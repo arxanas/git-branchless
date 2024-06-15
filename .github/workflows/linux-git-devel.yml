@@ -65,11 +65,11 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git-master/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          (cd git-branchless && cargo test --all-features --examples --tests --workspace)
+          (cd git-branchless && cargo test --all-features --examples --tests --workspace --no-fail-fast)
 
       - name: Run Rust tests on Git `next`
         timeout-minutes: 30
         run: |
           export TEST_GIT="$PWD"/git-next/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          (cd git-branchless && cargo test --all-features --examples --tests --workspace)
+          (cd git-branchless && cargo test --all-features --examples --tests --workspace --no-fail-fast)
