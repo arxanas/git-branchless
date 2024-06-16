@@ -659,7 +659,7 @@ fn test_install_man_pages() -> eyre::Result<()> {
     .SH DESCRIPTION
     Branchless workflow for Git.
     .PP
-    See the documentation at <https://github.com/arxanas/git\-branchless/wiki>.
+    See the documentation at https://github.com/arxanas/git\-branchless/wiki.
     .SH OPTIONS
     .TP
     \fB\-C\fR=\fIWORKING_DIRECTORY\fR

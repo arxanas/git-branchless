@@ -1720,7 +1720,7 @@ pub struct PatchId {
     patch_id: git2::Oid,
 }
 
-/// A timestamp as used in a [`Signature`].
+/// A timestamp as used in a [`git2::Signature`].
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Time {
     pub(super) inner: git2::Time,

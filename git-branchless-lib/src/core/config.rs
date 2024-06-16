@@ -166,7 +166,7 @@ pub fn get_default_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
 /// `$GIT_EDITOR` environment var and the `core.editor` config setting. We do so in that order to
 /// match how git resolves the editor to use.
 ///
-/// FMI see https://git-scm.com/docs/git-var#Documentation/git-var.txt-GITEDITOR
+/// FMI see <https://git-scm.com/docs/git-var#Documentation/git-var.txt-GITEDITOR>
 #[instrument]
 pub fn get_editor(git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<Option<OsString>> {
     if let Ok(result) =
@@ -340,7 +340,7 @@ pub mod env_vars {
     /// with the `cargo build -p git-branchless-init` before running incremental
     /// tests. (Ideally, this would happen automatically by marking the binaries
     /// as dependencies and having Cargo build them, but that's not implemented;
-    /// see https://github.com/rust-lang/cargo/issues/4316 for more details).
+    /// see <https://github.com/rust-lang/cargo/issues/4316> for more details).
     ///
     /// If there *is* a change to `git-branchless-init`, and it hasn't been
     /// built, and the test is rerun, then it might fail in an unusual way
