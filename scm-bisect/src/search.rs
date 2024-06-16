@@ -106,7 +106,7 @@ pub enum Status {
 }
 
 /// The upper and lower bounds of the search.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
@@ -115,6 +115,36 @@ pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The lower bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Failure`.
     pub failure: NodeSet<Node>,
+}
+
+impl<Node: Debug + Eq + Hash> std::fmt::Debug for Bounds<Node> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { success, failure } = self;
+
+        struct DebugNodeSet<'a, Node: Eq + Hash>(&'a NodeSet<Node>);
+        impl<'a, Node: Debug + Eq + Hash> std::fmt::Debug for DebugNodeSet<'a, Node> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let Self(set) = self;
+                if set.is_empty() {
+                    write!(f, "NodeSet {{}}")?;
+                    return Ok(());
+                }
+
+                write!(f, "NodeSet {{")?;
+                for (i, node) in set.iter().enumerate() {
+                    let comma = if i == 0 { "" } else { "," };
+                    write!(f, "{comma} {node:?}")?;
+                }
+                write!(f, " }}")?;
+                Ok(())
+            }
+        }
+
+        f.debug_struct("Bounds")
+            .field("success", &DebugNodeSet(success))
+            .field("failure", &DebugNodeSet(failure))
+            .finish()
+    }
 }
 
 impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {
