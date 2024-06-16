@@ -1,4 +1,5 @@
-//! Basic search strategies; see `BasicStrategyKind`.
+//! Example implementations of basic search strategies as defined in [`search`].
+//! See [`BasicStrategyKind`] for the list.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -154,12 +155,12 @@ pub enum BasicStrategyKind {
     /// TODO: Partitioning into groups of approximately equal size isn't
     /// actually optimal for the DAG case. Really, we want to maximize the
     /// information that we gain from each test. The `git bisect` algorithm at
-    /// https://git-scm.com/docs/git-bisect-lk2009#_bisection_algorithm_discussed
+    /// <https://git-scm.com/docs/git-bisect-lk2009#_bisection_algorithm_discussed>
     /// discusses a metric to find the best partition for the subgraph which
     /// remains to be tested.
     ///
     /// See also `git-bisect`'s skip algorithm:
-    /// https://git-scm.com/docs/git-bisect-lk2009#_skip_algorithm. This does
+    /// <https://git-scm.com/docs/git-bisect-lk2009#_skip_algorithm>. This does
     /// *not* use the same skip algorithm, and instead uses a deterministic
     /// approach. In order to solve the following problem:
     ///
@@ -173,9 +174,9 @@ pub enum BasicStrategyKind {
     ///
     /// Resources:
     ///
-    /// - https://git-scm.com/docs/git-bisect-lk2009#_bisection_algorithm_discussed
-    /// - https://byorgey.wordpress.com/2023/01/01/competitive-programming-in-haskell-better-binary-search/
-    /// - https://julesjacobs.com/notes/binarysearch/binarysearch.pdf
+    /// - <https://git-scm.com/docs/git-bisect-lk2009#_bisection_algorithm_discussed>
+    /// - <https://byorgey.wordpress.com/2023/01/01/competitive-programming-in-haskell-better-binary-search/>
+    /// - <https://julesjacobs.com/notes/binarysearch/binarysearch.pdf>
     Binary,
 }
 

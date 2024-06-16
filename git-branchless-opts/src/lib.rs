@@ -8,6 +8,9 @@
     clippy::dbg_macro
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+// These URLs are printed verbatim in help output, so we don't want to add extraneous Markdown
+// formatting.
+#![allow(rustdoc::bare_urls)]
 
 use std::ffi::OsString;
 use std::fmt::Display;
@@ -774,7 +777,7 @@ pub struct GlobalArgs {
 
 /// Branchless workflow for Git.
 ///
-/// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
+/// See the documentation at https://github.com/arxanas/git-branchless/wiki.
 #[derive(Debug, Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 pub struct Opts {

@@ -1,6 +1,6 @@
 //! Fork of `dialoguer::edit`.
 //!
-//! Originally from https://github.com/mitsuhiko/dialoguer/blob/40c7c90f04c8bcab4e26133fdf6ece30fd001bd0/src/edit.rs
+//! Originally from <https://github.com/mitsuhiko/dialoguer/blob/40c7c90f04c8bcab4e26133fdf6ece30fd001bd0/src/edit.rs>
 //!
 //! There are bugs we want to fix and behaviors we want to customize, and their
 //! release schedule may not align with ours.  This chunk of code is fairly

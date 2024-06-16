@@ -63,7 +63,7 @@ pub enum RebaseCommand {
         original_commit_oid: NonZeroOid,
 
         /// The commits whose patches should be applied to the rebase head.
-        ///  - This will be different from [`original_commit_oid`] when a commit
+        ///  - This will be different from `original_commit_oid` when a commit
         ///    is being replaced.
         ///  - If this is a single commit, then the rebase will perform a normal
         ///    `pick`.

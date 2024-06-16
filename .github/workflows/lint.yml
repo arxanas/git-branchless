@@ -50,3 +50,8 @@ jobs:
           # Allow `--allow renamed_and_removed_lints` because the new lint name
           # may not be available in our oldest-supported Rust version.
           args: --workspace --all-features --all-targets -- --deny warnings --allow renamed_and_removed_lints
+
+      - name: Run `cargo doc`
+        env:
+          RUSTDOCFLAGS: "--deny warnings"
+        run: cargo doc --workspace --no-deps

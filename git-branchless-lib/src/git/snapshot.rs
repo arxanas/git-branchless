@@ -1,5 +1,5 @@
 //! Implementation of working copy snapshots. The ideas are based off of those
-//! in Jujutsu: https://github.com/martinvonz/jj/blob/main/docs/working-copy.md
+//! in Jujutsu: <https://github.com/martinvonz/jj/blob/main/docs/working-copy.md>
 //!
 //! Normally, Git only tracks committed changes via commits, and a subset of
 //! information about uncommitted changes via the index. This module implements
