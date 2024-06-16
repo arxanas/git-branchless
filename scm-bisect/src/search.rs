@@ -602,7 +602,13 @@ impl<G: Graph, S: Strategy<G>> Iterator for SearchIter<'_, G, S> {
 
             match self.check_node_not_searched(&next_node, &bounds) {
                 Ok(()) => {}
-                Err(err) => return Some(Err(err)),
+                Err(err) => {
+                    debug!(
+                        ?err,
+                        "skipping node returned from `midpoints` as it was already excluded"
+                    );
+                    continue;
+                }
             }
             match self.speculate_node(&next_node, &bounds, &statuses) {
                 Ok(states) => {
