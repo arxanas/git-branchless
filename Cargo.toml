@@ -76,7 +76,7 @@ indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 itertools = "0.13.0"
 lalrpop = "0.19.12"
 lalrpop-util = "0.19.12"
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 lib = { package = "git-branchless-lib", version = "0.9.0", path = "git-branchless-lib" }
 man = "0.3.0"
 num_cpus = "1.16.0"
