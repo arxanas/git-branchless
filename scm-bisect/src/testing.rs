@@ -27,24 +27,22 @@ impl BasicSourceControlGraph for UsizeGraph {
         Ok((0..self.max).collect())
     }
 
-    // @nocommit
-    // fn sort(
-    //     &self,
-    //     nodes: impl IntoIterator<Item = Self::Node>,
-    // ) -> Result<Vec<Self::Node>, Self::Error> {
-    //     let mut nodes = nodes.into_iter().collect::<Vec<_>>();
-    //     nodes.sort();
-    //     Ok(nodes)
-    // }
-
-    fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+    fn children(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
         assert!(*node < self.max);
-        Ok((0..=*node).collect())
+        if *node + 1 == self.max {
+            Ok(NodeSet::default())
+        } else {
+            Ok([*node + 1].into_iter().collect())
+        }
     }
 
-    fn descendants(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+    fn parents(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
         assert!(*node < self.max);
-        Ok((*node..self.max).collect())
+        if *node == 0 {
+            Ok(NodeSet::default())
+        } else {
+            Ok([*node - 1].into_iter().collect())
+        }
     }
 }
 
@@ -81,22 +79,22 @@ impl BasicSourceControlGraph for TestGraph {
         Ok(nodes)
     }
 
-    /// FIXME: O(n^2) complexity due to intermediate container allocations.
-    fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
-        let parents: NodeSet<char> = self
-            .nodes
-            .iter()
-            .filter_map(|(k, v)| if v.contains(node) { Some(*k) } else { None })
-            .collect();
-        let ancestors = &self.ancestors_all(parents)?;
-        Ok(ancestors.insert(*node))
+    fn parents(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Self::Error> {
+        let mut result = NodeSet::default();
+        for (parent, children) in &self.nodes {
+            if children.contains(node) {
+                result.insert_mut(*parent);
+            }
+        }
+        Ok(result)
     }
 
-    /// FIXME: O(n^2) complexity due to intermediate container allocations.
-    fn descendants(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
-        let children: NodeSet<char> = self.nodes[node].iter().copied().collect();
-        let descendants = self.descendants_all(children)?;
-        Ok(descendants.insert(*node))
+    fn children(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Self::Error> {
+        let children = self.nodes.get(node);
+        match children {
+            Some(children) => Ok(children.iter().copied().collect()),
+            None => Ok(NodeSet::default()),
+        }
     }
 }
 

@@ -2,6 +2,7 @@
 //! See [`BasicStrategyKind`] for the list.
 
 use std::cmp::{min, Ordering};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -82,10 +83,25 @@ pub trait BasicSourceControlGraph: Debug {
         Ok(self.ancestors(descendant)?.contains(ancestor))
     }
 
+    fn parents(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
+
     /// Get every node `X` in the [`BasicSourceControlGraph::universe`] such
     /// that `X == node` or there exists a child of `X` that is an ancestor of
     /// `node`.
-    fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
+    fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let mut result: search::NodeSet<Self::Node> = [node.clone()].into_iter().collect();
+        let mut work = vec![node.clone()];
+        while let Some(node) = work.pop() {
+            let parents = self.parents(&node)?;
+            for parent in parents.into_iter() {
+                if !result.contains(&parent) {
+                    result.insert_mut(parent.clone());
+                    work.push(parent.clone());
+                }
+            }
+        }
+        Ok(result)
+    }
 
     /// Get the union of `ancestors(node)` for every node in `nodes`.
     #[instrument]
@@ -129,10 +145,25 @@ pub trait BasicSourceControlGraph: Debug {
         Ok(heads)
     }
 
+    fn children(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
+
     /// Get every node `X` in the [`BasicSourceControlGraph::universe`] such
     /// that `X == node` or there exists a parent of `X` that is a descendant of
     /// `node`.
-    fn descendants(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
+    fn descendants(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let mut result: search::NodeSet<Self::Node> = [node.clone()].into_iter().collect();
+        let mut work = vec![node.clone()];
+        while let Some(node) = work.pop() {
+            let children = self.children(&node)?;
+            for child in children.into_iter() {
+                if !result.contains(&child) {
+                    result.insert_mut(child.clone());
+                    work.push(child.clone());
+                }
+            }
+        }
+        Ok(result)
+    }
 
     /// Filter `nodes` to only include nodes that are not descendants of any
     /// other node in `nodes`.
@@ -317,33 +348,82 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
                 Ok(heads)
             }
             BasicStrategyKind::Binary => {
-                let search_degrees: Vec<(G::Node, usize)> = nodes_to_search
+                let (ancestor_degrees, descendant_degrees) = assign_search_degrees(graph, bounds)?;
+                let nodes: HashSet<_> = ancestor_degrees
+                    .keys()
+                    .cloned()
+                    .chain(descendant_degrees.keys().cloned())
+                    .collect();
+                let node_degrees = nodes
                     .into_iter()
                     .map(|node| {
-                        let degree = search_degree(graph, bounds, &node)?;
-                        Ok((node, degree))
+                        let ancestor_degree = ancestor_degrees.get(&node).copied().unwrap_or(0);
+                        let descendant_degree = descendant_degrees.get(&node).copied().unwrap_or(0);
+                        (node, min(ancestor_degree, descendant_degree))
                     })
-                    .try_collect()?;
-                let max_degree = search_degrees
+                    .collect_vec();
+                let max_degree_nodes = node_degrees
                     .iter()
-                    .map(|(_, degree)| degree)
-                    .copied()
-                    .max();
-                match max_degree {
-                    Some(max_degree) => {
-                        let max_degree_nodes = search_degrees
-                            .into_iter()
-                            .filter(|(_, degree)| *degree == max_degree)
-                            .map(|(node, _)| node)
-                            .collect_vec();
-                        let max_degree_nodes = graph.sort(max_degree_nodes)?;
-                        Ok(max_degree_nodes)
-                    }
-                    None => Ok(Default::default()),
-                }
+                    .max_set_by_key(|(_ndoe, degree)| *degree)
+                    .into_iter()
+                    .map(|(node, _degree)| node)
+                    .cloned()
+                    .collect_vec();
+                let result = graph.sort(max_degree_nodes)?;
+                // @nocommit explain
+                Ok(result.into_iter().take(1).collect())
             }
         }
     }
+}
+
+fn assign_search_degrees<G: BasicSourceControlGraph>(
+    graph: &G,
+    bounds: &search::Bounds<G::Node>,
+) -> Result<(HashMap<G::Node, usize>, HashMap<G::Node, usize>), G::Error> {
+    let roots = if !bounds.success.is_empty() {
+        bounds.success.clone()
+    } else {
+        graph.descendant_roots(graph.universe()?)?
+    };
+    let mut num_ancestors: HashMap<G::Node, usize> = Default::default();
+    let mut ancestors_work: VecDeque<(G::Node, search::NodeSet<G::Node>)> = roots
+        .into_iter()
+        .cloned()
+        .map(|node| (node.clone(), [node].into_iter().collect()))
+        .collect();
+    while let Some((node, ancestors)) = ancestors_work.pop_front() {
+        if bounds.failure.contains(&node) {
+            continue;
+        }
+        for child_node in graph.children(&node)?.into_iter().cloned() {
+            ancestors_work.push_back((child_node.clone(), ancestors.insert(child_node)))
+        }
+        num_ancestors.insert(node, ancestors.size());
+    }
+
+    let heads = if !bounds.failure.is_empty() {
+        bounds.failure.clone()
+    } else {
+        graph.ancestor_heads(graph.universe()?)?
+    };
+    let mut num_descendants: HashMap<G::Node, usize> = Default::default();
+    let mut descendants_work: VecDeque<(G::Node, search::NodeSet<G::Node>)> = heads
+        .into_iter()
+        .cloned()
+        .map(|node| (node.clone(), [node].into_iter().collect()))
+        .collect();
+    while let Some((node, descendants)) = descendants_work.pop_front() {
+        if bounds.success.contains(&node) {
+            continue;
+        }
+        for parent_node in graph.parents(&node)?.into_iter().cloned() {
+            descendants_work.push_back((parent_node.clone(), descendants.insert(parent_node)))
+        }
+        num_descendants.insert(node, descendants.size());
+    }
+
+    Ok((num_ancestors, num_descendants))
 }
 
 /// Calculate the "search degree" of a node for binary search. The "search

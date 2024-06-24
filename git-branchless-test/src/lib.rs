@@ -1178,11 +1178,31 @@ impl BasicSourceControlGraph for SearchGraph<'_> {
     }
 
     #[instrument]
+    fn parents(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let ancestors = self.dag.query_ancestors(CommitSet::from(*node))?;
+        let ancestors = ancestors.intersection(&self.commit_set);
+        let parents = self.dag.query_heads_ancestors(ancestors)?;
+        let parents = self.dag.commit_set_to_vec(&parents)?;
+        Ok(parents.into_iter().collect())
+    }
+
+    #[instrument]
     fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
         let ancestors = self.dag.query_ancestors(CommitSet::from(*node))?;
         let ancestors = ancestors.intersection(&self.commit_set);
         let ancestors = self.dag.commit_set_to_vec(&ancestors)?;
         Ok(ancestors.into_iter().collect())
+    }
+
+    #[instrument]
+    fn children(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let descendants = self.dag.query_descendants(CommitSet::from(*node))?;
+        let descendants = descendants.intersection(&self.commit_set);
+        let children = self
+            .dag
+            .query_roots(self.dag.query_descendants(descendants)?)?;
+        let children = self.dag.commit_set_to_vec(&children)?;
+        Ok(children.into_iter().collect())
     }
 
     #[instrument]
