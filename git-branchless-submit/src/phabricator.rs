@@ -365,7 +365,7 @@ impl Forge for PhabricatorForge<'_> {
                 .map_err(|err| Error::VerifyPermissions { source: err })?
                 .map_err(Error::BuildRebasePlan)?;
         let command = if !should_mock() {
-            let mut args = vec!["arc", "diff", "--create", "--verbatim"];
+            let mut args = vec!["arc", "diff", "--create", "--verbatim", "--allow-untracked"];
             if *draft {
                 args.push("--draft");
             }
@@ -614,7 +614,14 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 .map_err(Error::BuildRebasePlan)?;
         let test_options = ResolvedTestOptions {
             command: if !should_mock() {
-                let mut args = vec!["arc", "diff", "--head", "HEAD", "HEAD^"];
+                let mut args = vec![
+                    "arc",
+                    "diff",
+                    "--head",
+                    "HEAD",
+                    "HEAD^",
+                    "--allow-untracked",
+                ];
                 args.extend(match message {
                     Some(message) => ["-m", message.as_ref()],
                     None => ["-m", "update"],
