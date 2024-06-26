@@ -186,13 +186,13 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         git_run_info,
     } = ctx;
     let SubmitArgs {
-        create,
-        draft,
-        strategy,
         revsets,
         resolve_revset_options,
-        forge,
+        forge_kind,
+        create,
+        draft,
         message,
+        execution_strategy,
         dry_run,
     } = args;
     submit(
@@ -200,11 +200,11 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         &git_run_info,
         revsets,
         &resolve_revset_options,
+        forge_kind,
         create,
         draft,
-        strategy,
-        forge,
         message,
+        execution_strategy,
         dry_run,
     )
 }
@@ -214,11 +214,11 @@ fn submit(
     git_run_info: &GitRunInfo,
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
+    forge_kind: Option<ForgeKind>,
     create: bool,
     draft: bool,
-    execution_strategy: Option<TestExecutionStrategy>,
-    forge_kind: Option<ForgeKind>,
     message: Option<String>,
+    execution_strategy: Option<TestExecutionStrategy>,
     dry_run: bool,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;

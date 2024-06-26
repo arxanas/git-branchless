@@ -361,11 +361,12 @@ pub struct SmartlogArgs {
 /// The Git hosting provider to use, called a "forge".
 #[derive(Clone, Debug, ValueEnum)]
 pub enum ForgeKind {
-    /// Force-push branches to the default push remote.
+    /// Force-push branches to the default push remote. You can configure the
+    /// default push remote with `git config remote.pushDefault <remote>`.
     Branch,
 
     /// Force-push branches to the remote and create a pull request for each
-    /// branch using the `gh` command-line tool.
+    /// branch using the `gh` command-line tool. WARNING: likely buggy!
     Github,
 
     /// Submit code reviews to Phabricator using the `arc` command-line tool.
@@ -375,25 +376,9 @@ pub enum ForgeKind {
 /// Push commits to a remote.
 #[derive(Debug, Parser)]
 pub struct SubmitArgs {
-    /// If there is no remote branch for a given local branch, create the
-    /// remote branch by pushing the local branch to the default push
-    /// remote.
-    ///
-    /// You can configure the default push remote with `git config
-    /// remote.pushDefault <remote>`.
-    #[clap(action, short = 'c', long = "create")]
-    pub create: bool,
-
-    /// If the remote supports it, create code reviews in "draft" mode.
-    #[clap(action, short = 'd', long = "draft")]
-    pub draft: bool,
-
-    /// What kind of execution strategy to use for tools which need access to the working copy.
-    #[clap(short = 's', long = "strategy")]
-    pub strategy: Option<TestExecutionStrategy>,
-
-    /// The commits to push. All branches attached to those commits will be
-    /// pushed.
+    /// The commits to push to the forge. Unless `--create` is passed, this will
+    /// only push commits that already have associated remote objects on the
+    /// forge.
     #[clap(value_parser, default_value = "stack()")]
     pub revsets: Vec<Revset>,
 
@@ -401,16 +386,35 @@ pub struct SubmitArgs {
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,
 
-    /// The Git hosting provider to use.
+    /// The Git hosting provider to use, called a "forge". If not provided, an
+    /// attempt will be made to automatically detect the forge used by the
+    /// repository. If no forge can be detected, will fall back to the "branch"
+    /// forge.
     #[clap(short = 'F', long = "forge")]
-    pub forge: Option<ForgeKind>,
+    pub forge_kind: Option<ForgeKind>,
 
-    /// An optional message to include with the create or update operation.
+    /// If there is no associated remote commit or code review object for a
+    /// given local commit, create the remote object by pushing the local commit
+    /// to the forge.
+    #[clap(action, short = 'c', long = "create")]
+    pub create: bool,
+
+    /// If the forge supports it, create code reviews in "draft" mode.
+    #[clap(action, short = 'd', long = "draft")]
+    pub draft: bool,
+
+    /// If the forge supports it, an optional message to include with the create
+    /// or update operation.
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,
 
+    /// If the forge supports it and uses a tool that needs access to the
+    /// working copy, what kind of execution strategy to use.
+    #[clap(short = 's', long = "strategy")]
+    pub execution_strategy: Option<TestExecutionStrategy>,
+
     /// Don't push or create anything. Instead, report what would be pushed or
-    /// created. (Still triggers a fetch.)
+    /// created. (This may still trigger fetching information from the forge.)
     #[clap(short = 'n', long = "dry-run")]
     pub dry_run: bool,
 }
