@@ -2569,6 +2569,23 @@ fn prepare_working_directory(
         }
     })?;
 
+    // FIXME: fix locking in the presence of worktrees: if you're using multiple
+    // worktrees simultaneously with the `working-copy` strategy, then they all
+    // try to acquire `working-copy.lock`, which is wrong. They should be able
+    // to acquire locks for their specify working copies. Possibly each worktree
+    // should simply have its own lock file in its git dir.
+    //
+    // FIXME: fix locking in the presence of contention for a single worktree:
+    // if you want to run `git test` from the same worktree multiple times
+    // concurrently, then you end up trying to lock the same worktrees. It would
+    // be a better user experience if we simply created more worktrees or
+    // allocated them in a different manner other than by worker ID (which can
+    // be the same between concurrent `git test` invocations).
+    //
+    // FIXME: make worktree acquisition atomic. I got into a situation where one
+    // of my worktrees was not correctly provisioned, causing issues only when I
+    // happened to try to use that worktree (by using enough concurrency that
+    // the worker ID was sufficiently large).
     let lock_file_name = match strategy {
         TestExecutionStrategy::WorkingCopy => "working-copy.lock".to_string(),
         TestExecutionStrategy::Worktree => {
