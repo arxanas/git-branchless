@@ -8,8 +8,6 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-use cursive_core::theme::Effect;
-use cursive_core::utils::markup::StyledString;
 use git_branchless_opts::Revset;
 use git_branchless_test::{
     run_tests, FixInfo, ResolvedTestOptions, TestOutput, TestResults, TestStatus,
@@ -21,7 +19,10 @@ use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::EventLogDb;
-use lib::core::formatting::StyledStringBuilder;
+use lib::core::formatting::{
+    Effect, StyledString,
+    StyledStringBuilder,
+};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,

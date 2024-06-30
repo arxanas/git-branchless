@@ -4,12 +4,11 @@
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use cursive_core::theme::BaseColor;
-use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;
 use lib::core::eventlog::EventLogDb;
+use lib::core::formatting::{BaseColor, StyledString};
 use lib::git::{GitRunInfo, GitRunResult, NonZeroOid, Repo, WorkingCopySnapshot};
 use lib::util::{ExitCode, EyreExitOr};
 
