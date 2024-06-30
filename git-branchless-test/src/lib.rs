@@ -1495,7 +1495,7 @@ fn run_tests_inner<'a>(
     Ok(Ok(TestResults {
         search_bounds: match search_strategy {
             None => Default::default(),
-            Some(search_strategy) => search.search(&search_strategy)?.bounds,
+            Some(search_strategy) => search.search(&search_strategy)?.bounds.clone(),
         },
         test_outputs: test_outputs_ordered,
         testing_aborted_error,
