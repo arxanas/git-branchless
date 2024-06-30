@@ -408,6 +408,11 @@ pub struct SubmitArgs {
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,
 
+    /// If the forge supports it, how many jobs to execute in parallel. The
+    /// value `0` indicates to use all CPUs.
+    #[clap(short = 'j', long = "jobs")]
+    pub num_jobs: Option<usize>,
+
     /// If the forge supports it and uses a tool that needs access to the
     /// working copy, what kind of execution strategy to use.
     #[clap(short = 's', long = "strategy")]

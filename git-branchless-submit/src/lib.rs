@@ -192,6 +192,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         create,
         draft,
         message,
+        num_jobs,
         execution_strategy,
         dry_run,
     } = args;
@@ -204,6 +205,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         create,
         draft,
         message,
+        num_jobs,
         execution_strategy,
         dry_run,
     )
@@ -218,6 +220,7 @@ fn submit(
     create: bool,
     draft: bool,
     message: Option<String>,
+    num_jobs: Option<usize>,
     execution_strategy: Option<TestExecutionStrategy>,
     dry_run: bool,
 ) -> EyreExitOr<()> {
@@ -253,7 +256,7 @@ fn submit(
         bisect: false,
         no_cache: true,
         interactive: false,
-        jobs: None,
+        jobs: num_jobs,
         verbosity: Verbosity::None,
         apply_fixes: false,
     };
