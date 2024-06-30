@@ -42,8 +42,7 @@ use lib::core::eventlog::{
     EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
 };
 use lib::core::formatting::{
-    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString,
-    StyledStringBuilder,
+    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString, StyledStringBuilder,
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
@@ -52,9 +51,10 @@ use lib::core::rewrite::{
 };
 use lib::git::{
     get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
-    make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid,
-    Repo, SerializedNonZeroOid, SerializedTestResult, TestCommand, WorkingCopyChangesType,
-    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunOpts, GitRunResult, MaybeZeroOid,
+    NonZeroOid, Repo, RepoError, SerializedNonZeroOid, SerializedTestResult, TestCommand,
+    WorkingCopyChangesType, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE,
 };
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
@@ -788,10 +788,10 @@ pub struct TestOutput {
 }
 
 /// The possible results of attempting to run a test.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum TestStatus {
     /// Attempting to set up the working directory for the repository failed.
-    CheckoutFailed,
+    CheckoutFailed(PrepareWorkingDirectoryError),
 
     /// Invoking the test command failed.
     SpawnTestFailed(String),
@@ -866,7 +866,7 @@ impl TestStatus {
     #[instrument]
     fn get_icon(&self) -> &'static str {
         match self {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
@@ -880,7 +880,7 @@ impl TestStatus {
     #[instrument]
     fn get_style(&self) -> Style {
         match self {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
@@ -900,9 +900,10 @@ impl TestStatus {
         apply_fixes: bool,
     ) -> eyre::Result<StyledString> {
         let description = match self {
-            TestStatus::CheckoutFailed => StyledStringBuilder::new()
+            TestStatus::CheckoutFailed(err) => StyledStringBuilder::new()
                 .append_styled("Failed to check out: ", self.get_style())
                 .append(commit.friendly_describe(glyphs)?)
+                .append(format!(": {err}"))
                 .build(),
 
             TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
@@ -1079,7 +1080,7 @@ impl TestOutput {
         }
 
         let interactive = match self.test_status {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
@@ -1651,7 +1652,7 @@ fn event_loop(
             operation_type: _,
         } = job;
         let (maybe_testing_aborted_error, search_status) = match &test_output.test_status {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
@@ -1739,7 +1740,7 @@ fn print_summary(
             )?)?
         )?;
         match test_output.test_status {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
@@ -1948,7 +1949,7 @@ fn apply_fixes(
                     },
                 interactive: _,
             }
-            | TestStatus::CheckoutFailed
+            | TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
@@ -2220,13 +2221,14 @@ fn run_test(
         TestFilesResult::Cached(test_output) => test_output,
         TestFilesResult::NotCached(test_files) => {
             match prepare_working_directory(
+                &effects,
                 git_run_info,
                 repo,
                 event_tx_id,
                 commit,
                 *execution_strategy,
                 worker_id,
-            )? {
+            ) {
                 Err(err) => {
                     info!(?err, "Failed to prepare working directory for testing");
                     let TestFiles {
@@ -2244,7 +2246,7 @@ fn run_test(
                         result_path,
                         stdout_path,
                         stderr_path,
-                        test_status: TestStatus::CheckoutFailed,
+                        test_status: TestStatus::CheckoutFailed(err),
                     }
                 }
                 Ok(PreparedWorkingDirectory {
@@ -2291,7 +2293,7 @@ fn run_test(
         .build();
     progress.notify_status(
         match test_output.test_status {
-            TestStatus::CheckoutFailed
+            TestStatus::CheckoutFailed(_)
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
@@ -2485,27 +2487,87 @@ struct PreparedWorkingDirectory {
     path: PathBuf,
 }
 
-#[allow(dead_code)] // fields are not read except by `Debug` implementation`
-#[derive(Debug)]
-enum PrepareWorkingDirectoryError {
-    LockFailed(PathBuf),
+#[allow(missing_docs)]
+#[derive(Debug, Error)]
+pub enum PrepareWorkingDirectoryError {
+    #[error("creating lock directory: {path}: {source}")]
+    CreateLockDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("error when opening lock file at path: {path}: {source}")]
+    OpenLockFile {
+        path: PathBuf,
+        #[source]
+        source: fslock::Error,
+    },
+
+    #[error("lock unavailable at path: {path}")]
+    LockUnavailable { path: PathBuf },
+
+    #[error("error when acquiring lock at path: {path}: {source}")]
+    LockError {
+        path: PathBuf,
+        #[source]
+        source: fslock::Error,
+    },
+
+    #[error("repository has no working copy")]
     NoWorkingCopy,
-    CheckoutFailed(NonZeroOid),
-    CreateWorktreeFailed(PathBuf),
+
+    #[error("could not check out to commit")]
+    CheckoutFailed(GitRunResult),
+
+    #[error("could not get configuration for {item}: {source}")]
+    Config {
+        item: &'static str,
+        #[source]
+        source: RepoError,
+    },
+
+    #[error("could not create parent directory for worktrees: {path}: {source}")]
+    CreateWorktreeParentDirFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("could not convert worktree path to UTF-8: {path}")]
+    InvalidWorktreeName { path: PathBuf },
+
+    #[error("could not create worktree at path: {path}")]
+    CreateWorktreeFailed {
+        path: PathBuf,
+        git_run_result: GitRunResult,
+    },
+
+    #[error(transparent)]
+    Git(eyre::Error),
 }
 
 #[instrument]
 fn prepare_working_directory(
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: EventTransactionId,
     commit: &Commit,
     strategy: TestExecutionStrategy,
     worker_id: WorkerId,
-) -> eyre::Result<Result<PreparedWorkingDirectory, PrepareWorkingDirectoryError>> {
-    let test_lock_dir_path = get_test_locks_dir(repo)?;
-    std::fs::create_dir_all(&test_lock_dir_path)
-        .wrap_err_with(|| format!("Creating test lock dir path: {test_lock_dir_path:?}"))?;
+) -> Result<PreparedWorkingDirectory, PrepareWorkingDirectoryError> {
+    let test_lock_dir_path =
+        get_test_locks_dir(repo).map_err(|err| PrepareWorkingDirectoryError::Config {
+            item: "test locks dir",
+            source: err,
+        })?;
+    std::fs::create_dir_all(&test_lock_dir_path).map_err(|err| {
+        PrepareWorkingDirectoryError::CreateLockDir {
+            path: test_lock_dir_path.clone(),
+            source: err,
+        }
+    })?;
 
     let lock_file_name = match strategy {
         TestExecutionStrategy::WorkingCopy => "working-copy.lock".to_string(),
@@ -2514,102 +2576,120 @@ fn prepare_working_directory(
         }
     };
     let lock_path = test_lock_dir_path.join(lock_file_name);
-    let mut lock_file = LockFile::open(&lock_path)
-        .wrap_err_with(|| format!("Opening working copy lock at {lock_path:?}"))?;
-    if !lock_file
-        .try_lock_with_pid()
-        .wrap_err_with(|| format!("Locking working copy with {lock_path:?}"))?
-    {
-        return Ok(Err(PrepareWorkingDirectoryError::LockFailed(lock_path)));
+    let mut lock_file =
+        LockFile::open(&lock_path).map_err(|err| PrepareWorkingDirectoryError::OpenLockFile {
+            path: lock_path.clone(),
+            source: err,
+        })?;
+    match lock_file.try_lock_with_pid() {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(PrepareWorkingDirectoryError::LockUnavailable { path: lock_path });
+        }
+        Err(err) => {
+            return Err(PrepareWorkingDirectoryError::LockError {
+                path: lock_path,
+                source: err,
+            });
+        }
     }
 
+    let git_run_opts = GitRunOpts {
+        treat_git_failure_as_error: false,
+        stdin: None,
+    };
     match strategy {
         TestExecutionStrategy::WorkingCopy => {
             let working_copy_path = match repo.get_working_copy_path() {
-                None => return Ok(Err(PrepareWorkingDirectoryError::NoWorkingCopy)),
+                None => return Err(PrepareWorkingDirectoryError::NoWorkingCopy),
                 Some(working_copy_path) => working_copy_path.to_owned(),
             };
 
-            let GitRunResult { exit_code, stdout: _, stderr: _ } =
+            let git_run_result =
                 // Don't show the `git reset` operation among the progress bars,
                 // as we only want to see the testing status.
                 git_run_info.run_silent(
                     repo,
                     Some(event_tx_id),
                     &["reset", "--hard", &commit.get_oid().to_string()],
-                    Default::default()
-                ).context("Checking out commit to prepare working directory")?;
-            if exit_code.is_success() {
-                Ok(Ok(PreparedWorkingDirectory {
+                    git_run_opts,
+                ).map_err(PrepareWorkingDirectoryError::Git)?;
+            if git_run_result.exit_code.is_success() {
+                Ok(PreparedWorkingDirectory {
                     lock_file,
                     path: working_copy_path,
-                }))
+                })
             } else {
-                Ok(Err(PrepareWorkingDirectoryError::CheckoutFailed(
-                    commit.get_oid(),
-                )))
+                Err(PrepareWorkingDirectoryError::CheckoutFailed(git_run_result))
             }
         }
 
         TestExecutionStrategy::Worktree => {
-            let parent_dir = get_test_worktrees_dir(repo)?;
-            std::fs::create_dir_all(&parent_dir)
-                .wrap_err_with(|| format!("Creating worktree parent dir at {parent_dir:?}"))?;
+            let parent_dir = get_test_worktrees_dir(repo).map_err(|err| {
+                PrepareWorkingDirectoryError::Config {
+                    item: "test worktrees dir",
+                    source: err,
+                }
+            })?;
+            std::fs::create_dir_all(&parent_dir).map_err(|err| {
+                PrepareWorkingDirectoryError::CreateWorktreeParentDirFailed {
+                    path: parent_dir.clone(),
+                    source: err,
+                }
+            })?;
 
             let worktree_dir_name = format!("testing-worktree-{worker_id}");
             let worktree_dir = parent_dir.join(worktree_dir_name);
             let worktree_dir_str = match worktree_dir.to_str() {
                 Some(worktree_dir) => worktree_dir,
                 None => {
-                    return Ok(Err(PrepareWorkingDirectoryError::CreateWorktreeFailed(
-                        worktree_dir,
-                    )));
+                    return Err(PrepareWorkingDirectoryError::InvalidWorktreeName {
+                        path: worktree_dir,
+                    });
                 }
             };
 
             if !worktree_dir.exists() {
-                let GitRunResult {
-                    exit_code,
-                    stdout: _,
-                    stderr: _,
-                } = git_run_info.run_silent(
-                    repo,
-                    Some(event_tx_id),
-                    &["worktree", "add", worktree_dir_str, "--force", "--detach"],
-                    Default::default(),
-                )?;
-                if !exit_code.is_success() {
-                    return Ok(Err(PrepareWorkingDirectoryError::CreateWorktreeFailed(
-                        worktree_dir,
-                    )));
+                let git_run_result = git_run_info
+                    .run_silent(
+                        repo,
+                        Some(event_tx_id),
+                        &["worktree", "add", worktree_dir_str, "--force", "--detach"],
+                        git_run_opts.clone(),
+                    )
+                    .map_err(PrepareWorkingDirectoryError::Git)?;
+                if !git_run_result.exit_code.is_success() {
+                    return Err(PrepareWorkingDirectoryError::CreateWorktreeFailed {
+                        path: worktree_dir,
+                        git_run_result,
+                    });
                 }
             }
 
-            let GitRunResult {
-                exit_code,
-                stdout: _,
-                stderr: _,
-            } = git_run_info.run_silent(
-                repo,
-                Some(event_tx_id),
-                &[
-                    "-C",
-                    worktree_dir_str,
-                    "checkout",
-                    "--force",
-                    &commit.get_oid().to_string(),
-                ],
-                Default::default(),
-            )?;
-            if !exit_code.is_success() {
-                return Ok(Err(PrepareWorkingDirectoryError::CheckoutFailed(
-                    commit.get_oid(),
-                )));
+            {
+                let git_run_result = git_run_info
+                    .run_silent(
+                        repo,
+                        Some(event_tx_id),
+                        &[
+                            "-C",
+                            worktree_dir_str,
+                            "checkout",
+                            "--force",
+                            &commit.get_oid().to_string(),
+                        ],
+                        git_run_opts,
+                    )
+                    .map_err(PrepareWorkingDirectoryError::Git)?;
+                if !git_run_result.exit_code.is_success() {
+                    return Err(PrepareWorkingDirectoryError::CheckoutFailed(git_run_result));
+                }
             }
-            Ok(Ok(PreparedWorkingDirectory {
+
+            Ok(PreparedWorkingDirectory {
                 lock_file,
                 path: worktree_dir,
-            }))
+            })
         }
     }
 }
@@ -2781,7 +2861,7 @@ To abort testing entirely, run:      {exit127}",
             fix_info,
             interactive: _,
         } => Some(fix_info),
-        TestStatus::CheckoutFailed
+        TestStatus::CheckoutFailed(_)
         | TestStatus::SpawnTestFailed(_)
         | TestStatus::TerminatedBySignal
         | TestStatus::AlreadyInProgress
@@ -2986,6 +3066,8 @@ mod tests {
         let git = make_git()?;
         git.init_repo()?;
 
+        let glyphs = Glyphs::text();
+        let effects = Effects::new_suppress_for_test(glyphs);
         let git_run_info = git.get_git_run_info();
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
@@ -2996,45 +3078,49 @@ mod tests {
         let worker_id = 1;
 
         let _prepared_working_copy = prepare_working_directory(
+            &effects,
             &git_run_info,
             &repo,
             event_tx_id,
             &head_commit,
             TestExecutionStrategy::WorkingCopy,
             worker_id,
-        )?
+        )
         .unwrap();
         assert!(matches!(
             prepare_working_directory(
+                &effects,
                 &git_run_info,
                 &repo,
                 event_tx_id,
                 &head_commit,
                 TestExecutionStrategy::WorkingCopy,
                 worker_id
-            )?,
-            Err(PrepareWorkingDirectoryError::LockFailed(_))
+            ),
+            Err(PrepareWorkingDirectoryError::LockUnavailable { .. })
         ));
 
         let _prepared_worktree = prepare_working_directory(
+            &effects,
             &git_run_info,
             &repo,
             event_tx_id,
             &head_commit,
             TestExecutionStrategy::Worktree,
             worker_id,
-        )?
+        )
         .unwrap();
         assert!(matches!(
             prepare_working_directory(
+                &effects,
                 &git_run_info,
                 &repo,
                 event_tx_id,
                 &head_commit,
                 TestExecutionStrategy::Worktree,
                 worker_id
-            )?,
-            Err(PrepareWorkingDirectoryError::LockFailed(_))
+            ),
+            Err(PrepareWorkingDirectoryError::LockUnavailable { .. })
         ));
 
         Ok(())
