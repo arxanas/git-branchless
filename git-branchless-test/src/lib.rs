@@ -24,8 +24,6 @@ use std::time::SystemTime;
 use bstr::ByteSlice;
 use clap::ValueEnum;
 use crossbeam::channel::{Receiver, RecvError};
-use cursive::theme::{BaseColor, Effect, Style};
-use cursive::utils::markup::StyledString;
 
 use eyre::WrapErr;
 use fslock::LockFile;
@@ -43,7 +41,10 @@ use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
 use lib::core::eventlog::{
     EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
 };
-use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
+use lib::core::formatting::{
+    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString,
+    StyledStringBuilder,
+};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,

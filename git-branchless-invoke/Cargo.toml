@@ -11,7 +11,6 @@ version = "0.10.0"
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 color-eyre = { workspace = true }
-cursive_core = { workspace = true }
 eyre = { workspace = true }
 git-branchless-opts = { workspace = true }
 git2 = { workspace = true }

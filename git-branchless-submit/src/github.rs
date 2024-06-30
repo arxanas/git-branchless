@@ -5,8 +5,6 @@ use std::env;
 use std::fmt::{Debug, Write};
 use std::hash::Hash;
 
-use cursive_core::theme::Effect;
-use cursive_core::utils::markup::StyledString;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lib::core::config::get_main_branch_name;
@@ -15,6 +13,7 @@ use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::effects::OperationType;
 use lib::core::eventlog::EventLogDb;
+use lib::core::formatting::{Effect, StyledString};
 use lib::core::repo_ext::RepoExt;
 use lib::core::repo_ext::RepoReferencesSnapshot;
 use lib::git::CategorizedReferenceName;
