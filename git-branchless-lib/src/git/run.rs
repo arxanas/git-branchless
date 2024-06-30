@@ -42,6 +42,7 @@ impl std::fmt::Debug for GitRunInfo {
 }
 
 /// Options for invoking Git.
+#[derive(Clone)]
 pub struct GitRunOpts {
     /// If set, a non-zero exit code will be treated as an error.
     pub treat_git_failure_as_error: bool,

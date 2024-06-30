@@ -444,7 +444,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                     }
                 };
                 match test_output.test_status {
-                    TestStatus::CheckoutFailed
+                    TestStatus::CheckoutFailed(_)
                     | TestStatus::SpawnTestFailed(_)
                     | TestStatus::TerminatedBySignal
                     | TestStatus::AlreadyInProgress
@@ -706,7 +706,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             .into_iter()
             .partition(|(_commit_oid, test_output)| match test_output.test_status {
                 TestStatus::Passed { .. } => true,
-                TestStatus::CheckoutFailed
+                TestStatus::CheckoutFailed(_)
                 | TestStatus::SpawnTestFailed(_)
                 | TestStatus::TerminatedBySignal
                 | TestStatus::AlreadyInProgress
