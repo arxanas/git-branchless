@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 73d040e4a25ae61ed8ede083d6cdbd4cad00e6f51f4cf6ccd281f02977c45d33 # shrinks to strategy = Linear, (graph, failure_nodes) = (TestGraph { nodes: {'c': {}, 'h': {}, 'a': {}} }, ['h', 'a'])
+cc f4d60732f72af454aca2e0808fd294205a7180c94483e6498e652e84d97b5d79 # shrinks to strategy = Binary, (graph, failure_nodes) = (TestGraph { nodes: {'b': {'f'}, 'f': {'g'}, 'g': {'e'}, 'e': {}} }, [])
