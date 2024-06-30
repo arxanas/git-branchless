@@ -106,7 +106,7 @@ pub enum Status {
 }
 
 /// The upper and lower bounds of the search.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
@@ -122,6 +122,16 @@ impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {
         Bounds {
             success: Default::default(),
             failure: Default::default(),
+        }
+    }
+}
+
+impl<Node: Debug + Eq + Hash> Clone for Bounds<Node> {
+    fn clone(&self) -> Self {
+        let Self { success, failure } = self;
+        Self {
+            success: success.clone(),
+            failure: failure.clone(),
         }
     }
 }
@@ -213,7 +223,7 @@ pub trait Strategy<G: Graph>: Debug {
 /// The results of the search so far. The search is complete if `next_to_search` is empty.
 pub struct LazySolution<'a, TNode: Debug + Eq + Hash + 'a, TError> {
     /// The bounds of the search so far.
-    pub bounds: Bounds<TNode>,
+    pub bounds: &'a Bounds<TNode>,
 
     /// The next nodes to search in a suggested order. Normally, you would only
     /// consume the first node in this iterator and then call `Search::notify`
@@ -233,7 +243,7 @@ impl<'a, TNode: Debug + Eq + Hash + 'a, TError> LazySolution<'a, TNode, TError> 
             next_to_search,
         } = self;
         Ok(EagerSolution {
-            bounds,
+            bounds: bounds.clone(),
             next_to_search: next_to_search.collect::<Result<Vec<_>, TError>>()?,
         })
     }
@@ -296,7 +306,8 @@ pub enum NotifyError<TNode, TGraphError> {
 #[derive(Clone, Debug)]
 pub struct Search<G: Graph> {
     graph: G,
-    nodes: IndexMap<G::Node, Status>,
+    statuses: IndexMap<G::Node, Status>,
+    bounds: Bounds<G::Node>,
 }
 
 impl<G: Graph> Search<G> {
@@ -305,7 +316,8 @@ impl<G: Graph> Search<G> {
     pub fn new(graph: G) -> Self {
         Self {
             graph,
-            nodes: Default::default(),
+            statuses: Default::default(),
+            bounds: Default::default(),
         }
     }
 
@@ -326,43 +338,11 @@ impl<G: Graph> Search<G> {
             .into_iter()
             .map(|node| (node, Status::Untested))
             .collect();
-        Self { graph, nodes }
-    }
-
-    /// Get the currently known bounds on the success nodes.
-    ///
-    /// FIXME: O(n) complexity.
-    #[instrument]
-    pub fn success_bounds(&self) -> Result<NodeSet<G::Node>, G::Error> {
-        let success_bounds = self
-            .nodes
-            .iter()
-            .filter_map(|(node, status)| match status {
-                Status::Success => Some(node.clone()),
-                Status::Untested | Status::Failure | Status::Indeterminate => None,
-            })
-            .try_fold(NodeSet::default(), |acc, node| {
-                self.graph.add_success_bound(acc, &node)
-            })?;
-        Ok(success_bounds)
-    }
-
-    /// Get the currently known bounds on the failure nodes.
-    ///
-    /// FIXME: O(n) complexity.
-    #[instrument]
-    pub fn failure_bounds(&self) -> Result<NodeSet<G::Node>, G::Error> {
-        let failure_bounds = self
-            .nodes
-            .iter()
-            .filter_map(|(node, status)| match status {
-                Status::Failure => Some(node.clone()),
-                Status::Untested | Status::Success | Status::Indeterminate => None,
-            })
-            .try_fold(NodeSet::default(), |acc, node| {
-                self.graph.add_failure_bound(acc, &node)
-            })?;
-        Ok(failure_bounds)
+        Self {
+            graph,
+            statuses: nodes,
+            bounds: Default::default(),
+        }
     }
 
     /// Summarize the current search progress and suggest the next node(s) to
@@ -376,16 +356,10 @@ impl<G: Graph> Search<G> {
         LazySolution<'a, G::Node, SearchError<G::Node, G::Error, S::Error>>,
         SearchError<G::Node, G::Error, S::Error>,
     > {
-        let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
-        let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
-
         let initial_state = SearchState {
             next_node: None,
-            bounds: Bounds {
-                success: success_bounds.clone(),
-                failure: failure_bounds.clone(),
-            },
-            statuses: self.nodes.clone(),
+            bounds: self.bounds.clone(),
+            statuses: self.statuses.clone(),
         };
         let iter = SearchIter {
             graph: &self.graph,
@@ -395,10 +369,7 @@ impl<G: Graph> Search<G> {
         };
 
         Ok(LazySolution {
-            bounds: Bounds {
-                success: success_bounds,
-                failure: failure_bounds,
-            },
+            bounds: &self.bounds,
             next_to_search: Box::new(iter),
         })
     }
@@ -410,7 +381,7 @@ impl<G: Graph> Search<G> {
         node: G::Node,
         status: Status,
     ) -> Result<(), NotifyError<G::Node, G::Error>> {
-        match self.nodes.get(&node) {
+        match self.statuses.get(&node) {
             Some(existing_status @ (Status::Success | Status::Failure))
                 if existing_status != &status =>
             {
@@ -423,15 +394,11 @@ impl<G: Graph> Search<G> {
             _ => {}
         }
 
-        match status {
-            Status::Untested | Status::Indeterminate => {}
+        let bounds = match status {
+            Status::Untested | Status::Indeterminate => self.bounds.clone(),
 
             Status::Success => {
-                for failure_node in self
-                    .failure_bounds()
-                    .map_err(NotifyError::Graph)?
-                    .into_iter()
-                {
+                for failure_node in self.bounds.failure.iter() {
                     if self
                         .graph
                         .is_ancestor(failure_node, &node)
@@ -445,14 +412,19 @@ impl<G: Graph> Search<G> {
                         });
                     }
                 }
+
+                let Bounds { success, failure } = self.bounds.clone();
+                Bounds {
+                    success: self
+                        .graph
+                        .add_success_bound(success, &node)
+                        .map_err(NotifyError::Graph)?,
+                    failure,
+                }
             }
 
             Status::Failure => {
-                for success_node in self
-                    .success_bounds()
-                    .map_err(NotifyError::Graph)?
-                    .into_iter()
-                {
+                for success_node in self.bounds.success.iter() {
                     if self
                         .graph
                         .is_ancestor(&node, success_node)
@@ -466,10 +438,20 @@ impl<G: Graph> Search<G> {
                         });
                     }
                 }
-            }
-        }
 
-        self.nodes.insert(node, status);
+                let Bounds { success, failure } = self.bounds.clone();
+                Bounds {
+                    success,
+                    failure: self
+                        .graph
+                        .add_failure_bound(failure, &node)
+                        .map_err(NotifyError::Graph)?,
+                }
+            }
+        };
+
+        self.statuses.insert(node, status);
+        self.bounds = bounds;
         Ok(())
     }
 }
