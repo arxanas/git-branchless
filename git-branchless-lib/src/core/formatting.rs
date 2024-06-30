@@ -6,9 +6,9 @@
 
 use std::fmt::Display;
 
-use cursive::theme::{Effect, Style};
-use cursive::utils::markup::StyledString;
-use cursive::utils::span::Span;
+pub use cursive_core::theme::{BaseColor, Color, ColorType, Effect, Style};
+pub use cursive_core::utils::markup::StyledString;
+pub use cursive_core::utils::span::Span;
 
 /// Pluralize a quantity, as appropriate. Example:
 ///
@@ -369,7 +369,6 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
     let Style { effects, color } = style;
     let output = {
         use console::style;
-        use cursive::theme::{BaseColor, Color, ColorType};
         let output = content.to_string();
         match color.front {
             ColorType::Palette(_) => {

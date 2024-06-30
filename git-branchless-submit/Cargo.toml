@@ -9,7 +9,6 @@ version = "0.10.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cursive_core = { workspace = true }
 eden_dag = { workspace = true }
 eyre = { workspace = true }
 git-branchless-invoke = { workspace = true }

@@ -8,8 +8,6 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use bstr::{ByteSlice, ByteVec};
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
 use lazy_static::lazy_static;
 use regex::Regex;
 use tracing::instrument;
@@ -18,14 +16,14 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
+use crate::core::eventlog::{Event, EventCursor, EventReplayer};
+use crate::core::formatting::Glyphs;
+use crate::core::formatting::{BaseColor, StyledString, StyledStringBuilder};
+use crate::core::repo_ext::RepoReferencesSnapshot;
+use crate::core::rewrite::find_rewrite_target;
 use crate::git::{
     CategorizedReferenceName, Commit, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo,
 };
-
-use super::eventlog::{Event, EventCursor, EventReplayer};
-use super::formatting::{Glyphs, StyledStringBuilder};
-use super::repo_ext::RepoReferencesSnapshot;
-use super::rewrite::find_rewrite_target;
 
 /// An object which can be rendered in the smartlog.
 #[derive(Clone, Debug)]
