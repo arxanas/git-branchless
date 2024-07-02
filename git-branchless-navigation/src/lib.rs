@@ -17,9 +17,6 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
-
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
 use lib::util::{ExitCode, EyreExitOr};
@@ -32,7 +29,7 @@ use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::Pluralize;
+use lib::core::formatting::{BaseColor, Pluralize, StyledString};
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,

@@ -18,7 +18,6 @@ use std::fmt::{Debug, Write};
 use std::time::SystemTime;
 
 use branch_forge::BranchForge;
-use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
 use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
 use github::GithubForge;
@@ -27,7 +26,7 @@ use lazy_static::lazy_static;
 use lib::core::dag::{union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{Pluralize, StyledStringBuilder};
+use lib::core::formatting::{BaseColor, Effect, Pluralize, Style, StyledStringBuilder};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 use lib::try_exit_code;
@@ -192,6 +191,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         create,
         draft,
         message,
+        num_jobs,
         execution_strategy,
         dry_run,
     } = args;
@@ -204,6 +204,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         create,
         draft,
         message,
+        num_jobs,
         execution_strategy,
         dry_run,
     )
@@ -218,6 +219,7 @@ fn submit(
     create: bool,
     draft: bool,
     message: Option<String>,
+    num_jobs: Option<usize>,
     execution_strategy: Option<TestExecutionStrategy>,
     dry_run: bool,
 ) -> EyreExitOr<()> {
@@ -253,7 +255,7 @@ fn submit(
         bisect: false,
         no_cache: true,
         interactive: false,
-        jobs: None,
+        jobs: num_jobs,
         verbosity: Verbosity::None,
         apply_fixes: false,
     };
