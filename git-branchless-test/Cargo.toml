@@ -10,7 +10,6 @@ version = "0.9.0"
 bstr = { workspace = true }
 clap = { workspace = true }
 crossbeam = { workspace = true }
-cursive = { workspace = true }
 eden_dag = { workspace = true }
 eyre = { workspace = true }
 fslock = { workspace = true }
