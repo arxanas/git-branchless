@@ -37,13 +37,12 @@ use lib::core::config::{
     print_hint_suppression_notice, Hint,
 };
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
-use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
+use lib::core::effects::{icons, Effects, OperationIcon, OperationType, ProgressHandle};
 use lib::core::eventlog::{
     EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
 };
 use lib::core::formatting::{
-    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString,
-    StyledStringBuilder,
+    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString, StyledStringBuilder,
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
@@ -1144,10 +1143,40 @@ fn shell_escape(s: impl AsRef<str>) -> String {
     escaped
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct TestJob {
+#[derive(Clone, Debug)]
+struct TestJob<'a> {
+    effects: Effects,
+    progress: Arc<ProgressHandle<'a>>,
     commit_oid: NonZeroOid,
-    operation_type: OperationType,
+}
+
+impl<'a> PartialEq for TestJob<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            effects: _,
+            progress: _,
+            commit_oid,
+        } = self;
+        let Self {
+            effects: _,
+            progress: _,
+            commit_oid: other_commit_oid,
+        } = other;
+        commit_oid == other_commit_oid
+    }
+}
+
+impl<'a> Eq for TestJob<'a> {}
+
+impl<'a> std::hash::Hash for TestJob<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let Self {
+            effects: _,
+            progress: _,
+            commit_oid,
+        } = self;
+        commit_oid.hash(state);
+    }
 }
 
 #[derive(Debug, Error)]
@@ -1351,29 +1380,30 @@ fn run_tests_inner<'a>(
         test_outputs: test_outputs_unordered,
         testing_aborted_error,
     } = {
-        let (effects, progress) =
+        let (loop_effects, loop_progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.to_string())));
-        progress.notify_progress(0, commits.len());
+        loop_progress.notify_progress(0, commits.len());
         let commit_jobs = {
             let mut results = IndexMap::new();
             for commit in commits {
                 // Create the progress entries in the multiprogress meter without starting them.
                 // They'll be resumed later in the loop below.
-                let commit_description = effects
+                let commit_description = loop_effects
                     .get_glyphs()
-                    .render(commit.friendly_describe(effects.get_glyphs())?)?;
+                    .render(commit.friendly_describe(loop_effects.get_glyphs())?)?;
                 let operation_type =
                     OperationType::RunTestOnCommit(Arc::new(commit_description.clone()));
-                let (_effects, progress) = effects.start_operation(operation_type.clone());
-                progress.notify_status(
+                let (job_effects, job_progress) = loop_effects.start_operation(operation_type);
+                job_progress.notify_status(
                     OperationIcon::InProgress,
                     format!("Waiting to run on {commit_description}"),
                 );
                 results.insert(
                     commit.get_oid(),
                     TestJob {
+                        effects: job_effects,
+                        progress: Arc::new(job_progress),
                         commit_oid: commit.get_oid(),
-                        operation_type,
                     },
                 );
             }
@@ -1393,8 +1423,7 @@ fn run_tests_inner<'a>(
             let workers: HashMap<WorkerId, crossbeam::thread::ScopedJoinHandle<()>> = {
                 let mut result = HashMap::new();
                 for worker_id in 1..=*num_jobs {
-                    let effects = &effects;
-                    let progress = &progress;
+                    let loop_progress = &loop_progress;
                     let shell_path = &shell_path;
                     let work_queue = work_queue.clone();
                     let result_tx = result_tx.clone();
@@ -1404,13 +1433,14 @@ fn run_tests_inner<'a>(
                     };
                     let f = move |job: TestJob, repo: &Repo| -> eyre::Result<TestOutput> {
                         let TestJob {
+                            effects: job_effects,
+                            progress: job_progress,
                             commit_oid,
-                            operation_type,
                         } = job;
                         let commit = repo.find_commit_or_fail(commit_oid)?;
                         run_test(
-                            effects,
-                            operation_type,
+                            job_effects,
+                            &job_progress,
                             git_run_info,
                             shell_path,
                             repo,
@@ -1423,7 +1453,7 @@ fn run_tests_inner<'a>(
                     result.insert(
                         worker_id,
                         scope.spawn(move |_scope| {
-                            worker(progress, worker_id, work_queue, result_tx, setup, f);
+                            worker(loop_progress, worker_id, work_queue, result_tx, setup, f);
                             debug!("Exiting spawned thread closure");
                         }),
                     );
@@ -1450,7 +1480,7 @@ fn run_tests_inner<'a>(
 
             if test_results.testing_aborted_error.is_none() && search_strategy.is_none() {
                 debug!("Waiting for workers");
-                progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
+                loop_progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
                 for (worker_id, worker) in workers {
                     worker
                         .join()
@@ -1509,17 +1539,17 @@ struct EventLoopOutput<'a> {
     testing_aborted_error: Option<TestingAbortedError>,
 }
 
-fn event_loop(
-    commit_jobs: IndexMap<NonZeroOid, TestJob>,
-    mut search: search::Search<SearchGraph>,
+fn event_loop<'graph, 'job>(
+    commit_jobs: IndexMap<NonZeroOid, TestJob<'job>>,
+    mut search: search::Search<SearchGraph<'graph>>,
     search_strategy: Option<BasicStrategy>,
     num_jobs: usize,
-    work_queue: WorkQueue<TestJob>,
-    result_rx: Receiver<JobResult<TestJob, TestOutput>>,
-) -> eyre::Result<EventLoopOutput> {
+    work_queue: WorkQueue<TestJob<'job>>,
+    result_rx: Receiver<JobResult<TestJob<'job>, TestOutput>>,
+) -> eyre::Result<EventLoopOutput<'graph>> {
     #[derive(Debug)]
-    enum ScheduledJob {
-        Scheduled(TestJob),
+    enum ScheduledJob<'a> {
+        Scheduled(TestJob<'a>),
         Complete(TestOutput),
     }
     let mut scheduled_jobs: HashMap<NonZeroOid, ScheduledJob> = Default::default();
@@ -1637,8 +1667,9 @@ fn event_loop(
 
             Ok(JobResult::Error(worker_id, job, error_message)) => {
                 let TestJob {
+                    effects: _,
+                    progress: _,
                     commit_oid,
-                    operation_type: _,
                 } = job;
                 eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
             }
@@ -1647,8 +1678,9 @@ fn event_loop(
         };
 
         let TestJob {
+            effects: _,
+            progress: _,
             commit_oid,
-            operation_type: _,
         } = job;
         let (maybe_testing_aborted_error, search_status) = match &test_output.test_status {
             TestStatus::CheckoutFailed
@@ -2184,8 +2216,8 @@ fn apply_fixes(
 
 #[instrument]
 fn run_test(
-    effects: &Effects,
-    operation_type: OperationType,
+    effects: Effects,
+    progress: &ProgressHandle,
     git_run_info: &GitRunInfo,
     shell_path: &Path,
     repo: &Repo,
@@ -2205,7 +2237,6 @@ fn run_test(
         verbosity: _,
         fix_options,
     } = options;
-    let (effects, progress) = effects.start_operation(operation_type);
     progress.notify_status(
         OperationIcon::InProgress,
         format!(
