@@ -338,6 +338,19 @@ impl<'repo> Branch<'repo> {
         Ok(Some(upstream_branch_name_without_remote.to_owned()))
     }
 
+    /// Get the associated remote to pull from for this branch. If there is no
+    /// associated remote, returns `None`.
+    #[instrument]
+    pub fn get_pull_remote_name(&self) -> eyre::Result<Option<String>> {
+        let branch_name = self
+            .inner
+            .name()?
+            .ok_or_else(|| eyre::eyre!("Branch name was not UTF-8: {self:?}"))?;
+        let config = self.repo.get_readonly_config()?;
+        let pull_remote_name = config.get(format!("branch.{branch_name}.remote"))?;
+        Ok(pull_remote_name)
+    }
+
     /// Get the associated remote to push to for this branch. If there is no
     /// associated remote, returns `None`. Note that this never reads the value
     /// of `push.remoteDefault`.
