@@ -15,7 +15,7 @@ use git_branchless_revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType, WithProgress};
-use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{BaseColor, Pluralize, StyledStringBuilder};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
@@ -45,6 +45,7 @@ fn get_stack_roots(dag: &Dag, commit_sets: Vec<CommitSet>) -> eyre::Result<Commi
 }
 
 /// Move all commit stacks on top of the main branch.
+#[tracing::instrument]
 pub fn sync(
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -63,10 +64,6 @@ pub fn sync(
     // side-effects.
     check_revset_syntax(&repo, &revsets)?;
 
-    if pull {
-        try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?);
-    }
-
     let MoveOptions {
         force_rewrite_public_commits,
         force_in_memory,
@@ -82,8 +79,6 @@ pub fn sync(
         dump_rebase_constraints,
         dump_rebase_plan,
     };
-    let now = SystemTime::now();
-    let event_tx_id = event_log_db.make_transaction_id(now, "sync")?;
     let execute_options = ExecuteRebasePlanOptions {
         now,
         event_tx_id,
@@ -100,13 +95,16 @@ pub fn sync(
     let thread_pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
 
-    let head_info = repo.get_head_info()?;
     if pull {
-        try_exit_code!(execute_main_branch_sync_plan(
+        let head_info = repo.get_head_info()?;
+        try_exit_code!(pull_main_branch(
             effects,
             git_run_info,
-            &repo,
             &event_log_db,
+            event_tx_id,
+            &repo,
+            &revsets,
+            resolve_revset_options,
             &build_options,
             &execute_options,
             &thread_pool,
@@ -115,9 +113,9 @@ pub fn sync(
         )?);
     }
 
-    // The main branch might have changed since we synced with `master`, so read its information again.
-
-    execute_sync_plans(
+    // NOTE: this function loads its own `Dag` as the graph may have changed after pulling the
+    // main branch.
+    try_exit_code!(execute_sync_plans(
         effects,
         git_run_info,
         &repo,
@@ -128,9 +126,44 @@ pub fn sync(
         &repo_pool,
         revsets,
         resolve_revset_options,
-    )
+    )?);
+
+    Ok(Ok(()))
 }
 
+#[tracing::instrument]
+fn pull_main_branch(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    event_log_db: &EventLogDb,
+    event_tx_id: EventTransactionId,
+    repo: &Repo,
+    revsets: &[Revset],
+    resolve_revset_options: &ResolveRevsetOptions,
+    build_options: &BuildRebasePlanOptions,
+    execute_options: &ExecuteRebasePlanOptions,
+    thread_pool: &ThreadPool,
+    repo_pool: &RepoPool,
+    head_info: &ResolvedReferenceInfo,
+) -> EyreExitOr<()> {
+    try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?);
+
+    try_exit_code!(execute_main_branch_sync_plan(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        build_options,
+        execute_options,
+        thread_pool,
+        repo_pool,
+        head_info,
+    )?);
+
+    Ok(Ok(()))
+}
+
+#[tracing::instrument]
 fn execute_main_branch_sync_plan(
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -293,6 +326,7 @@ fn execute_main_branch_sync_plan(
     )
 }
 
+#[tracing::instrument]
 fn execute_sync_plans(
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -388,6 +422,7 @@ fn execute_sync_plans(
     )
 }
 
+#[tracing::instrument]
 fn execute_plans(
     effects: &Effects,
     git_run_info: &GitRunInfo,
