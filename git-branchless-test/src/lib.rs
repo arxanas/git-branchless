@@ -42,8 +42,7 @@ use lib::core::eventlog::{
     EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
 };
 use lib::core::formatting::{
-    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString,
-    StyledStringBuilder,
+    BaseColor, Effect, Glyphs, Pluralize, Style, StyledString, StyledStringBuilder,
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
