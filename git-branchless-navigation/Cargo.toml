@@ -7,7 +7,6 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.9.0"
 
 [dependencies]
-cursive = { workspace = true }
 eden_dag = { workspace = true }
 eyre = { workspace = true }
 git-branchless-opts = { workspace = true }
