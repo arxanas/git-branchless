@@ -1,6 +1,5 @@
 //! Implements the `git sync` command.
 
-use cursive_core::theme::BaseColor;
 use lib::try_exit_code;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -17,7 +16,7 @@ use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{Pluralize, StyledStringBuilder};
+use lib::core::formatting::{BaseColor, Pluralize, StyledStringBuilder};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, FailedMergeInfo, RebasePlan, RebasePlanBuilder, RebasePlanPermissions,
