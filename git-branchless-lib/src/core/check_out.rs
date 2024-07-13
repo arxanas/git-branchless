@@ -4,13 +4,12 @@ use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
 use eyre::Context;
 use itertools::Itertools;
 use tracing::instrument;
 
 use crate::core::config::get_auto_switch_branches;
+use crate::core::formatting::{BaseColor, StyledString};
 use crate::git::{
     update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
     Repo, Stage, UpdateIndexCommand, WorkingCopySnapshot,

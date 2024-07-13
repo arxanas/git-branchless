@@ -1,12 +1,10 @@
 use std::path::Path;
 
 use bstr::{BString, ByteSlice};
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
 use git2::message_trailers_bytes;
 use tracing::instrument;
 
-use crate::core::formatting::{Glyphs, StyledStringBuilder};
+use crate::core::formatting::{BaseColor, Glyphs, StyledString, StyledStringBuilder};
 use crate::core::node_descriptors::{
     render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject, Redactor,
 };

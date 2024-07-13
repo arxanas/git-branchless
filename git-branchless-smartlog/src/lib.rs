@@ -377,14 +377,13 @@ mod render {
     use std::cmp::Ordering;
     use std::collections::HashSet;
 
-    use cursive_core::theme::{BaseColor, Effect};
-    use cursive_core::utils::markup::StyledString;
     use tracing::instrument;
 
     use lib::core::dag::{CommitSet, Dag};
     use lib::core::effects::Effects;
-    use lib::core::formatting::{set_effect, Pluralize};
-    use lib::core::formatting::{Glyphs, StyledStringBuilder};
+    use lib::core::formatting::{
+        set_effect, BaseColor, Effect, Glyphs, Pluralize, StyledString, StyledStringBuilder,
+    };
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
 

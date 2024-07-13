@@ -21,31 +21,31 @@ use std::time::SystemTime;
 
 use cursive_core::event::Key;
 use cursive_core::traits::Resizable;
-use cursive_core::utils::markup::StyledString;
 use cursive_core::views::{
     Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView,
 };
 use cursive_core::{Cursive, CursiveRunner};
 use eyre::Context;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
-use lib::core::repo_ext::RepoExt;
-use lib::try_exit_code;
-use lib::util::{ExitCode, EyreExitOr};
 use tracing::instrument;
 
-use crate::tui::{with_siv, SingletonView};
 use git_branchless_revset::resolve_default_smartlog_commits;
 use git_branchless_smartlog::{make_smartlog_graph, render_graph};
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
+use lib::core::formatting::{Glyphs, Pluralize, StyledString, StyledStringBuilder};
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
+use lib::core::repo_ext::RepoExt;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::try_exit_code;
+use lib::util::{ExitCode, EyreExitOr};
+
+use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
     effects: &Effects,
@@ -999,7 +999,8 @@ pub fn undo(
 pub mod testing {
     use std::io::Read;
 
-    use cursive_core::{Cursive, CursiveRunner};
+    pub use cursive_core::event::Key;
+    pub use cursive_core::{Cursive, CursiveRunner};
 
     use lib::core::dag::Dag;
     use lib::core::effects::Effects;
