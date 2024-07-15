@@ -413,9 +413,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.8"
+version = "4.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84b3edb18336f4df585bc9aa31dd99c036dfa5dc5e9a2939a722a188f3a8970d"
+checksum = "64acc1846d54c1fe936a78dc189c34e28d3f5afc348403f28ecf53660b9b8462"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -423,9 +423,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.8"
+version = "4.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1c09dd5ada6c6c78075d6fd0da3f90d8080651e2d6cc8eb2f1aaa4034ced708"
+checksum = "6fb8393d67ba2e7bfaf28a23458e4e2b543cc73a99595511eb207fdb8aede942"
 dependencies = [
  "anstream",
  "anstyle",
@@ -466,7 +466,7 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f50dde5bc0c853d6248de457e5eb6e5a674a54b93810a34ded88d882ca1fe2de"
 dependencies = [
- "clap 4.5.8",
+ "clap 4.5.9",
  "roff 0.2.1",
 ]
 
@@ -573,7 +573,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.5.8",
+ "clap 4.5.9",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1473,7 +1473,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.9.0"
 dependencies = [
- "clap 4.5.8",
+ "clap 4.5.9",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1562,7 +1562,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.9.0"
 dependencies = [
- "clap 4.5.8",
+ "clap 4.5.9",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.13.0",
@@ -1666,7 +1666,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.9.0"
 dependencies = [
- "clap 4.5.8",
+ "clap 4.5.9",
  "cursive_core",
  "esl01-dag",
  "eyre",
@@ -1694,7 +1694,7 @@ version = "0.9.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.5.8",
+ "clap 4.5.9",
  "crossbeam",
  "cursive",
  "esl01-dag",
@@ -2992,7 +2992,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a1bf431016c7a34038f440696c672f0fee1a15d6aea31fe100df6974a35bf5f"
 dependencies = [
  "cassowary",
- "clap 4.5.8",
+ "clap 4.5.9",
  "crossterm 0.27.0",
  "diffy",
  "num-traits",
