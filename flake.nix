@@ -29,6 +29,12 @@
           # in nixpkgs, consider first improving the definition there, and then
           # update the `flake.lock` here.
 
+          postInstall = ''
+            mkdir -p $out/share/man
+
+            $out/bin/git-branchless install-man-pages $out/share/man
+          '';
+
           # in case local overrides might confuse upstream maintainers,
           # we do not list them here:
           meta = (removeAttrs meta [ "maintainers" ]) // {
