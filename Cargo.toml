@@ -40,7 +40,7 @@ chashmap = "2.2.2"
 chrono = "0.4.34"
 chrono-english = "0.1.7"
 chronoutil = "0.2.7"
-clap = "4.5.9"
+clap = "4.5.11"
 clap_mangen = "0.2.22"
 color-eyre = "0.6.3"
 concolor = { version = "0.1.1", features = ["auto"] }
