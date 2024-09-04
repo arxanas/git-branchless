@@ -1105,8 +1105,8 @@ impl EventReplayer {
     ///
     /// Args:
     /// * `num_events`: The number of events to advance by. Can be positive,
-    /// zero, or negative. If out of bounds, the cursor is set to the first or
-    /// last valid position, as appropriate.
+    ///   zero, or negative. If out of bounds, the cursor is set to the first or
+    ///   last valid position, as appropriate.
     pub fn advance_cursor(&self, cursor: EventCursor, num_events: isize) -> EventCursor {
         self.make_cursor(cursor.event_id + num_events)
     }

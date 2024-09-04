@@ -14,12 +14,12 @@
 //! There are two main reasons to implement working copy snapshots:
 //!
 //!  1. To support enhanced undo features. For example, you should be able to
-//!  jump back into merge conflict resolution which was happening at some past
-//!  time.
+//!     jump back into merge conflict resolution which was happening at some
+//!     past time.
 //!  2. To unify the implementations of operations across commits and the
-//!  working copy. For example, a `git split` command which splits one commit
-//!  into multiple could also be used to split the working copy into multiple
-//!  commits.
+//!     working copy. For example, a `git split` command which splits one commit
+//!     into multiple could also be used to split the working copy into multiple
+//!     commits.
 
 use itertools::Itertools;
 use std::collections::HashMap;

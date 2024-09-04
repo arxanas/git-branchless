@@ -451,7 +451,7 @@ mod in_memory {
             ///
             /// - This is only `None` if `HEAD` was unborn.
             /// - This doesn't capture if `HEAD` was pointing to a branch. The
-            /// caller will need to figure that out.
+            ///   caller will need to figure that out.
             new_head_oid: Option<NonZeroOid>,
         },
         MergeFailed(FailedMergeInfo),

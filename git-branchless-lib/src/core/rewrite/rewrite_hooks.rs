@@ -432,6 +432,8 @@ fn load_updated_head_oid(repo: &Repo) -> eyre::Result<Option<NonZeroOid>> {
     }
 }
 
+/// Register extra cleanup actions for rebase.
+///
 /// For rebases, register that extra cleanup actions should be taken when the
 /// rebase finishes and calls the post-rewrite hook. We don't want to change the
 /// behavior of `git rebase` itself, except when called via `git-branchless`, so

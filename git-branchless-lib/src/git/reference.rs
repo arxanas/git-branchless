@@ -130,10 +130,11 @@ impl<'repo> Reference<'repo> {
     }
 }
 
-/// Determine what kind of branch a reference is, given its name. The returned
-/// `suffix` value is converted to a `String` to be rendered to the screen, so
-/// it may have lost some information if the reference name had unusual
-/// characters.
+/// Determine what kind of branch a reference is, given its name.
+///
+/// The returned `suffix` value is converted to a `String` to be rendered to
+/// the screen, so it may have lost some information if the reference name had
+/// unusual characters.
 ///
 /// FIXME: This abstraction seems uncomfortable and clunky to use; consider
 /// revising.

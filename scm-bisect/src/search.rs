@@ -22,7 +22,7 @@ pub trait Graph: Debug {
     /// - `X == Y`
     /// - `X` is an immediate parent of `Y`.
     /// - `X` is an ancestor of an immediate parent of `Y` (defined
-    /// recursively).
+    ///   recursively).
     fn is_ancestor(
         &self,
         ancestor: Self::Node,

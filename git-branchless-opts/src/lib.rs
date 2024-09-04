@@ -989,9 +989,10 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std:
     Ok(())
 }
 
-/// Carry out some rewrites on the command-line arguments for uniformity. For
-/// example, `git-branchless-smartlog` becomes `git-branchless smartlog`, and
-/// the `.exe` suffix is removed on Windows. These are necessary for later
+/// Carry out some rewrites on the command-line arguments for uniformity.
+///
+/// For example, `git-branchless-smartlog` becomes `git-branchless smartlog`,
+/// and the `.exe` suffix is removed on Windows. These are necessary for later
 /// command-line argument parsing.
 pub fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
