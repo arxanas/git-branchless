@@ -59,6 +59,9 @@ tracing-subscriber = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 
+[features]
+man-pages = []
+
 [package.metadata.release]
 pre-release-replacements = [
   { file = "../CHANGELOG.md", search = "Unreleased", replace = "{{version}}", min = 1 },
