@@ -925,7 +925,7 @@ fn test_undo_no_confirm() -> eyre::Result<()> {
 fn test_undo_unseen_commit() -> eyre::Result<()> {
     // Disabled since we no longer support `origin/master` as a main branch, but this test might be
     // useful in the future.
-    if cfg!(none) {
+    if false {
         let git = make_git()?;
         if !git.supports_reference_transactions()? {
             return Ok(());
