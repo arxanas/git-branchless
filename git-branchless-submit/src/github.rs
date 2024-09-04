@@ -95,7 +95,7 @@ pub fn github_push_remote(repo: &Repo) -> eyre::Result<Option<String>> {
         // Possible values seem to be `base` and `other`. See:
         // https://github.com/search?q=repo%3Acli%2Fcli%20gh-resolved&type=code
         let gh_resolved: Option<String> =
-            config.get(&format!("remote.{remote_name}.gh-resolved"))?;
+            config.get(format!("remote.{remote_name}.gh-resolved"))?;
         if gh_resolved.as_deref() == Some("base") {
             return Ok(Some(remote_name));
         }
