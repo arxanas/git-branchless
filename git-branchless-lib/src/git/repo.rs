@@ -1,12 +1,12 @@
 //! Operations on the Git repository. This module exists for a few reasons:
 //!
 //! - To ensure that every call to a Git operation has an associated `wrap_err`
-//! for use with `Try`.
+//!   for use with `Try`.
 //! - To improve the interface in some cases. In particular, some operations in
-//! `git2` return an `Error` with code `ENOTFOUND`, but we should really return
-//! an `Option` in those cases.
+//!   `git2` return an `Error` with code `ENOTFOUND`, but we should really return
+//!   an `Option` in those cases.
 //! - To make it possible to audit all the Git operations carried out in the
-//! codebase.
+//!   codebase.
 //! - To collect some different helper Git functions.
 
 use std::borrow::Borrow;
@@ -320,11 +320,11 @@ pub fn message_prettify(message: &str, comment_char: Option<char>) -> Result<Str
 /// There are a couple of interesting edge cases to worry about:
 ///
 /// - `HEAD` is detached. This means that it's pointing directly to a commit and
-/// is not a symbolic reference for the time being. This is uncommon in normal
-/// Git usage, but very common in `git-branchless` usage.
+///   is not a symbolic reference for the time being. This is uncommon in normal
+///   Git usage, but very common in `git-branchless` usage.
 /// - `HEAD` is unborn. This means that it doesn't even exist yet. This happens
-/// when a repository has been freshly initialized, but no commits have been
-/// made, for example.
+///   when a repository has been freshly initialized, but no commits have been
+///   made, for example.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ResolvedReferenceInfo {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then

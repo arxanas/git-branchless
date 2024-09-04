@@ -10,6 +10,8 @@ use tracing::instrument;
 
 use crate::search;
 
+/// Directed acyclic graph commonly used in source control.
+///
 /// Implementation of `Graph` that represents the common case of a directed
 /// acyclic graph in source control. You can implement this trait instead of
 /// `Graph` (as there is a blanket implementation for `Graph`) and also make use
@@ -165,8 +167,8 @@ pub enum BasicStrategyKind {
     /// approach. In order to solve the following problem:
     ///
     /// > sometimes the best bisection points all happened to be in an area
-    /// where all the commits are untestable. And in this case the user was
-    /// asked to test many untestable commits, which could be very inefficient.
+    /// > where all the commits are untestable. And in this case the user was
+    /// > asked to test many untestable commits, which could be very inefficient.
     ///
     /// We instead consider the hypothetical case that the node is a success,
     /// and yield further nodes as if it were a success, and then interleave

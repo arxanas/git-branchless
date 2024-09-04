@@ -101,9 +101,11 @@ pub(super) fn make_non_zero_oid(oid: git2::Oid) -> NonZeroOid {
     NonZeroOid { inner: oid }
 }
 
-/// Represents an OID which may be zero or non-zero. This exists because Git
-/// often represents the absence of an object using the zero OID. We want to
-/// statically check for those cases by using a more descriptive type.
+/// OID which may be zero or non-zero.
+///
+/// This exists because Git often represents the absence of an object using the
+/// zero OID. We want to statically check for those cases by using a more
+/// descriptive type.
 ///
 /// This type is isomorphic to `Option<NonZeroOid>`. It should be used primarily
 /// when converting to and from string representations of OID values.

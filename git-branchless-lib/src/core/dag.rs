@@ -728,10 +728,11 @@ impl std::fmt::Debug for Dag {
     }
 }
 
-/// Sort the given set of commits topologically. In the case of two commits
-/// being unorderable, sort them using a deterministic tie-breaking function.
-/// Commits which have been garbage collected and are no longer available in the
-/// repository are omitted.
+/// Sort the given set of commits topologically.
+///
+/// In the case of two commits being unorderable, sort them using a
+/// deterministic tie-breaking function. Commits which have been garbage
+/// collected and are no longer available in the repository are omitted.
 ///
 /// FIXME: this function does not use a total ordering for the sort, which could
 /// mean that it produces incorrect results. Suppose that we have a graph with

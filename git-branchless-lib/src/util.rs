@@ -34,6 +34,8 @@ impl TryFrom<ExitStatus> for ExitCode {
     }
 }
 
+/// Encapsulate both an `eyre::Result<T>` and a possible subcommand exit code.
+///
 /// Helper type alias for the common case that we want to run a computation and
 /// return `eyre::Result<T>`, but it's also possible that we run a subcommand
 /// which returns an exit code that we want to propagate. See also `try_exit_code`.

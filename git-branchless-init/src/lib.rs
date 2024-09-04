@@ -305,11 +305,11 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
 /// tries to look up with `man` when you run e.g. `git smartlog --help`:
 ///
 /// - `branchless smartlog`: invokes `man git-branchless`, which means that the
-/// subcommand is not included in the `man` invocation, so it can only show
-/// generic help.
+///   subcommand is not included in the `man` invocation, so it can only show
+///   generic help.
 /// - `branchless-smartlog`: invokes `man git-branchless-smartlog, so the
-/// subcommand is included in the `man` invocation, so it can show more specific
-/// help.
+///   subcommand is included in the `man` invocation, so it can show more specific
+///   help.
 fn should_use_wrapped_command_alias() -> bool {
     cfg!(feature = "man-pages")
 }

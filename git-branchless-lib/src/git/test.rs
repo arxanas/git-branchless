@@ -15,21 +15,24 @@ use super::{Commit, NonZeroOid, Repo, RepoError};
 pub const TEST_SUCCESS_EXIT_CODE: i32 = 0;
 
 /// The exit status to use when a test command intends to skip the provided commit.
+///
 /// This exit code is used officially by several source control systems:
 ///
 /// - Git: "Note that the script (my_script in the above example) should exit
-/// with code 0 if the current source code is good/old, and exit with a code
-/// between 1 and 127 (inclusive), except 125, if the current source code is
-/// bad/new."
+///   with code 0 if the current source code is good/old, and exit with a code
+///   between 1 and 127 (inclusive), except 125, if the current source code is
+///   bad/new."
 /// - Mercurial: "The exit status of the command will be used to mark revisions
-/// as good or bad: status 0 means good, 125 means to skip the revision, 127
-/// (command not found) will abort the bisection, and any other non-zero exit
-/// status means the revision is bad."
+///   as good or bad: status 0 means good, 125 means to skip the revision, 127
+///   (command not found) will abort the bisection, and any other non-zero exit
+///   status means the revision is bad."
 ///
 /// And it's become the de-facto standard for custom bisection scripts for other
 /// source control systems as well.
 pub const TEST_INDETERMINATE_EXIT_CODE: i32 = 125;
 
+/// The exit status used to abort a process.
+///
 /// Similarly to `INDETERMINATE_EXIT_CODE`, this exit code is used officially by
 /// `git-bisect` and others to abort the process. It's also typically raised by
 /// the shell when the command is not found, so it's technically ambiguous
@@ -43,9 +46,10 @@ pub fn make_test_command_slug(command: String) -> String {
     command.replace(['/', ' ', '\n'], "__")
 }
 
-/// A version of `NonZeroOid` that can be serialized and deserialized. This
-/// exists in case we want to move this type (back) into a separate module which
-/// has a `serde` dependency in the interest of improving build times.
+/// A version of `NonZeroOid` that can be serialized and deserialized.
+///
+/// This exists in case we want to move this type (back) into a separate module
+/// which has a `serde` dependency in the interest of improving build times.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SerializedNonZeroOid(pub NonZeroOid);
 
@@ -109,8 +113,10 @@ fn get_test_dir(repo: &Repo) -> Result<PathBuf, RepoError> {
 }
 
 /// Get the directory where the result of tests for a particular commit are
-/// stored. Tests are keyed by tree OID, not commit OID, so that they can be
-/// cached based on the contents of the commit, rather than its specific commit
+/// stored.
+///
+/// Tests are keyed by tree OID, not commit OID, so that they can be cached
+/// based on the contents of the commit, rather than its specific commit
 /// hash. This means that we can cache the results of tests for commits that
 /// have been amended or rebased.
 pub fn get_test_tree_dir(repo: &Repo, commit: &Commit) -> Result<PathBuf, RepoError> {
