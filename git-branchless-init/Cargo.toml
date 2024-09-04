@@ -20,3 +20,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
+
+[features]
+man-pages = []
