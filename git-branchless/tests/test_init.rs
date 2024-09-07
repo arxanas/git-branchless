@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use eyre::Context;
+use itertools::Itertools;
 use lib::git::GitVersion;
 use lib::testing::{
     make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
@@ -363,13 +364,11 @@ fn test_init_uninstall() -> eyre::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "man-pages")]
 #[test]
-fn test_man_viewer_installed() -> eyre::Result<()> {
-    use std::collections::HashMap;
-
-    use itertools::Itertools;
-
+fn test_help_flag() -> eyre::Result<()> {
+    // NOTE(arxanas, 2024-09-07): Not sure if this test actually fails on
+    // Windows since it's no longer exercising the `man` code path.
+    //
     // The `man` executable isn't installed for most Windows Git installations.
     // In particular, it's not installed on Github Actions.  It might be
     // possible to install it manually, but I didn't bother.
@@ -384,6 +383,9 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
 
+    // NOTE(arxanas, 2024-09-07): This test no longer exercises the man viewer
+    // code path, so the below environment manipulation probably does nothing.
+    //
     // `env` and `man` are not on the sanitized testing `PATH`, so use the
     // caller's `PATH` instead.
     let testing_path = git.get_path_for_env();
@@ -407,10 +409,10 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        let first_word = stdout.split_whitespace().next();
-        insta::assert_debug_snapshot!(first_word, @r###"
+        let first_line = stdout.lines().next();
+        insta::assert_debug_snapshot!(first_line, @r###"
         Some(
-            "GIT-BRANCHLESS-SMARTLOG(1)",
+            "`smartlog` command",
         )
         "###);
     }
@@ -424,10 +426,10 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        let first_word = stdout.split_whitespace().next();
-        insta::assert_debug_snapshot!(first_word, @r###"
+        let first_line = stdout.lines().next();
+        insta::assert_debug_snapshot!(first_line, @r###"
         Some(
-            "GIT-INIT(1)",
+            "Initialize the branchless workflow for this repository",
         )
         "###);
     }
