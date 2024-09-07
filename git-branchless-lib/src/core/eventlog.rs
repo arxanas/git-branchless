@@ -17,7 +17,9 @@ use tracing::{error, instrument};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::repo_ext::RepoExt;
-use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, Repo};
+use crate::git::{
+    CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, ReferenceTarget, Repo,
+};
 
 use super::repo_ext::RepoReferencesSnapshot;
 
@@ -1336,6 +1338,9 @@ impl EventReplayer {
     }
 
     /// Get the `RepoReferencesSnapshot` at the cursor's point in time.
+    ///
+    /// FIXME: Not enough information is stored to get historical symbolic
+    /// reference targets (particularly for `HEAD`).
     pub fn get_references_snapshot(
         &self,
         repo: &Repo,
@@ -1346,6 +1351,11 @@ impl EventReplayer {
         let branch_oid_to_names = self.get_cursor_branch_oid_to_names(cursor, repo)?;
         Ok(RepoReferencesSnapshot {
             head_oid,
+            // FIXME: Not enough information is stored to get the historical
+            // symbolic reference target:
+            head_target: head_oid.map(|head_oid| ReferenceTarget::Direct {
+                oid: head_oid.into(),
+            }),
             main_branch_oid,
             branch_oid_to_names,
         })

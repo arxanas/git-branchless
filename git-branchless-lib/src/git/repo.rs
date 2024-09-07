@@ -41,7 +41,7 @@ use crate::git::{Branch, BranchType, Commit, Reference, ReferenceName};
 use super::index::{Index, IndexEntry};
 use super::snapshot::WorkingCopySnapshot;
 use super::status::FileMode;
-use super::{tree, Diff, StatusEntry};
+use super::{tree, Diff, ReferenceTarget, StatusEntry};
 
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
@@ -349,6 +349,20 @@ impl ResolvedReferenceInfo {
                 .strip_prefix("refs/heads/")
                 .unwrap_or(reference_name),
         ))
+    }
+
+    /// Convert this `ResolvedReferenceInfo` into a `ReferenceTarget`.
+    pub fn into_reference_target(self) -> Option<ReferenceTarget> {
+        let Self {
+            oid,
+            reference_name,
+        } = self;
+        match reference_name {
+            Some(reference_name) => Some(ReferenceTarget::Symbolic { reference_name }),
+            None => oid.map(|oid| ReferenceTarget::Direct {
+                oid: MaybeZeroOid::from(oid),
+            }),
+        }
     }
 }
 

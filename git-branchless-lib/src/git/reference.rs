@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-use std::ffi::OsStr;
 use std::string::FromUtf8Error;
 
 use thiserror::Error;
@@ -9,23 +7,6 @@ use crate::git::config::ConfigRead;
 use crate::git::oid::make_non_zero_oid;
 use crate::git::repo::{Error, Result};
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
-
-/// The target of a reference.
-#[derive(Debug, PartialEq, Eq)]
-pub enum ReferenceTarget<'a> {
-    /// The reference points directly to an object. This is the case for most
-    /// references, such as branches.
-    Direct {
-        /// The OID of the pointed-to object.
-        oid: MaybeZeroOid,
-    },
-
-    /// The reference points to another reference with the given name.
-    Symbolic {
-        /// The name of the pointed-to reference.
-        reference_name: Cow<'a, OsStr>,
-    },
-}
 
 #[derive(Debug, Error)]
 pub enum ReferenceNameError {
@@ -38,6 +19,11 @@ pub enum ReferenceNameError {
 pub struct ReferenceName(String);
 
 impl ReferenceName {
+    /// `ReferenceName` corresponding to the `HEAD` reference.
+    pub fn head() -> Self {
+        Self("HEAD".to_string())
+    }
+
     /// Create a reference name from the provided bytestring. Non-UTF-8 references are not supported.
     pub fn from_bytes(bytes: Vec<u8>) -> std::result::Result<ReferenceName, ReferenceNameError> {
         let reference_name = String::from_utf8(bytes).map_err(ReferenceNameError::InvalidUtf8)?;
@@ -79,6 +65,23 @@ impl AsRef<str> for ReferenceName {
     fn as_ref(&self) -> &str {
         &self.0
     }
+}
+
+/// The target of a reference.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReferenceTarget {
+    /// The reference points directly to an object. This is the case for most
+    /// references, such as branches.
+    Direct {
+        /// The OID of the pointed-to object.
+        oid: MaybeZeroOid,
+    },
+
+    /// The reference points to another reference with the given name.
+    Symbolic {
+        /// The name of the pointed-to reference.
+        reference_name: ReferenceName,
+    },
 }
 
 /// Represents a reference to an object.

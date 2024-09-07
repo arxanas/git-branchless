@@ -213,6 +213,7 @@ impl Dag {
         let observed_commits = event_replayer.get_cursor_oids(event_cursor);
         let RepoReferencesSnapshot {
             head_oid,
+            head_target: _,
             main_branch_oid,
             branch_oid_to_names,
         } = references_snapshot;

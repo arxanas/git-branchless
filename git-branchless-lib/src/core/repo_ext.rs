@@ -1,13 +1,14 @@
 //! Helper functions on [`Repo`].
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use color_eyre::Help;
 use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{
-    Branch, BranchType, CategorizedReferenceName, ConfigRead, NonZeroOid, ReferenceName, Repo,
+    Branch, BranchType, CategorizedReferenceName, ConfigRead, NonZeroOid, ReferenceName,
+    ReferenceTarget, Repo, ResolvedReferenceInfo,
 };
 
 use super::config::get_main_branch_name;
@@ -15,14 +16,85 @@ use super::config::get_main_branch_name;
 /// A snapshot of all the positions of references we care about in the repository.
 #[derive(Debug)]
 pub struct RepoReferencesSnapshot {
-    /// The location of the `HEAD` reference. This may be `None` if `HEAD` is unborn.
+    /// The object pointed to by the `HEAD` reference, possibly via a symbolic reference. This may be `None` if
+    /// `HEAD` is unborn.
     pub head_oid: Option<NonZeroOid>,
+
+    /// The target of the `HEAD` reference. This may be `None` if `HEAD` is unborn.
+    pub head_target: Option<ReferenceTarget>,
 
     /// The location of the main branch.
     pub main_branch_oid: NonZeroOid,
 
     /// A mapping from commit OID to the branches which point to that commit.
     pub branch_oid_to_names: HashMap<NonZeroOid, HashSet<ReferenceName>>,
+}
+
+impl RepoReferencesSnapshot {
+    /// Generate the mapping from branch names to the OIDs they point to.
+    pub fn branch_targets(&self) -> HashMap<&ReferenceName, NonZeroOid> {
+        self.branch_oid_to_names
+            .iter()
+            .flat_map(|(oid, names)| names.iter().map(|name| (name, *oid)))
+            .collect()
+    }
+
+    /// Generate a list of differences between this snapshot and a later one.
+    pub fn diff<'a>(
+        &'a self,
+        other: &'a Self,
+    ) -> Vec<(ReferenceName, ResolvedReferenceInfo, ResolvedReferenceInfo)> {
+        let old_branch_targets = self.branch_targets();
+        let new_branch_targets = other.branch_targets();
+        let all_branch_names: BTreeSet<&ReferenceName> = old_branch_targets
+            .keys()
+            .copied()
+            .chain(new_branch_targets.keys().copied())
+            .collect();
+
+        let mut result = Vec::new();
+        if self.head_oid != other.head_oid || self.head_target != other.head_target {
+            result.push((
+                ReferenceName::head(),
+                ResolvedReferenceInfo {
+                    oid: self.head_oid,
+                    reference_name: match &self.head_target {
+                        Some(ReferenceTarget::Symbolic { reference_name }) => {
+                            Some(reference_name.clone())
+                        }
+                        Some(ReferenceTarget::Direct { .. }) | None => None,
+                    },
+                },
+                ResolvedReferenceInfo {
+                    oid: self.head_oid,
+                    reference_name: match &other.head_target {
+                        Some(ReferenceTarget::Symbolic { reference_name }) => {
+                            Some(reference_name.clone())
+                        }
+                        Some(ReferenceTarget::Direct { .. }) | None => None,
+                    },
+                },
+            ));
+        }
+
+        for branch_name in all_branch_names {
+            let old_oid = old_branch_targets.get(branch_name).copied();
+            let new_oid = new_branch_targets.get(branch_name).copied();
+            if old_oid != new_oid {
+                let old_info = ResolvedReferenceInfo {
+                    oid: old_oid,
+                    reference_name: None,
+                };
+                let new_info = ResolvedReferenceInfo {
+                    oid: new_oid,
+                    reference_name: None,
+                };
+                result.push((branch_name.clone(), old_info, new_info));
+            }
+        }
+
+        result
+    }
 }
 
 /// Helper functions on [`Repo`].
@@ -114,12 +186,13 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
     }
 
     fn get_references_snapshot(&self) -> eyre::Result<RepoReferencesSnapshot> {
-        let head_oid = self.get_head_info()?.oid;
+        let head_info = self.get_head_info()?;
         let main_branch_oid = self.get_main_branch_oid()?;
         let branch_oid_to_names = self.get_branch_oid_to_names()?;
 
         Ok(RepoReferencesSnapshot {
-            head_oid,
+            head_oid: head_info.oid,
+            head_target: head_info.into_reference_target(),
             main_branch_oid,
             branch_oid_to_names,
         })
