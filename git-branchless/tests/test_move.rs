@@ -2738,9 +2738,7 @@ fn test_move_base_onto_head() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
-
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.detach_head()?;
