@@ -136,3 +136,32 @@ fn test_sparse_checkout() -> eyre::Result<()> {
 
     Ok(())
 }
+
+/// The Git index v4 format is supported as of libgit2 v1.8.0: https://github.com/arxanas/git-branchless/issues/894#issuecomment-2044059209
+/// libgit2 v1.8.0 was bundled into git2 v0.19.0: https://github.com/arxanas/git-branchless/issues/894#issuecomment-2270760735
+///
+/// See https://github.com/arxanas/git-branchless/issues/894
+/// See https://github.com/arxanas/git-branchless/issues/1363
+#[test]
+fn test_index_version_4() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.run(&["update-index", "--index-version=4"])?;
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("switch", &["HEAD"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout HEAD
+        @ f777ecc (> master) create initial.txt
+        "###);
+    }
+
+    Ok(())
+}
