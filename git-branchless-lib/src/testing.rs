@@ -191,6 +191,7 @@ impl Git {
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
             ("GIT_EXEC_PATH", self.git_exec_path.as_os_str().into()),
+            ("LC_ALL", "C".into()),
             ("PATH", new_path),
             (TEST_GIT, self.path_to_git.as_os_str().into()),
             (
