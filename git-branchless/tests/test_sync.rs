@@ -43,7 +43,7 @@ fn test_sync_basic() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["sync"])?;
+        let (stdout, stderr) = git.branchless("sync", &[])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: creating working copy snapshot
         Switched to branch 'master'
@@ -102,7 +102,7 @@ fn test_sync_up_to_date() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, stderr) = git.run(&["sync"])?;
+        let (stdout, stderr) = git.branchless("sync", &[])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @"Not moving up-to-date stack at 70deb1e create test3.txt
 ");
@@ -141,7 +141,7 @@ fn test_sync_pull() -> eyre::Result<()> {
     cloned_repo.commit_file("test6", 6)?;
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 96d1c37 (master) create test2.txt
@@ -155,7 +155,7 @@ fn test_sync_pull() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
@@ -170,7 +170,7 @@ fn test_sync_pull() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O f81d55c (master) create test5.txt
@@ -180,7 +180,7 @@ fn test_sync_pull() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
@@ -286,7 +286,7 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
     cloned_repo.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ d2e18e3 (> master) create test5.txt
@@ -294,7 +294,7 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
@@ -312,7 +312,7 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ f81d55c (> master) create test5.txt
@@ -354,7 +354,7 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
     cloned_repo.run(&["branch", "should-be-deleted"])?;
 
     {
-        let (stdout, stderr) = cloned_repo.run(&["sync", "-p", "--on-disk"])?;
+        let (stdout, stderr) = cloned_repo.branchless("sync", &["-p", "--on-disk"])?;
         let stdout = remove_nondeterministic_lines(stdout);
         let stderr = remove_nondeterministic_lines(stderr);
         insta::assert_snapshot!(stderr, @r###"
@@ -382,7 +382,7 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 96d1c37 (> master) create test2.txt

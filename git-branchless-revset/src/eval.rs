@@ -1113,13 +1113,10 @@ mod tests {
         let test3_oid = git.commit_file("test3", 3)?;
         let test4_oid = git.commit_file("test4", 4)?;
 
-        git.run(&[
+        git.branchless(
             "move",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &["-s", &test3_oid.to_string(), "-d", &test1_oid.to_string()],
+        )?;
         git.branchless("reword", &["-m", "test4 has been rewritten twice"])?;
 
         let effects = Effects::new_suppress_for_test(Glyphs::text());

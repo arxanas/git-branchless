@@ -110,7 +110,7 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amend test1.txt v2"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack"])?;
+        let (stdout, _stderr) = git.branchless("restack", &[])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
@@ -213,7 +213,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     git.run(&["branch", "foo"])?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&["prev"])?;
+    git.run(&["checkout", "HEAD^"])?;
 
     git.write_file_txt("test2", "conflicting test2 contents")?;
     git.run(&["add", "."])?;
@@ -454,7 +454,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["restack"])?;
+        let (stdout, _stderr) = git.branchless("restack", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
         No abandoned branches to restack.
