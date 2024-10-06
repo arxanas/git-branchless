@@ -44,7 +44,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.run(&["branch", "test1"])?;
     git.commit_file("test2", 2)?;
-    git.run(&["prev"])?;
+    git.run(&["checkout", "test1"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -114,9 +114,10 @@ fn test_reword_preserves_comment_lines_for_messages_on_cli() -> eyre::Result<()>
     "###);
 
     // try adding several messages that start w/ '#'
-    git.run(&[
-        "reword", "-f", "-m", "foo", "-m", "# bar", "-m", "#", "-m", "buz",
-    ])?;
+    git.branchless(
+        "reword",
+        &["-f", "-m", "foo", "-m", "# bar", "-m", "#", "-m", "buz"],
+    )?;
 
     // confirm the '#' messages aren't present
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
@@ -187,14 +188,10 @@ fn test_reword_multiple_commits_on_same_branch() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    let (_stdout, _stderr) = git.run(&[
+    let (_stdout, _stderr) = git.branchless(
         "reword",
-        "HEAD",
-        "HEAD^",
-        "--force-rewrite",
-        "--message",
-        "foo",
-    ])?;
+        &["HEAD", "HEAD^", "--force-rewrite", "--message", "foo"],
+    )?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -285,13 +282,15 @@ fn test_reword_across_branches() -> eyre::Result<()> {
     @ 848121c create test5.txt
     "###);
 
-    let (_stdout, _stderr) = git.run(&[
+    let (_stdout, _stderr) = git.branchless(
         "reword",
-        &test2_oid.to_string(),
-        &test4_oid.to_string(),
-        "--message",
-        "foo",
-    ])?;
+        &[
+            &test2_oid.to_string(),
+            &test4_oid.to_string(),
+            "--message",
+            "foo",
+        ],
+    )?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -318,8 +317,9 @@ fn test_reword_exit_early_public_commit() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["reword"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "reword",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()

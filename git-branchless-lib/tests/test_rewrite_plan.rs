@@ -202,7 +202,7 @@ fn test_plan_moving_nonconsecutive_commits() -> eyre::Result<()> {
     let test5_oid = git.commit_file("test5", 5)?;
     git.commit_file("test6", 6)?;
 
-    git.run(&["smartlog"])?;
+    git.smartlog()?;
 
     create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
         builder.move_commit(test3_oid, test1_oid)?;

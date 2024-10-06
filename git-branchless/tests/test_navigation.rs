@@ -22,8 +22,9 @@ fn test_prev() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["prev"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "prev",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -108,8 +109,9 @@ fn test_next_ambiguous() -> eyre::Result<()> {
     git.run(&["checkout", "master"])?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["next"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "next",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -238,7 +240,7 @@ fn test_next_on_master2() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["next"])?;
+        let (stdout, _stderr) = git.branchless("next", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
@@ -562,8 +564,9 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
     git.write_file_txt("test2", "conflicting contents")?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["next"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "next",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -660,8 +663,9 @@ fn test_navigation_merge() -> eyre::Result<()> {
     git.write_file_txt("conflicting", "foo\nbar\nqux\n")?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["prev"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "prev",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -724,8 +728,9 @@ fn test_navigation_force() -> eyre::Result<()> {
     git.write_file_txt("conflicting", "foo\n\nbar\nqux\n")?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["prev"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "prev",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()

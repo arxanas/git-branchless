@@ -828,8 +828,9 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     git.branchless("wrap", &["--", "commit", "--amend", "-m", "bad message"])?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["undo"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "undo",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 input: Some("n".to_string()),
@@ -860,8 +861,9 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["undo"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "undo",
+            &[],
             &GitRunOptions {
                 input: Some("y".to_string()),
                 ..Default::default()

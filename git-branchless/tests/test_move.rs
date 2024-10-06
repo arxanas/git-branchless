@@ -4886,7 +4886,7 @@ fn test_move_fixup_head_into_parent() -> eyre::Result<()> {
         "update 3",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -4907,15 +4907,17 @@ fn test_move_fixup_head_into_parent() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-s",
-            "HEAD",
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-s",
+                "HEAD",
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 8c3aa56 update 2 test.txt
@@ -4961,7 +4963,7 @@ fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
         "update 3",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -4982,13 +4984,10 @@ fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &test2_oid.to_string(),
-        ])?;
+            &["--in-memory", "--fixup", "-x", &test2_oid.to_string()],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: ff6183f update 3 test.txt
@@ -5035,7 +5034,7 @@ fn test_move_fixup_head_into_ancestor() -> eyre::Result<()> {
         "update 3",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5056,15 +5055,17 @@ fn test_move_fixup_head_into_ancestor() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-s",
-            "HEAD",
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-s",
+                "HEAD",
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Committed as: 963fb93 create test.txt
@@ -5124,7 +5125,7 @@ fn test_move_fixup_ancestor_into_head() -> eyre::Result<()> {
         "update 4",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5148,13 +5149,10 @@ fn test_move_fixup_ancestor_into_head() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &test2_oid.to_string(),
-        ])?;
+            &["--in-memory", "--fixup", "-x", &test2_oid.to_string()],
+        )?;
 
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
@@ -5205,7 +5203,7 @@ fn test_move_fixup_multiple_into_head() -> eyre::Result<()> {
         "update 3",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5226,13 +5224,15 @@ fn test_move_fixup_multiple_into_head() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &format!("{}+{}", test1_oid, test2_oid),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test1_oid, test2_oid),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: c4f6746 update 3 test.txt
@@ -5282,7 +5282,7 @@ fn test_move_fixup_multiple_into_ancestor_with_unmoved_head() -> eyre::Result<()
         "update 4",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5313,15 +5313,17 @@ fn test_move_fixup_multiple_into_ancestor_with_unmoved_head() -> eyre::Result<()
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &format!("{}+{}", test2_oid, test3_oid),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test2_oid, test3_oid),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Committed as: 23d4bdd create test.txt
@@ -5450,7 +5452,7 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
         "update 6",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5491,15 +5493,17 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &format!("{}+{}", test3_oid, test5_oid),
-            "-d",
-            "test",
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test3_oid, test5_oid),
+                "-d",
+                "test",
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/4] Committed as: 38caaaf create test.txt
@@ -5643,7 +5647,7 @@ fn test_move_fixup_multiple_disconnected_into_head() -> eyre::Result<()> {
         "update 6",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5685,13 +5689,15 @@ fn test_move_fixup_multiple_disconnected_into_head() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &format!("{}+{}", test3_oid, test5_oid),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test3_oid, test5_oid),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Committed as: c21e0d7 update 4 test.txt
@@ -5776,7 +5782,7 @@ fn test_move_fixup_squash_branch() -> eyre::Result<()> {
         "update 3",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5799,15 +5805,17 @@ fn test_move_fixup_squash_branch() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-s",
-            &test2_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-s",
+                &test2_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: c513440 create test.txt
@@ -5877,7 +5885,7 @@ fn test_move_fixup_branch_tip() -> eyre::Result<()> {
     )?;
     git.run(&["switch", "-c", "test-3"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -5911,15 +5919,10 @@ fn test_move_fixup_branch_tip() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            "test-3",
-            "-d",
-            "test-1",
-        ])?;
+            &["--in-memory", "--fixup", "-x", "test-3", "-d", "test-1"],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Committed as: f4321df create test.txt
@@ -6067,7 +6070,7 @@ fn test_move_fixup_tree() -> eyre::Result<()> {
         "update 7",
     )?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -6098,15 +6101,17 @@ fn test_move_fixup_tree() -> eyre::Result<()> {
     "###);
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--fixup",
-            "-x",
-            &format!("{}+{}", test2_oid, test6_oid),
-            "-d",
-            "test",
-        ])?;
+            &[
+                "--in-memory",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test2_oid, test6_oid),
+                "-d",
+                "test",
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/3] Committed as: 5e6d3e4 update 7 test.txt
@@ -6171,16 +6176,9 @@ fn test_move_fixup_conflict() -> eyre::Result<()> {
     git.commit_file_with_contents_and_message("test", 3, "line 1, 2, 3\n", "update 3")?;
     // --in-memory
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &[
-                "move",
-                "--in-memory",
-                "--fixup",
-                "-s",
-                "HEAD",
-                "-d",
-                "HEAD~2",
-            ],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
+            &["--in-memory", "--fixup", "-s", "HEAD", "-d", "HEAD~2"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -6206,15 +6204,10 @@ fn test_move_fixup_added_files() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&[
+    let (stdout, _stderr) = git.branchless(
         "move",
-        "--in-memory",
-        "--fixup",
-        "-x",
-        "HEAD",
-        "-d",
-        "HEAD~",
-    ])?;
+        &["--in-memory", "--fixup", "-x", "HEAD", "-d", "HEAD~"],
+    )?;
 
     insta::assert_snapshot!(stdout, @r###"
     Attempting rebase in-memory...
