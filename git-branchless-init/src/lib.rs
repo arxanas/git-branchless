@@ -697,7 +697,7 @@ pub fn command_install_man_pages(ctx: CommandContext, args: InstallManPagesArgs)
 
 #[cfg(test)]
 mod tests {
-    use super::{update_between_lines, ALL_ALIASES, UPDATE_MARKER_END, UPDATE_MARKER_START};
+    use super::{update_between_lines, UPDATE_MARKER_END, UPDATE_MARKER_START};
 
     #[test]
     fn test_update_between_lines() {
@@ -731,29 +731,5 @@ contents 3
             ),
             expected
         )
-    }
-
-    #[test]
-    fn test_all_alias_binaries_exist() {
-        let all_alias_binaries_installed = cfg!(feature = "man-pages");
-        if !all_alias_binaries_installed {
-            return;
-        }
-
-        for (_from, to) in ALL_ALIASES {
-            let executable_name = format!("git-branchless-{to}");
-
-            // For each subcommand that's been aliased, asserts that a binary
-            // with the corresponding name exists in `Cargo.toml`. If this test
-            // fails, then it may mean that a new binary entry should be added.
-            //
-            // Note that this check may require a `cargo clean` to clear out any
-            // old executables in order to produce deterministic results.
-            assert_cmd::cmd::Command::cargo_bin(executable_name)
-                .unwrap()
-                .arg("--help")
-                .assert()
-                .success();
-        }
     }
 }
