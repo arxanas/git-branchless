@@ -22,4 +22,4 @@ tracing = { workspace = true }
 assert_cmd = { workspace = true }
 
 [features]
-man-pages = []
+separate-binaries = []
