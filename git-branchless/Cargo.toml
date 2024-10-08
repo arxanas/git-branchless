@@ -60,7 +60,7 @@ tracing-subscriber = { workspace = true }
 insta = { workspace = true }
 
 [features]
-man-pages = []
+separate-binaries = []
 
 [package.metadata.release]
 pre-release-replacements = [
