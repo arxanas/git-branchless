@@ -1,17 +1,18 @@
 name: "Linux (Git devel)"
 
 on:
-  schedule:
-    # Run once every day at 6:40AM UTC.
-    - cron: "40 6 * * *"
+  # TODO(#1416): re-enable once tests are passing on Git v2.46+
+  # schedule:
+  #   # Run once every day at 6:40AM UTC.
+  #   - cron: "40 6 * * *"
 
-  push:
-    branches:
-      - master
+  # push:
+  #   branches:
+  #     - master
 
-  pull_request:
-    paths:
-      - ".github/workflows/*.yml"
+  # pull_request:
+  #   paths:
+  #     - ".github/workflows/*.yml"
 
   workflow_dispatch:
 
