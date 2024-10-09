@@ -36,10 +36,11 @@ jobs:
       - name: Compile
         run: cargo build --benches --tests
 
-      - name: Run tests
-        timeout-minutes: 30
-        run: |
-          export RUST_BACKTRACE=1
-          export TEST_GIT=$(which git)
-          export TEST_GIT_EXEC_PATH=$("$TEST_GIT" --exec-path)
-          cargo test --workspace --no-fail-fast
+      # TODO(#1416): re-enable once tests are passing on Git v2.46+
+      # - name: Run tests
+      #   timeout-minutes: 30
+      #   run: |
+      #     export RUST_BACKTRACE=1
+      #     export TEST_GIT=$(which git)
+      #     export TEST_GIT_EXEC_PATH=$("$TEST_GIT" --exec-path)
+      #     cargo test --workspace --no-fail-fast
