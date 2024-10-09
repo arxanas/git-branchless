@@ -29,7 +29,7 @@ jobs:
       - name: Compile
         run: cargo build --all-targets --workspace
 
-      # TODO: re-enable once tests are passing on Git v2.46+
+      # TODO(#1416): re-enable once tests are passing on Git v2.46+
       # - name: Run tests
       #   timeout-minutes: 30
       #   run: |
