@@ -11,4 +11,4 @@ clap = { workspace = true, features = ["derive"] }
 clap_mangen = { workspace = true }
 itertools = { workspace = true }
 lib = { workspace = true }
-scm-record = { workspace = true, features = ["scm-diff-editor"] }
+scm-diff-editor = { workspace = true }
