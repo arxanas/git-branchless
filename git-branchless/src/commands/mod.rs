@@ -45,9 +45,9 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
 
         Command::Difftool(opts) => {
-            let result = scm_record::scm_diff_editor::scm_diff_editor_main(opts);
+            let result = scm_diff_editor::run(opts);
             match result {
-                Ok(()) | Err(scm_record::scm_diff_editor::Error::Cancelled) => Ok(()),
+                Ok(()) | Err(scm_diff_editor::Error::Cancelled) => Ok(()),
                 Err(err) => {
                     eprintln!("Error: {err}");
                     Err(ExitCode(1))

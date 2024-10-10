@@ -49,7 +49,7 @@ path-slash = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true }
-scm-record = { workspace = true, features = ["scm-diff-editor"] }
+scm-diff-editor = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-chrome = { workspace = true }

@@ -99,7 +99,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
                 PtyAction::Write("f"), // expand files
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write(" "),
-                PtyAction::WaitUntilContains("(×)"),
+                PtyAction::WaitUntilContains("(●)"),
                 PtyAction::Write("c"),
             ],
         )?;
