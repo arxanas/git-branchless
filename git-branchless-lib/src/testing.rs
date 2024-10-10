@@ -536,15 +536,14 @@ then you can only run tests in the main `git-branchless` and \
     /// hash. The filename is always appended to the message prefix.
     #[track_caller]
     #[instrument]
-    pub fn commit_file_with_contents_and_message_and_file_name(
+    pub fn commit_file_with_contents_and_message(
         &self,
         name: &str,
         time: isize,
         contents: &str,
         message_prefix: &str,
-        file_name: &str,
     ) -> eyre::Result<NonZeroOid> {
-        let message = format!("{message_prefix} {file_name}");
+        let message = format!("{message_prefix} {name}.txt");
         self.write_file_txt(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
@@ -561,26 +560,6 @@ then you can only run tests in the main `git-branchless` and \
             .oid
             .expect("Could not find OID for just-created commit");
         Ok(oid)
-    }
-
-    /// Commit a file with given contents and message. The `time` argument is
-    /// used to set the commit timestamp, which is factored into the commit
-    /// hash. The filename is always appended to the message prefix.
-    #[instrument]
-    pub fn commit_file_with_contents_and_message(
-        &self,
-        name: &str,
-        time: isize,
-        contents: &str,
-        message_prefix: &str,
-    ) -> eyre::Result<NonZeroOid> {
-        self.commit_file_with_contents_and_message_and_file_name(
-            name,
-            time,
-            contents,
-            message_prefix,
-            format!("{name}.txt").as_str(),
-        )
     }
 
     /// Commit a file with given contents and a default message. The `time`
@@ -947,18 +926,6 @@ pub mod pty {
         args: &[&str],
         inputs: &[PtyAction],
     ) -> eyre::Result<ExitStatus> {
-        // add "branchless" to subcommand list
-        run_in_pty_with_command(git, &["branchless", branchless_subcommand], args, inputs)
-    }
-
-    /// Run the provided script in the context of a virtual terminal.
-    #[track_caller]
-    pub fn run_in_pty_with_command(
-        git: &Git,
-        command: &[&str],
-        args: &[&str],
-        inputs: &[PtyAction],
-    ) -> eyre::Result<ExitStatus> {
         // Use the native pty implementation for the system
         let pty_system = native_pty_system();
         let pty_size = PtySize::default();
@@ -977,7 +944,8 @@ pub mod pty {
             cmd.env(k, v);
         }
         cmd.env("TERM", "xterm");
-        cmd.args(command);
+        cmd.arg("branchless");
+        cmd.arg(branchless_subcommand);
         cmd.args(args);
         cmd.cwd(&git.repo_path);
 
