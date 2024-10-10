@@ -9,7 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
-See also the release notes for [`scm-record` v0.3.0](https://github.com/arxanas/scm-record/releases/tag/v0.3.0).
+## [v0.10.0] - 2024-10-10
+
+### Added
+
+- (#1355): `git submit` now supports the `--jobs` argument for parallelism.
+
+### Changed
+
+- `git2` upgraded to [v0.19.0](https://github.com/rust-lang/git2-rs/releases/tag/git2-0.19.0).
+- `libgit2` upgraded to [v1.8.1](https://github.com/libgit2/libgit2/releases/tag/v1.8.1).
+- `scm-record` upgraded to [v0.4.0](https://github.com/arxanas/scm-record/releases/tag/v0.4.0).
+
+### Fixed
+
+- (#1322): Fixed the processing of symbolic refs in reference-transaction lines (since Git v2.46+).
+- (#1353): `git submit` with the Phabricator forge now ignores untracked working copy changes.
+- (#1363): git-branchless now supports index version 4 (via `libgit2` upgrade).
+- (#1393): Branches with multivars in their configuration can now be deleted (via `libgit2` upgrade).
+
+## [v0.9.0] - 2024-05-27
 
 ### Added
 
@@ -25,6 +44,7 @@ See also the release notes for [`scm-record` v0.3.0](https://github.com/arxanas/
 
 ### Changed
 
+- `scm-record` upgraded to [v0.3.0](https://github.com/arxanas/scm-record/releases/tag/v0.3.0).
 - BREAKING (#1128) Arguments/revsets passed to `git sync` are now resolved to their respective stacks.
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
 - BREAKING (#1152) Previously, `git hide` would not delete branches pointing to the hidden commits unless `-D`/`--delete-branches` was passed. Now, deleting branches is the default behavior. Pass `--no-delete-branches` to restore the old behavior.
