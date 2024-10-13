@@ -77,6 +77,7 @@
           nativeBuildInputs = with pkgs.buildPackages; [
             cargo # with shell completions, instead of cargo-auditable
             git # for testing
+            cargo-insta # for updating insta snapshots
           ] ++ nativeBuildInputs;
 
           env = with pkgs.buildPackages; {
