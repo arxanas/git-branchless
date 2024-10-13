@@ -1,4 +1,4 @@
-use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
+use lib::testing::{insta_filters, make_git, remove_rebase_lines, trim_lines, GitRunOptions};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {
@@ -592,6 +592,10 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("undo", &["-y"])?;
         let stdout = trim_lines(stdout);
+        insta::with_settings!({filters => [
+            insta_filters::NO_OP_CHECKOUTS,
+            insta_filters::NUMBERING,
+        ].concat()}, {
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
         1. Move branch foo from 94b1077 create file1.txt
@@ -622,6 +626,7 @@ fn test_amend_undo() -> eyre::Result<()> {
         @ c0bdfb5 (> foo) create file1.txt
         Applied 6 inverse events.
         "###);
+        });
     }
 
     {
