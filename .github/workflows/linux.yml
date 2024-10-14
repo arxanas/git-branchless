@@ -89,7 +89,7 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --all-features --examples --tests --workspace
+          cargo test --all-features --examples --tests --workspace --no-fail-fast
 
       # Note that `--doc` can't be combined with other tests.
       - name: Run Rust doc-tests (all features)
@@ -97,7 +97,7 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --all-features --doc --workspace
+          cargo test --all-features --doc --workspace --no-fail-fast
 
       - name: Compile (no features)
         run: cargo build --no-default-features --all-targets --workspace
@@ -107,4 +107,4 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --no-default-features --examples --tests --workspace
+          cargo test --no-default-features --examples --tests --workspace --no-fail-fast
