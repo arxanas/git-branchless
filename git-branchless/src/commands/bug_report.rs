@@ -25,7 +25,7 @@ use lib::core::node_descriptors::{
 };
 use lib::git::{GitRunInfo, Repo, ResolvedReferenceInfo};
 
-use git_branchless_init::{determine_hook_path, Hook, ALL_HOOKS};
+use git_branchless_init::{determine_hooks_path, HooksPath, ALL_HOOKS};
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {
@@ -254,10 +254,10 @@ fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let hook_contents = {
         let mut result = Vec::new();
         for (hook_type, _content) in ALL_HOOKS {
-            let hook_path = match determine_hook_path(&repo, &hooks_dir, hook_type)? {
-                Hook::RegularHook { path } | Hook::MultiHook { path } => path,
+            let hooks_path = match determine_hooks_path(&repo, &hooks_dir, hook_type)? {
+                HooksPath::RegularHook(path) | HooksPath::MultiHook(path) => path,
             };
-            let hook_contents = match std::fs::read_to_string(hook_path) {
+            let hook_contents = match std::fs::read_to_string(hooks_path) {
                 Ok(hook_contents) => hook_contents,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => "<not found>".to_string(),
                 Err(err) => return Err(err.into()),

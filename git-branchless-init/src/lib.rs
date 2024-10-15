@@ -104,36 +104,34 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("unhide", "unhide"),
 ];
 
-/// A specification for installing a Git hook on disk.
+/// The location to install the Git hooks on disk.
 #[derive(Debug)]
-pub enum Hook {
+pub enum HooksPath {
     /// Regular Git hook.
-    RegularHook {
-        /// The path to the hook script.
-        path: PathBuf,
-    },
+    RegularHook(PathBuf),
 
     /// For Twitter multihooks. (But does anyone even work at Twitter anymore?)
-    MultiHook {
-        /// The path to the hook script.
-        path: PathBuf,
-    },
+    MultiHook(PathBuf),
 }
 
 /// Determine the path where all hooks are installed.
 #[instrument]
-pub fn determine_hook_path(repo: &Repo, hooks_dir: &Path, hook_type: &str) -> eyre::Result<Hook> {
+pub fn determine_hooks_path(
+    repo: &Repo,
+    hooks_dir: &Path,
+    hook_type: &str,
+) -> eyre::Result<HooksPath> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
-    let hook = if multi_hooks_path.exists() {
+    let hooks_path = if multi_hooks_path.exists() {
         let path = multi_hooks_path
             .join(format!("{hook_type}.d"))
             .join("00_local_branchless");
-        Hook::MultiHook { path }
+        HooksPath::MultiHook(path)
     } else {
         let path = hooks_dir.join(hook_type);
-        Hook::RegularHook { path }
+        HooksPath::RegularHook(path)
     };
-    Ok(hook)
+    Ok(hooks_path)
 }
 
 const SHEBANG: &str = "#!/bin/sh";
@@ -204,9 +202,9 @@ fn write_script(path: &Path, contents: &str) -> eyre::Result<()> {
 }
 
 #[instrument]
-fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
-    let (hook_path, hook_contents) = match hook {
-        Hook::RegularHook { path } => match std::fs::read_to_string(path) {
+fn update_hook_contents(hooks_path: &HooksPath, hook_contents: &str) -> eyre::Result<()> {
+    let (hook_path, hook_contents) = match hooks_path {
+        HooksPath::RegularHook(path) => match std::fs::read_to_string(path) {
             Ok(lines) => {
                 let lines = update_between_lines(&lines, hook_contents);
                 (path, lines)
@@ -221,7 +219,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
                 return Err(eyre::eyre!(other));
             }
         },
-        Hook::MultiHook { path } => (path, format!("{SHEBANG}\n{hook_contents}")),
+        HooksPath::MultiHook(path) => (path, format!("{SHEBANG}\n{hook_contents}")),
     };
 
     write_script(hook_path, &hook_contents).wrap_err("Writing hook script")?;
@@ -236,8 +234,8 @@ fn install_hook(
     hook_type: &str,
     hook_script: &str,
 ) -> eyre::Result<()> {
-    let hook = determine_hook_path(repo, hooks_dir, hook_type)?;
-    update_hook_contents(&hook, hook_script)?;
+    let hooks_path = determine_hooks_path(repo, hooks_dir, hook_type)?;
+    update_hook_contents(&hooks_path, hook_script)?;
     Ok(())
 }
 
