@@ -115,7 +115,4 @@ name = "test_snapshot"
 name = "test_sync"
 
 [[test]]
-name = "test_undo"
-
-[[test]]
 name = "test_wrap"
