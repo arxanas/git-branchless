@@ -25,7 +25,7 @@ use lib::core::node_descriptors::{
 };
 use lib::git::{GitRunInfo, Repo, ResolvedReferenceInfo};
 
-use git_branchless_init::{determine_hooks_path, HooksPath, ALL_HOOKS};
+use git_branchless_init::{determine_hooks_path, HookInfo, HooksPath, ALL_HOOKS};
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {
@@ -253,7 +253,7 @@ fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, &repo, None)?;
     let hook_contents = {
         let mut result = Vec::new();
-        for (hook_type, _content) in ALL_HOOKS {
+        for HookInfo(hook_type, _content) in ALL_HOOKS {
             let hooks_path = match determine_hooks_path(&repo, &hooks_dir, hook_type)? {
                 HooksPath::RegularHook(path) | HooksPath::MultiHook(path) => path,
             };

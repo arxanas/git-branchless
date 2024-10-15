@@ -32,45 +32,47 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
+pub struct HookInfo(pub &'static str, pub &'static str);
+
 /// The contents of all Git hooks to install.
-pub const ALL_HOOKS: &[(&str, &str)] = &[
-    (
+pub const ALL_HOOKS: &[HookInfo] = &[
+    HookInfo(
         "post-applypatch",
         r#"
 git branchless hook post-applypatch "$@"
 "#,
     ),
-    (
+    HookInfo(
         "post-checkout",
         r#"
 git branchless hook post-checkout "$@"
 "#,
     ),
-    (
+    HookInfo(
         "post-commit",
         r#"
 git branchless hook post-commit "$@"
 "#,
     ),
-    (
+    HookInfo(
         "post-merge",
         r#"
 git branchless hook post-merge "$@"
 "#,
     ),
-    (
+    HookInfo(
         "post-rewrite",
         r#"
 git branchless hook post-rewrite "$@"
 "#,
     ),
-    (
+    HookInfo(
         "pre-auto-gc",
         r#"
 git branchless hook pre-auto-gc "$@"
 "#,
     ),
-    (
+    HookInfo(
         "reference-transaction",
         r#"
 # Avoid canceling the reference transaction in the case that `branchless` fails
@@ -246,11 +248,11 @@ fn install_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) -> e
         "Installing hooks: {}",
         ALL_HOOKS
             .iter()
-            .map(|(hook_type, _hook_script)| hook_type)
+            .map(|HookInfo(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
-    for (hook_type, hook_script) in ALL_HOOKS {
+    for HookInfo(hook_type, hook_script) in ALL_HOOKS {
         install_hook(repo, &hooks_dir, hook_type, hook_script)?;
     }
 
@@ -278,11 +280,11 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
         "Uninstalling hooks: {}",
         ALL_HOOKS
             .iter()
-            .map(|(hook_type, _hook_script)| hook_type)
+            .map(|HookInfo(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
-    for (hook_type, _hook_script) in ALL_HOOKS {
+    for HookInfo(hook_type, _hook_script) in ALL_HOOKS {
         install_hook(
             repo,
             &hooks_dir,
