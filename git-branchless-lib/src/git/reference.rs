@@ -68,7 +68,7 @@ impl AsRef<str> for ReferenceName {
 }
 
 /// The target of a reference.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReferenceTarget {
     /// The reference points directly to an object. This is the case for most
     /// references, such as branches.
@@ -77,7 +77,7 @@ pub enum ReferenceTarget {
         oid: MaybeZeroOid,
     },
 
-    /// The reference points to another reference with the given name.
+    /// The reference points to another reference with the given name. @nocommit: give example
     Symbolic {
         /// The name of the pointed-to reference.
         reference_name: ReferenceName,

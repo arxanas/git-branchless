@@ -82,6 +82,7 @@ fn get_repo_state<S: AsRef<str> + std::fmt::Debug>(args: &[S]) -> eyre::Result<R
     })
 }
 
+/// @nocommit: explain that this is a hack
 fn record_reference_diff(repo_state: &RepoState) -> eyre::Result<()> {
     // @nocommit: do we need to reopen the repo?
     // let repo = Repo::from_current_dir()?;
