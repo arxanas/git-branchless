@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime};
 use std::{io, time};
 
 use bstr::ByteVec;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use git2::DiffOptions;
@@ -1737,8 +1737,8 @@ impl Time {
         )))
     }
 
-    /// Calculate the associated [`NaiveDateTime`].
-    pub fn to_naive_date_time(&self) -> Option<NaiveDateTime> {
-        NaiveDateTime::from_timestamp_opt(self.inner.seconds(), 0)
+    /// Calculate the associated [`DateTime`].
+    pub fn to_date_time(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp(self.inner.seconds(), 0)
     }
 }

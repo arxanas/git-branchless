@@ -222,7 +222,7 @@ impl<'repo> Commit<'repo> {
     /// its OID, author, commit time, and message.
     #[instrument]
     pub fn friendly_preview(&self) -> Result<StyledString> {
-        let commit_time = self.get_time().to_naive_date_time();
+        let commit_time = self.get_time().to_date_time();
         let preview = StyledStringBuilder::from_lines(vec![
             StyledStringBuilder::new()
                 .append_styled(
