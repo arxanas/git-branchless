@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -44,6 +44,8 @@ pub struct Git {
 
     /// The `GIT_EXEC_PATH` environment variable value to use for testing.
     pub git_exec_path: PathBuf,
+
+    pub wrap: bool,
 }
 
 /// Options for `Git::init_repo_with_options`.
@@ -90,7 +92,12 @@ impl Git {
             repo_path,
             path_to_git,
             git_exec_path,
+            wrap: false,
         }
+    }
+
+    pub fn set_wrap(&mut self, wrap: bool) {
+        self.wrap = wrap;
     }
 
     /// Replace dynamic strings in the output, for testing purposes.
@@ -227,10 +234,22 @@ impl Git {
                     .map(|(k, v)| (OsString::from(k), OsString::from(v))),
             )
             .collect();
+        let args = args.into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let args = if self.wrap {
+            [
+                self.branchless_subcommand("wrap"),
+                vec!["--".to_string()],
+                args,
+            ]
+            .concat()
+            .to_vec()
+        } else {
+            args
+        };
         let mut command = Command::new(&self.path_to_git);
         command
             .current_dir(&self.repo_path)
-            .args(args)
+            .args(&args)
             .env_clear()
             .envs(&env);
 
@@ -339,6 +358,14 @@ stderr:
         self.branchless_with_options(subcommand, args, &Default::default())
     }
 
+    fn branchless_subcommand(&self, subcommand: &str) -> Vec<String> {
+        if should_use_separate_command_binary(subcommand) {
+            vec![format!("branchless-{subcommand}")]
+        } else {
+            vec!["branchless".to_string(), subcommand.to_string()]
+        }
+    }
+
     /// Locate the git-branchless binary and run a git-branchless subcommand
     /// with the provided `GitRunOptions`. These subcommands are located using
     /// `should_use_separate_command_binary`.
@@ -351,12 +378,7 @@ stderr:
         options: &GitRunOptions,
     ) -> eyre::Result<(String, String)> {
         let mut git_run_args = Vec::new();
-        if should_use_separate_command_binary(subcommand) {
-            git_run_args.push(format!("branchless-{subcommand}"));
-        } else {
-            git_run_args.push("branchless".to_string());
-            git_run_args.push(subcommand.to_string());
-        }
+        git_run_args.extend(self.branchless_subcommand(subcommand));
         git_run_args.extend(args.iter().map(|arg| arg.to_string()));
 
         let result = self.run_with_options(&git_run_args, options);
@@ -702,6 +724,12 @@ impl Deref for GitWrapper {
 
     fn deref(&self) -> &Self::Target {
         &self.git
+    }
+}
+
+impl DerefMut for GitWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.git
     }
 }
 

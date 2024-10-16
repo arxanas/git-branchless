@@ -12,11 +12,19 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, trim_lines, Git, GitInitOptions, GitRunOptions};
+use lib::testing::{make_git, trim_lines, Git, GitInitOptions, GitRunOptions, GitWrapper};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};
 use lib::util::ExitCode;
+
+// @nocommit: use in all tests in this file
+// @nocommit: document
+fn make_git_for_undo() -> eyre::Result<GitWrapper> {
+    let mut git = make_git()?;
+    git.set_wrap(true);
+    Ok(git)
+}
 
 fn run_select_past_event(
     repo: &Repo,
@@ -305,7 +313,7 @@ fn test_go_to_event() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_hide() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -318,8 +326,18 @@ fn test_undo_hide() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.branchless("hide", &["test1"])?;
 
+    // @nocommit
+    // git.init_repo()?;
+    // git.branchless("wrap", &["checkout", "-b", "test1"])?;
+    // git.commit_file("test1", 1)?;
+    // git.branchless("wrap", &["checkout", "HEAD^"])?;
+    // git.commit_file("test2", 2)?;
+    // git.branchless("wrap", &["hide", "test1"])?;
+
     {
         let (stdout, stderr) = git.run(&["smartlog"])?;
+        // @nocommit
+        // let (stdout, stderr) = git.branchless("wrap", &["smartlog"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
@@ -336,13 +354,13 @@ fn test_undo_hide() -> eyre::Result<()> {
             CursiveTestingEvent::Event('y'.into()),
         ],
     )?;
-    insta::assert_debug_snapshot!(event_cursor, @r###"
-        Some(
-            EventCursor {
-                event_id: 9,
-            },
-        )
-        "###);
+    insta::assert_debug_snapshot!(event_cursor, @r#"
+    Some(
+        EventCursor {
+            event_id: 10,
+        },
+    )
+    "#);
     let event_cursor = event_cursor.unwrap();
 
     {
@@ -374,7 +392,7 @@ fn test_undo_hide() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_move_refs() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -393,13 +411,13 @@ fn test_undo_move_refs() -> eyre::Result<()> {
             CursiveTestingEvent::Event('y'.into()),
         ],
     )?;
-    insta::assert_debug_snapshot!(event_cursor, @r###"
-        Some(
-            EventCursor {
-                event_id: 3,
-            },
-        )
-        "###);
+    insta::assert_debug_snapshot!(event_cursor, @r#"
+    Some(
+        EventCursor {
+            event_id: 0,
+        },
+    )
+    "#);
     let event_cursor = event_cursor.unwrap();
 
     {
@@ -431,7 +449,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
 
 #[test]
 fn test_historical_smartlog_visibility() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if git.produces_auto_merge_refs()? {
         return Ok(());
@@ -567,7 +585,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -659,7 +677,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
 #[cfg(unix)]
 #[test]
 fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -718,7 +736,7 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -816,7 +834,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_noninteractive() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -838,18 +856,18 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
             },
         )?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         Will apply these actions:
-        1. Rewrite commit 9ed8f9a bad message
-                      as 96d1c37 create test2.txt
-        2. Hide commit 9ed8f9a bad message
-
-        3. Move branch master from 9ed8f9a bad message
+        1. Move branch master from 9ed8f9a bad message
                                 to 96d1c37 create test2.txt
-        4. Check out from 9ed8f9a bad message
+        2. Check out from 96d1c37 create test2.txt
                        to 96d1c37 create test2.txt
+        3. Rewrite commit 9ed8f9a bad message
+                      as 96d1c37 create test2.txt
+        4. Hide commit 9ed8f9a bad message
+
         Confirm? [yN] Aborted.
-        "###);
+        "#);
     }
 
     {
@@ -900,7 +918,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
 
 #[test]
 fn test_undo_no_confirm() -> eyre::Result<()> {
-    let git = make_git()?;
+    let git = make_git_for_undo()?;
 
     if !git.supports_reference_transactions()? {
         return Ok(());
@@ -928,7 +946,7 @@ fn test_undo_unseen_commit() -> eyre::Result<()> {
     // Disabled since we no longer support `origin/master` as a main branch, but this test might be
     // useful in the future.
     if false {
-        let git = make_git()?;
+        let git = make_git_for_undo()?;
         if !git.supports_reference_transactions()? {
             return Ok(());
         }

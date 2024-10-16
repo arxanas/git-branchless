@@ -502,6 +502,7 @@ mod reference_transaction {
 /// See the man-page for `githooks(5)`.
 #[instrument]
 fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
+    return Ok(());
     use reference_transaction::{
         fix_packed_reference_oid, parse_reference_transaction_line, read_packed_refs_file,
         ParsedReferenceTransactionLine,
