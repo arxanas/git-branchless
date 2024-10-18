@@ -198,7 +198,7 @@ impl Glyphs {
             vertical_ellipsis: "⋮",
             split: "━┓",
             merge: "━┛",
-            commit_visible: "◯",
+            commit_visible: "○",
             commit_visible_head: "●",
             commit_obsolete: "✕",
             commit_obsolete_head: "⦻",
