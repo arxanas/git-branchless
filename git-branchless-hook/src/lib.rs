@@ -76,7 +76,7 @@ fn hook_post_checkout(
             let oid: MaybeZeroOid = current_head_oid.parse()?;
             oid
         },
-        ref_name: ReferenceName::from("HEAD"),
+        ref_name: ReferenceName::head(),
         message: None,
     }])?;
     Ok(())
