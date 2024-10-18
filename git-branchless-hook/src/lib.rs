@@ -25,6 +25,7 @@ use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
+use lib::core::config::get_use_reference_transaction_hook;
 use lib::core::dag::Dag;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::rewrite_hooks::get_deferred_commits_path;
@@ -502,7 +503,6 @@ mod reference_transaction {
 /// See the man-page for `githooks(5)`.
 #[instrument]
 fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
-    return Ok(());
     use reference_transaction::{
         fix_packed_reference_oid, parse_reference_transaction_line, read_packed_refs_file,
         ParsedReferenceTransactionLine,
@@ -514,6 +514,10 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
     let now = SystemTime::now();
 
     let repo = Repo::from_current_dir()?;
+    if !get_use_reference_transaction_hook(&repo)? {
+        return Ok(());
+    }
+
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "reference-transaction")?;

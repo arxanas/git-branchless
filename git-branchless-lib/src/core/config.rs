@@ -61,6 +61,15 @@ pub fn get_main_worktree_hooks_dir(
     Ok(hooks_path)
 }
 
+pub fn get_use_reference_transaction_hook(repo: &Repo) -> eyre::Result<bool> {
+    let config = repo.get_readonly_config()?;
+    let use_reference_transaction_hook =
+        // @nocommit
+        // config.get_or("branchless.core.useReferenceTransactionHook", false)?;
+        config.get_or("branchless.core.useReferenceTransactionHook", true)?;
+    Ok(use_reference_transaction_hook)
+}
+
 /// Get the configured name of the main branch.
 ///
 /// The following config values are resolved, in order. The first valid value is returned.
