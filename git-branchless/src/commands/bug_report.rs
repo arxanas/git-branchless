@@ -253,7 +253,11 @@ fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, &repo, None)?;
     let hook_contents = {
         let mut result = Vec::new();
-        for HookInfo(hook_type, _content) in ALL_HOOKS {
+        for hook_info in ALL_HOOKS {
+            let HookInfo {
+                r#type: hook_type,
+                contents: _,
+            } = hook_info;
             let hooks_path = match determine_hooks_path(&repo, &hooks_dir, hook_type)? {
                 HooksPath::RegularHook(path) | HooksPath::MultiHook(path) => path,
             };

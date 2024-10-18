@@ -32,49 +32,58 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
-pub struct HookInfo(pub &'static str, pub &'static str);
+/// Information about a Git hook to be installed to enable git-branchless
+/// functionality.
+pub struct HookInfo {
+    /// The hook type, like `post-commit`.
+    pub r#type: &'static str,
+
+    /// The contents of the hook script to install. For now, git-branchless
+    /// assumes that the hook is (or will be) POSIX `sh`.
+    pub contents: &'static str,
+}
 
 /// The contents of all Git hooks to install.
 pub const ALL_HOOKS: &[HookInfo] = &[
-    HookInfo(
-        "post-applypatch",
-        r#"
+    HookInfo {
+        r#type: "post-applypatch",
+        contents: r#"
 git branchless hook post-applypatch "$@"
 "#,
-    ),
-    HookInfo(
-        "post-checkout",
-        r#"
+    },
+    HookInfo {
+        r#type: "post-checkout",
+        contents: r#"
 git branchless hook post-checkout "$@"
 "#,
-    ),
-    HookInfo(
-        "post-commit",
-        r#"
+    },
+    HookInfo {
+        r#type: "post-commit",
+        contents: r#"
 git branchless hook post-commit "$@"
 "#,
-    ),
-    HookInfo(
-        "post-merge",
-        r#"
+    },
+    HookInfo {
+        r#type: "post-merge",
+        contents: r#"
 git branchless hook post-merge "$@"
 "#,
-    ),
-    HookInfo(
-        "post-rewrite",
-        r#"
+    },
+    HookInfo {
+        r#type: "post-rewrite",
+        contents: r#"
 git branchless hook post-rewrite "$@"
 "#,
-    ),
-    HookInfo(
-        "pre-auto-gc",
-        r#"
+    },
+    HookInfo {
+        r#type: "pre-auto-gc",
+        contents: r#"
 git branchless hook pre-auto-gc "$@"
 "#,
-    ),
-    HookInfo(
-        "reference-transaction",
-        r#"
+    },
+    HookInfo {
+        r#type: "reference-transaction",
+        contents: r#"
 # Avoid canceling the reference transaction in the case that `branchless` fails
 # for whatever reason.
 git branchless hook reference-transaction "$@" || (
@@ -83,7 +92,7 @@ echo 'branchless: Some events (e.g. branch updates) may have been lost.'
 echo 'branchless: This is a bug. Please report it.'
 )
 "#,
-    ),
+    },
 ];
 
 const ALL_ALIASES: &[(&str, &str)] = &[
@@ -248,12 +257,18 @@ fn install_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) -> e
         "Installing hooks: {}",
         ALL_HOOKS
             .iter()
-            .map(|HookInfo(hook_type, _hook_script)| hook_type)
+            .map(
+                |HookInfo {
+                     r#type,
+                     contents: _,
+                 }| r#type,
+            )
             .join(", ")
     )?;
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
-    for HookInfo(hook_type, hook_script) in ALL_HOOKS {
-        install_hook(repo, &hooks_dir, hook_type, hook_script)?;
+    for hook_info in ALL_HOOKS {
+        let HookInfo { r#type, contents } = hook_info;
+        install_hook(repo, &hooks_dir, r#type, contents)?;
     }
 
     let default_hooks_dir = get_default_hooks_dir(repo)?;
@@ -280,15 +295,24 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
         "Uninstalling hooks: {}",
         ALL_HOOKS
             .iter()
-            .map(|HookInfo(hook_type, _hook_script)| hook_type)
+            .map(
+                |HookInfo {
+                     r#type,
+                     contents: _,
+                 }| r#type
+            )
             .join(", ")
     )?;
     let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
-    for HookInfo(hook_type, _hook_script) in ALL_HOOKS {
+    for hook_info in ALL_HOOKS {
+        let HookInfo {
+            r#type,
+            contents: _,
+        } = hook_info;
         install_hook(
             repo,
             &hooks_dir,
-            hook_type,
+            r#type,
             r#"
 # This hook has been uninstalled.
 # Run `git branchless init` to reinstall.
