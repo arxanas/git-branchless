@@ -28,7 +28,7 @@ use lib::core::config::{
 };
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
-use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
@@ -663,6 +663,7 @@ fn command_init(
             event_cursor,
             &references_snapshot,
         )?;
+        event_log_db.add_events(vec![Event::RefUpdateEvent {}])?;
     }
 
     writeln!(

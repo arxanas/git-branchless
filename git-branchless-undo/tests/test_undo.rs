@@ -802,8 +802,17 @@ fn test_undo_no_confirm() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.branchless("undo", &["--yes"])?;
+        let smartlog = git.smartlog()?;
+        insta::assert_snapshot!(smartlog, @r#"
+        :
+        @ 62fc20d (> master) create test1.txt
+        "#);
+    }
+
+    {
+        let (stdout, stderr) = git.branchless("undo", &["--yes"])?;
         let stdout = trim_lines(stdout);
+        insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r#"
         Will apply these actions:
         1. Move branch master from 62fc20d create test1.txt

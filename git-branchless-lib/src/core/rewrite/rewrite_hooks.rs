@@ -147,6 +147,7 @@ pub fn hook_post_rewrite(
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
 
     {
         let deferred_commit_oids = read_deferred_commits(&repo)?;
@@ -206,6 +207,7 @@ pub fn hook_post_rewrite(
             git_run_info,
             &repo,
             &event_log_db,
+            &event_replayer,
             event_tx_id,
             &rewritten_oids,
             &previous_head_info,

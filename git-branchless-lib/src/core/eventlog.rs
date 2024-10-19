@@ -616,8 +616,10 @@ ORDER BY rowid ASC
         rows.into_iter().map(Event::try_from).collect()
     }
 
+    /// Create a new event transaction ID to be used to insert subsequent
+    /// `Event`s into the database.
     #[instrument]
-    fn make_transaction_id_inner(
+    pub fn make_transaction_id(
         &self,
         now: SystemTime,
         message: &str,
@@ -655,16 +657,6 @@ ORDER BY rowid ASC
         let event_tx_id: isize = self.conn.last_insert_rowid().try_into()?;
         tx.commit()?;
         Ok(EventTransactionId::Id(event_tx_id))
-    }
-
-    /// Create a new event transaction ID to be used to insert subsequent
-    /// `Event`s into the database.
-    pub fn make_transaction_id(
-        &self,
-        now: SystemTime,
-        message: impl AsRef<str>,
-    ) -> eyre::Result<EventTransactionId> {
-        self.make_transaction_id_inner(now, message.as_ref())
     }
 
     /// Get the message associated with the given transaction.
@@ -776,7 +768,8 @@ pub struct EventReplayer {
     id_counter: isize,
 
     /// The list of observed events.
-    events: Vec<Event>,
+    /// @nocommit: make private
+    pub events: Vec<Event>,
 
     /// The name of the reference representing the main branch.
     main_branch_reference_name: ReferenceName,

@@ -492,6 +492,7 @@ pub fn r#move(
                 git_run_info,
                 &repo,
                 &event_log_db,
+                &event_replayer,
                 &rebase_plan,
                 &options,
             )?

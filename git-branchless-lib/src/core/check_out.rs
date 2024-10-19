@@ -110,6 +110,7 @@ pub fn check_out_commit(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     event_tx_id: EventTransactionId,
     target: Option<CheckoutTarget>,
     options: &CheckOutCommitOptions,
@@ -131,7 +132,14 @@ pub fn check_out_commit(
     };
 
     if get_undo_create_snapshots(repo)? {
-        create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
+        create_snapshot(
+            effects,
+            git_run_info,
+            repo,
+            event_log_db,
+            event_replayer,
+            event_tx_id,
+        )?;
     }
 
     let target = if get_auto_switch_branches(repo)? && !reset {
@@ -203,18 +211,23 @@ pub fn check_out_commit(
 pub fn record_reference_diff(
     effects: &Effects,
     event_tx_id: EventTransactionId,
-    // old_references_snapshot: &RepoReferencesSnapshot,
+    event_replayer: &EventReplayer,
 ) -> eyre::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    // @nocommit: figure out correct event cursor
     let event_cursor = event_replayer.make_default_cursor();
+    // let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    // let event_cursor = event_replayer.advance_cursor_by_transaction(event_cursor, -1);
     let old_references_snapshot = event_replayer.get_references_snapshot(&repo, event_cursor)?;
     let references_snapshot = repo.get_references_snapshot()?;
     let references_diff = old_references_snapshot.diff(&references_snapshot);
+    dbg!(&event_replayer.events);
+    dbg!(&old_references_snapshot, &references_snapshot);
+    dbg!(&references_diff);
     let events: Vec<Event> = references_diff
         .into_iter()
         .map(
@@ -242,12 +255,15 @@ pub fn create_snapshot<'repo>(
     git_run_info: &GitRunInfo,
     repo: &'repo Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     event_tx_id: EventTransactionId,
 ) -> eyre::Result<WorkingCopySnapshot<'repo>> {
     writeln!(
         effects.get_error_stream(),
         "branchless: creating working copy snapshot"
     )?;
+
+    record_reference_diff(effects, event_tx_id, event_replayer)?;
 
     let head_info = repo.get_head_info()?;
     let index = repo.get_index()?;

@@ -458,6 +458,7 @@ pub fn traverse_commits(
         git_run_info,
         &repo,
         &event_log_db,
+        &event_replayer,
         event_tx_id,
         Some(checkout_target),
         &CheckOutCommitOptions {
@@ -577,6 +578,7 @@ pub fn switch(
         git_run_info,
         &repo,
         &event_log_db,
+        &event_replayer,
         event_tx_id,
         target,
         &CheckOutCommitOptions {
