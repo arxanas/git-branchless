@@ -20,7 +20,7 @@ use crate::util::EyreExitOr;
 
 use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
-use super::eventlog::{Event, EventLogDb, EventTransactionId};
+use super::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
 use super::repo_ext::{RepoExt, RepoReferencesSnapshot};
 
 /// An entity to check out.
@@ -196,6 +196,40 @@ pub fn check_out_commit(
         );
     }
     Ok(Ok(()))
+}
+
+/// @nocommit: explain that this is a hack
+#[instrument]
+pub fn record_reference_diff(
+    effects: &Effects,
+    event_tx_id: EventTransactionId,
+    // old_references_snapshot: &RepoReferencesSnapshot,
+) -> eyre::Result<()> {
+    let now = SystemTime::now();
+    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
+    let repo = Repo::from_current_dir()?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let old_references_snapshot = event_replayer.get_references_snapshot(&repo, event_cursor)?;
+    let references_snapshot = repo.get_references_snapshot()?;
+    let references_diff = old_references_snapshot.diff(&references_snapshot);
+    let events: Vec<Event> = references_diff
+        .into_iter()
+        .map(
+            |(reference_name, old_info, new_info)| Event::RefUpdateEvent {
+                timestamp,
+                event_tx_id: event_tx_id,
+                ref_name: reference_name.clone(),
+                old_oid: MaybeZeroOid::from(old_info.oid),
+                new_oid: MaybeZeroOid::from(new_info.oid),
+                message: None,
+            },
+        )
+        .collect();
+    event_log_db.add_events(events)?;
+    Ok(())
 }
 
 /// Create a working copy snapshot containing the working copy's current contents.

@@ -232,6 +232,7 @@ fn test_record_detach() -> eyre::Result<()> {
     git.init_repo_with_options(&GitInitOptions {
         make_initial_commit: false,
         run_branchless_init: false,
+        track_reference_updates: true, // @nocommit: set to false later?
     })?;
     git.branchless("init", &["--main-branch", "master"])?;
 

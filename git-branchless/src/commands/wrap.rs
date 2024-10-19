@@ -7,11 +7,12 @@ use std::time::SystemTime;
 use eyre::Context;
 use itertools::Itertools;
 
-use lib::core::eventlog::{
-    Event, EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
-};
+use lib::core::check_out::record_reference_diff;
+use lib::core::config::get_track_ref_updates;
+use lib::core::effects::Effects;
+use lib::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
-use lib::git::{GitRunInfo, MaybeZeroOid, Repo};
+use lib::git::{GitRunInfo, Repo};
 use lib::util::{ExitCode, EyreExitOr};
 
 struct RepoState {
@@ -82,46 +83,22 @@ fn get_repo_state<S: AsRef<str> + std::fmt::Debug>(args: &[S]) -> eyre::Result<R
     })
 }
 
-/// @nocommit: explain that this is a hack
-fn record_reference_diff(repo_state: &RepoState) -> eyre::Result<()> {
-    // @nocommit: do we need to reopen the repo?
-    // let repo = Repo::from_current_dir()?;
-    let references_snapshot = repo_state.repo.get_references_snapshot()?;
-    let now = SystemTime::now();
-    let conn = repo_state.repo.get_db_conn()?;
-    let event_log_db = EventLogDb::new(&conn)?;
-
-    let references_diff = repo_state.references_snapshot.diff(&references_snapshot);
-    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
-    let events: Vec<Event> = references_diff
-        .into_iter()
-        .map(
-            |(reference_name, old_info, new_info)| Event::RefUpdateEvent {
-                timestamp,
-                event_tx_id: repo_state.event_tx_id,
-                ref_name: reference_name.clone(),
-                old_oid: MaybeZeroOid::from(old_info.oid),
-                new_oid: MaybeZeroOid::from(new_info.oid),
-                message: None,
-            },
-        )
-        .collect();
-    event_log_db.add_events(events)?;
-    Ok(())
-}
-
 /// Run the provided Git command, but wrapped in an event transaction.
-pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
-    git_run_info: &GitRunInfo,
-    args: &[S],
-) -> EyreExitOr<()> {
+pub fn wrap(effects: &Effects, git_run_info: &GitRunInfo, args: &[String]) -> EyreExitOr<()> {
     // We may not be able to make an event transaction ID (such as if there is
     // no repository in the current directory). Ignore the error in that case.
     let repo_state = get_repo_state(args).ok();
 
     let exit_code = pass_through_git_command(git_run_info, args, repo_state.as_ref())?;
     if let Some(repo_state) = repo_state {
-        record_reference_diff(&repo_state)?;
+        // @nocommit: correct condition?
+        if !get_track_ref_updates(&repo_state.repo)? {
+            record_reference_diff(
+                effects,
+                repo_state.event_tx_id,
+                // &repo_state.references_snapshot,
+            )?;
+        }
     }
     Ok(exit_code)
 }

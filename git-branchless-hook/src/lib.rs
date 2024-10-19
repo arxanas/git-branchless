@@ -25,7 +25,7 @@ use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
-use lib::core::config::get_use_reference_transaction_hook;
+use lib::core::config::get_track_ref_updates;
 use lib::core::dag::Dag;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::rewrite_hooks::get_deferred_commits_path;
@@ -59,12 +59,17 @@ fn hook_post_checkout(
 
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
+
+    let repo = Repo::from_current_dir()?;
+    if !get_track_ref_updates(&repo)? {
+        return Ok(());
+    }
+
     writeln!(
         effects.get_output_stream(),
         "branchless: processing checkout"
     )?;
 
-    let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-checkout")?;
@@ -514,7 +519,7 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
     let now = SystemTime::now();
 
     let repo = Repo::from_current_dir()?;
-    if !get_use_reference_transaction_hook(&repo)? {
+    if !get_track_ref_updates(&repo)? {
         return Ok(());
     }
 

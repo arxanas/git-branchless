@@ -61,13 +61,12 @@ pub fn get_main_worktree_hooks_dir(
     Ok(hooks_path)
 }
 
-pub fn get_use_reference_transaction_hook(repo: &Repo) -> eyre::Result<bool> {
+/// Whether or not to attempt to track reference updates via hooks.
+pub fn get_track_ref_updates(repo: &Repo) -> eyre::Result<bool> {
     let config = repo.get_readonly_config()?;
-    let use_reference_transaction_hook =
-        // @nocommit
-        // config.get_or("branchless.core.useReferenceTransactionHook", false)?;
-        config.get_or("branchless.core.useReferenceTransactionHook", true)?;
-    Ok(use_reference_transaction_hook)
+    // @nocommit: need better name that evokes hooks
+    let track_ref_updates = config.get_or("branchless.undo.trackRefUpdates", false)?;
+    Ok(track_ref_updates)
 }
 
 /// Get the configured name of the main branch.

@@ -456,6 +456,7 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
     git.init_repo_with_options(&GitInitOptions {
         make_initial_commit: false,
         run_branchless_init: false,
+        track_reference_updates: false,
     })?;
 
     git.branchless("init", &["--main-branch", "master"])?;

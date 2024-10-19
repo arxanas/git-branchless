@@ -45,7 +45,8 @@ pub struct Git {
     /// The `GIT_EXEC_PATH` environment variable value to use for testing.
     pub git_exec_path: PathBuf,
 
-    pub wrap: bool,
+    /// If `true`, all commands are wrapped in `git-branchless wrap`.
+    pub wrap_commands: bool,
 }
 
 /// Options for `Git::init_repo_with_options`.
@@ -57,6 +58,11 @@ pub struct GitInitOptions {
 
     /// If `true`, run `git branchless init` as part of initialization process.
     pub run_branchless_init: bool,
+
+    // @nocommit: delete this and set to `false` everywhere?
+    // @nocommit: delete testing functions like `supports_reference_transactions`?
+    // @nocommit: rename to match ultimate config option name
+    pub track_reference_updates: bool,
 }
 
 impl Default for GitInitOptions {
@@ -64,6 +70,7 @@ impl Default for GitInitOptions {
         GitInitOptions {
             make_initial_commit: true,
             run_branchless_init: true,
+            track_reference_updates: true,
         }
     }
 }
@@ -92,12 +99,13 @@ impl Git {
             repo_path,
             path_to_git,
             git_exec_path,
-            wrap: false,
+            wrap_commands: false,
         }
     }
 
-    pub fn set_wrap(&mut self, wrap: bool) {
-        self.wrap = wrap;
+    /// Sets [`Git::wrap_commands`].
+    pub fn set_wrap_commands(&mut self, wrap_commands: bool) {
+        self.wrap_commands = wrap_commands;
     }
 
     /// Replace dynamic strings in the output, for testing purposes.
@@ -235,7 +243,7 @@ impl Git {
             )
             .collect();
         let args = args.into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        let args = if self.wrap {
+        let args = if self.wrap_commands {
             [
                 self.branchless_subcommand("wrap"),
                 vec!["--".to_string()],
@@ -451,6 +459,10 @@ then you can only run tests in the main `git-branchless` and \
         ])?;
         self.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
+        if options.track_reference_updates {
+            self.run(&["config", "branchless.undo.trackRefUpdates", "true"])?;
+        }
+
         // Disable warnings of the following form on Windows:
         //
         // ```
@@ -500,6 +512,7 @@ then you can only run tests in the main `git-branchless` and \
         new_repo.init_repo_with_options(&GitInitOptions {
             make_initial_commit: false,
             run_branchless_init: false,
+            track_reference_updates: true,
         })?;
 
         Ok(())

@@ -218,7 +218,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
                 },
                 None => git_run_info,
             };
-            wrap::wrap(&git_run_info, args.as_slice())?
+            wrap::wrap(&ctx.effects, &git_run_info, args.as_slice())?
         }
     };
 

@@ -66,7 +66,7 @@ impl RepoReferencesSnapshot {
                     },
                 },
                 ResolvedReferenceInfo {
-                    oid: self.head_oid,
+                    oid: other.head_oid,
                     reference_name: match &other.head_target {
                         Some(ReferenceTarget::Symbolic { reference_name }) => {
                             Some(reference_name.clone())
