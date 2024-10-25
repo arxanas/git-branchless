@@ -12,11 +12,13 @@
 use std::fmt::Write;
 use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use console::style;
 use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
+use lib::core::check_out::record_reference_diff;
 use lib::core::config::env_vars::should_use_separate_command_binary;
 use lib::util::EyreExitOr;
 use path_slash::PathExt;
@@ -28,7 +30,7 @@ use lib::core::config::{
 };
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
-use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
+use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
@@ -629,6 +631,7 @@ fn command_init(
     git_run_info: &GitRunInfo,
     main_branch_name: Option<&str>,
 ) -> EyreExitOr<()> {
+    let now = SystemTime::now();
     let mut in_ = BufReader::new(stdin());
     let repo = Repo::from_current_dir()?;
     let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
@@ -655,6 +658,7 @@ fn command_init(
     // invocation, when the main branch has been born.
     if let Ok(references_snapshot) = repo.get_references_snapshot() {
         let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+        let event_tx_id = event_log_db.make_transaction_id(now, "init")?;
         let event_cursor = event_replayer.make_default_cursor();
         Dag::open_and_sync(
             effects,
@@ -663,7 +667,7 @@ fn command_init(
             event_cursor,
             &references_snapshot,
         )?;
-        event_log_db.add_events(vec![Event::RefUpdateEvent {}])?;
+        record_reference_diff(effects, event_tx_id, &event_replayer)?;
     }
 
     writeln!(

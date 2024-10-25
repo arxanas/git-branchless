@@ -621,6 +621,7 @@ fn subcommand_run(
         &dag,
         &repo,
         &event_log_db,
+        &event_replayer,
         &revset,
         &commits,
         &options,
@@ -645,6 +646,7 @@ fn subcommand_run(
             &mut dag,
             &repo,
             &event_log_db,
+            &event_replayer,
             execute_options,
             permissions.clone(),
             options.is_dry_run,
@@ -674,6 +676,7 @@ fn set_abort_trap(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     event_tx_id: EventTransactionId,
     strategy: TestExecutionStrategy,
 ) -> EyreExitOr<AbortTrap> {
@@ -719,6 +722,7 @@ fn set_abort_trap(
         git_run_info,
         repo,
         event_log_db,
+        event_replayer,
         &rebase_plan,
         &ExecuteRebasePlanOptions {
             now,
@@ -1208,6 +1212,7 @@ pub fn run_tests<'a>(
     dag: &Dag,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
@@ -1219,6 +1224,7 @@ pub fn run_tests<'a>(
         git_run_info,
         repo,
         event_log_db,
+        event_replayer,
         event_tx_id,
         options.execution_strategy,
     )? {
@@ -1918,6 +1924,7 @@ fn apply_fixes(
     dag: &mut Dag,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     execute_options: &ExecuteRebasePlanOptions,
     permissions: RebasePlanPermissions,
     dry_run: bool,
@@ -2087,6 +2094,7 @@ fn apply_fixes(
             git_run_info,
             repo,
             event_log_db,
+            event_replayer,
             &rebase_plan,
             execute_options,
         )? {

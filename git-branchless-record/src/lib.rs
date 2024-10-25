@@ -86,6 +86,7 @@ fn record(
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
     let (snapshot, working_copy_changes_type) = {
@@ -125,6 +126,7 @@ fn record(
             git_run_info,
             &repo,
             &event_log_db,
+            &event_replayer,
             event_tx_id,
             None,
             &CheckOutCommitOptions {
@@ -223,6 +225,7 @@ fn record(
                 git_run_info,
                 &repo,
                 &event_log_db,
+                &event_replayer,
                 event_tx_id,
                 checkout_target,
                 &CheckOutCommitOptions {
@@ -554,6 +557,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         git_run_info,
         &repo,
         &event_log_db,
+        &event_replayer,
         &rebase_plan,
         &execute_options,
     )?;

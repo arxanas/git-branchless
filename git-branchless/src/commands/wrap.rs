@@ -19,6 +19,7 @@ use lib::util::{ExitCode, EyreExitOr};
 struct RepoState {
     repo: Repo,
     references_snapshot: RepoReferencesSnapshot,
+    event_replayer: EventReplayer,
     event_tx_id: EventTransactionId,
     event_cursor: EventCursor,
 }
@@ -41,6 +42,7 @@ fn pass_through_git_command(
     if let Some(RepoState {
         repo: _,
         references_snapshot: _,
+        event_replayer,
         event_tx_id,
         event_cursor,
     }) = repo_state
@@ -77,6 +79,7 @@ fn get_repo_state(effects: &Effects, args: &[String]) -> eyre::Result<RepoState>
     Ok(RepoState {
         repo,
         references_snapshot,
+        event_replayer,
         event_tx_id,
         event_cursor,
     })
@@ -93,7 +96,7 @@ pub fn wrap(effects: &Effects, git_run_info: &GitRunInfo, args: &[String]) -> Ey
         // @nocommit: correct condition?
         if !get_track_ref_updates(&repo_state.repo)? {
             // @nocommit
-            // record_reference_diff(effects, repo_state.event_tx_id, repo_state.event_cursor)?;
+            record_reference_diff(effects, repo_state.event_tx_id, &repo_state.event_replayer)?;
         }
     }
     Ok(exit_code)

@@ -9,7 +9,7 @@ use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;
-use lib::core::eventlog::EventLogDb;
+use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::git::{GitRunInfo, GitRunResult, NonZeroOid, Repo, WorkingCopySnapshot};
 use lib::util::{ExitCode, EyreExitOr};
 
@@ -17,8 +17,16 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> EyreExitOr<()> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "snapshot create")?;
-    let snapshot = create_snapshot(effects, git_run_info, &repo, &event_log_db, event_tx_id)?;
+    let snapshot = create_snapshot(
+        effects,
+        git_run_info,
+        &repo,
+        &event_log_db,
+        &event_replayer,
+        event_tx_id,
+    )?;
     writeln!(
         effects.get_output_stream(),
         "{}",

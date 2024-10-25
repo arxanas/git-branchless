@@ -289,6 +289,7 @@ fn execute_main_branch_sync_plan(
         git_run_info,
         repo,
         event_log_db,
+        &event_replayer,
         execute_options,
         vec![(root_commit_oid, Some(rebase_plan))],
     )
@@ -384,6 +385,7 @@ fn execute_sync_plans(
         git_run_info,
         repo,
         event_log_db,
+        &event_replayer,
         execute_options,
         root_commit_and_plans,
     )
@@ -394,6 +396,7 @@ fn execute_plans(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    event_replayer: &EventReplayer,
     execute_options: &ExecuteRebasePlanOptions,
     root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)>,
 ) -> EyreExitOr<()> {
@@ -420,6 +423,7 @@ fn execute_plans(
                 git_run_info,
                 repo,
                 event_log_db,
+                event_replayer,
                 &rebase_plan,
                 execute_options,
             )?;

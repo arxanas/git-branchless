@@ -20,7 +20,7 @@ use lazy_static::lazy_static;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType, WithProgress};
-use lib::core::eventlog::EventLogDb;
+use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
@@ -235,6 +235,7 @@ pub struct PhabricatorForge<'a> {
     pub repo: &'a Repo,
     pub dag: &'a mut Dag,
     pub event_log_db: &'a EventLogDb<'a>,
+    pub event_replayer: &'a EventReplayer,
     pub revset: &'a Revset,
 }
 
@@ -389,6 +390,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             self.dag,
             self.repo,
             self.event_log_db,
+            self.event_replayer,
             self.revset,
             &commits,
             &ResolvedTestOptions {
@@ -477,6 +479,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             self.git_run_info,
             self.repo,
             self.event_log_db,
+            self.event_replayer,
             &rebase_plan,
             &execute_options,
         )? {
@@ -650,6 +653,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             self.dag,
             self.repo,
             self.event_log_db,
+            self.event_replayer,
             self.revset,
             &commits,
             &test_options,

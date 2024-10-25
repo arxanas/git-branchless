@@ -930,6 +930,7 @@ fn undo_events(
             git_run_info,
             repo,
             event_log_db,
+            event_replayer,
             event_tx_id,
             Some(target),
             &options,

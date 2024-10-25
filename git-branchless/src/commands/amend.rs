@@ -199,6 +199,7 @@ pub fn amend(
             git_run_info,
             &repo,
             &event_log_db,
+            &event_replayer,
             event_tx_id,
             Some(target),
             &CheckOutCommitOptions {
@@ -306,6 +307,7 @@ pub fn amend(
             git_run_info,
             &repo,
             &event_log_db,
+            &event_replayer,
             &rebase_plan,
             &execute_options,
         )? {

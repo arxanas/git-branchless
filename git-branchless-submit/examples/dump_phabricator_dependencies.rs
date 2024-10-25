@@ -76,6 +76,7 @@ fn main() -> eyre::Result<()> {
         repo: &repo,
         dag: &mut dag,
         event_log_db: &event_log_db,
+        event_replayer: &event_replayer,
         revset: &revset,
     };
     let dependency_oids = phabricator.query_remote_dependencies(commit_oids)?;

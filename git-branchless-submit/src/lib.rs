@@ -300,6 +300,7 @@ fn submit(
         &repo,
         &mut dag,
         &event_log_db,
+        &event_replayer,
         &references_snapshot,
         &unioned_revset,
         forge_kind,
@@ -524,6 +525,7 @@ fn select_forge<'a>(
     repo: &'a Repo,
     dag: &'a mut Dag,
     event_log_db: &'a EventLogDb,
+    event_replayer: &'a EventReplayer,
     references_snapshot: &'a RepoReferencesSnapshot,
     revset: &'a Revset,
     forge_kind: Option<ForgeKind>,
@@ -597,6 +599,7 @@ fn select_forge<'a>(
             repo,
             dag,
             event_log_db,
+            event_replayer,
             revset,
         }),
     };
