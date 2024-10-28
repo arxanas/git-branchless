@@ -519,6 +519,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "compact_str"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6050c3a16ddab2e412160b31f2c871015704239bca62f72f6e5f0be631d3f644"
+dependencies = [
+ "castaway",
+ "cfg-if",
+ "itoa",
+ "rustversion",
+ "ryu",
+ "static_assertions",
+]
+
+[[package]]
 name = "concolor"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,14 +674,14 @@ checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
 
 [[package]]
 name = "crossterm"
-version = "0.25.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64e6c0fbe2c17357405f7c758c1ef960fce08bdfb2c03d88d2a18d7e09c4b67"
+checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.6.0",
  "crossterm_winapi",
  "libc",
- "mio",
+ "mio 0.8.11",
  "parking_lot 0.12.3",
  "signal-hook",
  "signal-hook-mio",
@@ -676,15 +690,15 @@ dependencies = [
 
 [[package]]
 name = "crossterm"
-version = "0.27.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags 2.6.0",
  "crossterm_winapi",
- "libc",
- "mio",
+ "mio 1.0.2",
  "parking_lot 0.12.3",
+ "rustix",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -717,15 +731,15 @@ dependencies = [
 
 [[package]]
 name = "cursive"
-version = "0.20.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5438eb16bdd8af51b31e74764fef5d0a9260227a5ec82ba75c9d11ce46595839"
+checksum = "386d5a36020bb856e9a34ecb8a4e6c9bd6b0262d1857bae4db7bc7e2fdaa532e"
 dependencies = [
  "ahash",
  "cfg-if",
  "crossbeam-channel",
- "crossterm 0.25.0",
- "cursive_core",
+ "crossterm 0.28.1",
+ "cursive_core 0.4.6",
  "lazy_static",
  "libc",
  "log",
@@ -735,12 +749,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cursive-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac7ac0eb0cede3dfdfebf4d5f22354e05a730b79c25fd03481fc69fcfba0a73e"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
 name = "cursive_buffered_backend"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf6287f9e06f44558a3264976e70c51187482a0271d48abfd88f0d3af18d3ee6"
 dependencies = [
- "cursive_core",
+ "cursive_core 0.3.7",
  "enumset",
  "log",
  "smallvec 1.13.2",
@@ -762,6 +785,29 @@ dependencies = [
  "log",
  "num",
  "owning_ref 0.4.1",
+ "time",
+ "unicode-segmentation",
+ "unicode-width 0.1.14",
+ "xi-unicode",
+]
+
+[[package]]
+name = "cursive_core"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "321ec774d27fafc66e812034d0025f8858bd7d9095304ff8fc200e0b9f9cc257"
+dependencies = [
+ "ahash",
+ "compact_str 0.8.0",
+ "crossbeam-channel",
+ "cursive-macros",
+ "enum-map",
+ "enumset",
+ "lazy_static",
+ "log",
+ "num",
+ "parking_lot 0.12.3",
+ "serde_json",
  "time",
  "unicode-segmentation",
  "unicode-width 0.1.14",
@@ -1409,7 +1455,7 @@ dependencies = [
  "bugreport",
  "color-eyre",
  "console",
- "cursive_core",
+ "cursive_core 0.3.7",
  "esl01-dag",
  "eyre",
  "fslock",
@@ -1483,7 +1529,7 @@ version = "0.10.0"
 dependencies = [
  "clap 4.5.20",
  "color-eyre",
- "cursive_core",
+ "cursive_core 0.3.7",
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
@@ -1659,7 +1705,7 @@ dependencies = [
 name = "git-branchless-smartlog"
 version = "0.10.0"
 dependencies = [
- "cursive_core",
+ "cursive_core 0.3.7",
  "esl01-dag",
  "eyre",
  "git-branchless-invoke",
@@ -1675,7 +1721,7 @@ name = "git-branchless-submit"
 version = "0.10.0"
 dependencies = [
  "clap 4.5.20",
- "cursive_core",
+ "cursive_core 0.3.7",
  "esl01-dag",
  "eyre",
  "git-branchless-invoke",
@@ -1733,7 +1779,7 @@ version = "0.10.0"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
- "cursive_core",
+ "cursive_core 0.3.7",
  "eyre",
  "git-branchless-lib",
  "git-branchless-revset",
@@ -2245,6 +2291,19 @@ dependencies = [
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "mio"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80e04d1dcff3aae0704555fe5fee3bcfaf3d1fdf8a7e521d5b9d2b42acb52cec"
+dependencies = [
+ "hermit-abi 0.3.9",
+ "libc",
+ "log",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2794,7 +2853,7 @@ checksum = "d16546c5b5962abf8ce6e2881e722b4e0ae3b6f1a08a26ae3573c55853ca68d3"
 dependencies = [
  "bitflags 2.6.0",
  "cassowary",
- "compact_str",
+ "compact_str 0.7.1",
  "crossterm 0.27.0",
  "itertools 0.13.0",
  "lru",
@@ -3174,7 +3233,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34db1a06d485c9142248b7a054f034b349b212551f3dfd19c94d45a754a217cd"
 dependencies = [
  "libc",
- "mio",
+ "mio 0.8.11",
+ "mio 1.0.2",
  "signal-hook",
 ]
 
