@@ -32,7 +32,7 @@ push = false
 tag = false
 
 [workspace.dependencies]
-anyhow = "1.0.90"
+anyhow = "1.0.92"
 async-trait = "0.1.83"
 bstr = "1.10.0"
 bugreport = "0.5.0"
