@@ -1028,6 +1028,8 @@ impl Repo {
                     line.extend(status_bytes.by_ref().take_while(not_null_terminator));
                     line
                 }
+                // Skip header lines
+                b'#' => continue,
                 _ => {
                     return Err(Error::UnknownStatusLinePrefix {
                         prefix: *line_prefix,
