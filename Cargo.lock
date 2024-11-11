@@ -1077,7 +1077,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "tempfile",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
 ]
 
@@ -1208,7 +1208,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7199d965852c3bac31f779ef99cbb4537f80e952e2d6aa0ffeb30cce00f4f46e"
 dependencies = [
  "libc",
- "thiserror",
+ "thiserror 1.0.69",
  "winapi",
 ]
 
@@ -1439,7 +1439,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "scm-diff-editor",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
  "tracing-chrome",
  "tracing-error",
@@ -1528,7 +1528,7 @@ dependencies = [
  "shell-words",
  "tempfile",
  "textwrap",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
  "tracing-chrome",
  "tracing-error",
@@ -1633,7 +1633,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
 ]
 
@@ -1692,7 +1692,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
 ]
 
@@ -1723,7 +1723,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
 ]
 
@@ -2853,7 +2853,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom 0.2.15",
  "libredox",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2993,7 +2993,7 @@ dependencies = [
  "itertools 0.13.0",
  "maplit",
  "proptest",
- "thiserror",
+ "thiserror 2.0.3",
  "tracing",
 ]
 
@@ -3007,7 +3007,7 @@ dependencies = [
  "diffy",
  "scm-record",
  "sha1",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "walkdir",
 ]
@@ -3024,7 +3024,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "unicode-width 0.1.14",
 ]
@@ -3420,18 +3420,38 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02dd99dc800bbb97186339685293e1cc5d9df1f8fae2d0aecd9ff1c77efea892"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c006c85c7651b3cf2ada4584faa36773bd07bac24acfb39f3c431b36d7e667aa"
+dependencies = [
+ "thiserror-impl 2.0.3",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7c61ec9a6f64d2793d8a45faba21efbe3ced62a886d44c36a009b2b519b4c7e"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f077553d607adc1caf65430528a576c757a71ed73944b66ebb58ef2bbd243568"
 dependencies = [
  "proc-macro2",
  "quote",

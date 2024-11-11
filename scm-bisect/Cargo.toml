@@ -11,7 +11,7 @@ version = "0.3.0"
 [dependencies]
 indexmap = "2"
 itertools = "0.13"
-thiserror = "1"
+thiserror = "2"
 tracing = "0.1"
 
 [dev-dependencies]
