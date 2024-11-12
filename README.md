@@ -1,7 +1,7 @@
 <p align="center"><img width="147" height="147" src="https://user-images.githubusercontent.com/454057/144287756-8570ba1b-b9f1-46de-9236-ca17db246856.png" alt="git-branchless logo" /></p>
 
 <h1 align="center">Branchless workflow for Git</h1>
-<p align="center">(This suite of tools is 100% compatible with branches. If you think this is confusing, you can <a href="https://github.com/arxanas/git-branchless/discussions/284">discuss a new name here</a>.)</p>
+<p align="center">(This suite of tools is 100% compatible with branches. For more discussion, see <a href="https://github.com/arxanas/git-branchless/discussions/284">this thread</a>.)</p>
 
 <hr />
 
