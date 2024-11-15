@@ -281,6 +281,99 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
 
 #[cfg(unix)]
 #[test]
+fn test_init_in_subdir() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    let subdir = git.repo_path.join("subdir");
+    std::fs::create_dir(&subdir)?;
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "init",
+            &[],
+            &GitRunOptions {
+                working_dir: Some(subdir),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Created config file at <repo-path>/.git/branchless/config
+        Auto-detected your main branch as: master
+        If this is incorrect, run: git branchless init --main-branch <branch>
+        Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
+    }
+
+    let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
+    assert!(hook_path.exists());
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_init_in_subdir_with_hooks_path() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    let hooks_path = git.repo_path.join("my-hooks");
+    std::fs::create_dir(&hooks_path)?;
+    git.run(&["config", "core.hooksPath", "my-hooks"])?;
+
+    let subdir = git.repo_path.join("subdir");
+    std::fs::create_dir(&subdir)?;
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "init",
+            &[],
+            &GitRunOptions {
+                working_dir: Some(subdir),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Created config file at <repo-path>/.git/branchless/config
+        Auto-detected your main branch as: master
+        If this is incorrect, run: git branchless init --main-branch <branch>
+        Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
+        Warning: the configuration value core.hooksPath was set to: <repo-path>/my-hooks,
+        which is not the expected default value of: <repo-path>/.git/hooks
+        The Git hooks above may have been installed to an unexpected global location.
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
+    }
+
+    let hook_path = hooks_path.join("post-commit");
+    assert!(hook_path.exists());
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
 fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     use lib::testing::trim_lines;
 
@@ -547,7 +640,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
-        Warning: the configuration value core.hooksPath was set to: my-hooks,
+        Warning: the configuration value core.hooksPath was set to: <repo-path>/my-hooks,
         which is not the expected default value of: <repo-path>/.git/hooks
         The Git hooks above may have been installed to an unexpected global location.
         Successfully installed git-branchless.
@@ -600,7 +693,7 @@ hooksPath = my-hooks
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
-        Warning: the configuration value core.hooksPath was set to: my-hooks,
+        Warning: the configuration value core.hooksPath was set to: <repo-path>/my-hooks,
         which is not the expected default value of: <repo-path>/.git/hooks
         The Git hooks above may have been installed to an unexpected global location.
         Successfully installed git-branchless.

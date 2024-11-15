@@ -54,7 +54,22 @@ pub fn get_main_worktree_hooks_dir(
     let hooks_path = if result.exit_code.is_success() {
         let path = String::from_utf8(result.stdout)
             .context("Decoding git config output for hooks path")?;
-        PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
+
+        let path = PathBuf::from(path.strip_suffix('\n').unwrap_or(&path));
+
+        // Relative hook paths are resolved relative to where hooks are run[1],
+        // which is the root of the current working tree in a non-bare
+        // repository, or $GIT_DIR (the .git directory) for a bare
+        // repository[2].
+        // [1]: https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath
+        // [2]: https://git-scm.com/docs/githooks#_description
+        repo.get_working_copy_path()
+            .as_deref()
+            .unwrap_or_else(
+                // Bare repo
+                || repo.get_path(),
+            )
+            .join(path)
     } else {
         get_default_hooks_dir(repo)?
     };
