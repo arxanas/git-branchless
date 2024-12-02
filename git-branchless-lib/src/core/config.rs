@@ -54,7 +54,13 @@ pub fn get_main_worktree_hooks_dir(
     let hooks_path = if result.exit_code.is_success() {
         let path = String::from_utf8(result.stdout)
             .context("Decoding git config output for hooks path")?;
-        PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
+
+        let path = PathBuf::from(path.strip_suffix('\n').unwrap_or(&path));
+
+        repo.get_working_copy_path()
+            .as_deref()
+            .unwrap_or_else(|| repo.get_path())
+            .join(path)
     } else {
         get_default_hooks_dir(repo)?
     };
