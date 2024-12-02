@@ -96,7 +96,7 @@ skim = "0.10.4"
 tempfile = "3.14.0"
 textwrap = "0.16.1"
 thiserror = "2.0.3"
-tracing = "0.1.40"
+tracing = "0.1.41"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
