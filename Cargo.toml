@@ -98,7 +98,7 @@ textwrap = "0.16.1"
 thiserror = "2.0.3"
 tracing = "0.1.41"
 tracing-chrome = "0.6.0"
-tracing-error = "0.2.0"
+tracing-error = "0.2.1"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 vt100 = "0.15.2"
 
