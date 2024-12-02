@@ -44,7 +44,7 @@ pub enum NodeObject<'repo> {
     },
 }
 
-impl<'repo> NodeObject<'repo> {
+impl NodeObject<'_> {
     fn get_oid(&self) -> NonZeroOid {
         match self {
             NodeObject::Commit { commit } => commit.get_oid(),
@@ -214,7 +214,7 @@ impl<'a> CommitMessageDescriptor<'a> {
     }
 }
 
-impl<'a> NodeDescriptor for CommitMessageDescriptor<'a> {
+impl NodeDescriptor for CommitMessageDescriptor<'_> {
     #[instrument]
     fn describe_node(
         &mut self,
@@ -249,7 +249,7 @@ impl<'a> ObsolescenceExplanationDescriptor<'a> {
     }
 }
 
-impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
+impl NodeDescriptor for ObsolescenceExplanationDescriptor<'_> {
     fn describe_node(
         &mut self,
         _glyphs: &Glyphs,
@@ -317,7 +317,7 @@ impl<'a> BranchesDescriptor<'a> {
     }
 }
 
-impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
+impl NodeDescriptor for BranchesDescriptor<'_> {
     #[instrument]
     fn describe_node(
         &mut self,
@@ -412,7 +412,7 @@ $",
     Some(diff_number.to_owned())
 }
 
-impl<'a> NodeDescriptor for DifferentialRevisionDescriptor<'a> {
+impl NodeDescriptor for DifferentialRevisionDescriptor<'_> {
     #[instrument]
     fn describe_node(
         &mut self,

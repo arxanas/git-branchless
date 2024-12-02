@@ -319,7 +319,7 @@ pub struct Blob<'repo> {
     pub(super) inner: git2::Blob<'repo>,
 }
 
-impl<'repo> Blob<'repo> {
+impl Blob<'_> {
     /// Get the size of the blob in bytes.
     pub fn size(&self) -> u64 {
         self.inner.size().try_into().unwrap()
