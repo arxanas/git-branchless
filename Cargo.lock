@@ -1409,7 +1409,6 @@ dependencies = [
  "bugreport",
  "color-eyre",
  "console",
- "cursive_core",
  "esl01-dag",
  "eyre",
  "fslock",
@@ -1483,7 +1482,6 @@ version = "0.10.0"
 dependencies = [
  "clap 4.5.21",
  "color-eyre",
- "cursive_core",
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
@@ -1509,7 +1507,7 @@ dependencies = [
  "concolor",
  "console",
  "criterion",
- "cursive",
+ "cursive_core",
  "esl01-dag",
  "eyre",
  "futures",
@@ -1554,7 +1552,6 @@ dependencies = [
 name = "git-branchless-navigation"
 version = "0.10.0"
 dependencies = [
- "cursive",
  "esl01-dag",
  "eyre",
  "git-branchless-lib",
@@ -1596,8 +1593,6 @@ dependencies = [
 name = "git-branchless-record"
 version = "0.10.0"
 dependencies = [
- "cursive",
- "cursive_buffered_backend",
  "esl01-dag",
  "eyre",
  "git-branchless-invoke",
@@ -1659,7 +1654,6 @@ dependencies = [
 name = "git-branchless-smartlog"
 version = "0.10.0"
 dependencies = [
- "cursive_core",
  "esl01-dag",
  "eyre",
  "git-branchless-invoke",
@@ -1675,7 +1669,6 @@ name = "git-branchless-submit"
 version = "0.10.0"
 dependencies = [
  "clap 4.5.21",
- "cursive_core",
  "esl01-dag",
  "eyre",
  "git-branchless-invoke",
@@ -1704,7 +1697,6 @@ dependencies = [
  "bstr",
  "clap 4.5.21",
  "crossbeam",
- "cursive",
  "esl01-dag",
  "eyre",
  "fslock",

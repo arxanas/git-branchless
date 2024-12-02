@@ -21,13 +21,11 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use clap::{CommandFactory, FromArgMatches, Parser};
-use cursive_core::theme::BaseColor;
-use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use git_branchless_opts::{ColorSetting, GlobalArgs};
 use lib::core::config::env_vars::{get_git_exec_path, get_path_to_git};
 use lib::core::effects::Effects;
-use lib::core::formatting::Glyphs;
+use lib::core::formatting::{BaseColor, Glyphs, StyledString};
 use lib::git::GitRunInfo;
 use lib::git::{Repo, RepoError};
 use lib::util::{ExitCode, EyreExitOr};
