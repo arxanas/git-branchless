@@ -5,8 +5,6 @@ use std::env;
 use std::fmt::{Debug, Write};
 use std::hash::Hash;
 
-use cursive_core::theme::Effect;
-use cursive_core::utils::markup::StyledString;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lib::core::config::get_main_branch_name;
@@ -15,6 +13,7 @@ use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::effects::OperationType;
 use lib::core::eventlog::EventLogDb;
+use lib::core::formatting::{Effect, StyledString};
 use lib::core::repo_ext::RepoExt;
 use lib::core::repo_ext::RepoReferencesSnapshot;
 use lib::git::CategorizedReferenceName;
@@ -290,6 +289,25 @@ impl Forge for GithubForge<'_> {
                 }),
                 options
             )?);
+            for (commit_oid, create_status) in created_branch.iter() {
+                match create_status {
+                    CreateStatus::Created { .. } => {}
+                    CreateStatus::Skipped | CreateStatus::Err => {
+                        // FIXME: surface the inner branch forge error somehow?
+                        writeln!(
+                            effects.get_output_stream(),
+                            "Could not create branch for commit: {}",
+                            effects.get_glyphs().render(
+                                self.repo.friendly_describe_commit_from_oid(
+                                    effects.get_glyphs(),
+                                    *commit_oid
+                                )?,
+                            )?
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                }
+            }
             created_branches.extend(created_branch.into_iter());
         }
 
@@ -298,7 +316,7 @@ impl Forge for GithubForge<'_> {
             .copied()
             .map(|(commit_oid, commit_status)| {
                 let commit_status = match created_branches.get(&commit_oid) {
-                    Some(CreateStatus {
+                    Some(CreateStatus::Created {
                         final_commit_oid: _,
                         local_commit_name,
                     }) => CommitStatus {
@@ -309,11 +327,18 @@ impl Forge for GithubForge<'_> {
                         // Expecting this to be the same as the local branch name (for now):
                         remote_commit_name: Some(local_commit_name.clone()),
                     },
+
+                    Some(
+                        CreateStatus::Skipped  | CreateStatus::Err ,
+                    ) => {
+                        warn!(?commits_to_create, ?created_branches, ?commit_oid, ?commit_status, "commit failed to be created");
+                        eyre::bail!("BUG: should have been handled in previous call to branch_forge.create: {commit_oid:?} has status {commit_status:?}");
+                    }
                     None => commit_status.clone(),
                 };
-                (commit_oid, commit_status)
+                Ok((commit_oid, commit_status))
             })
-            .collect();
+            .try_collect()?;
 
         // Create the pull requests only after creating all the branches because
         // we rely on the presence of a branch on each commit in the stack to

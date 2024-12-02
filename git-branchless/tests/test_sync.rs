@@ -158,7 +158,7 @@ fn test_sync_pull() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        branchless: running command: <git-executable> fetch origin
         Fast-forwarding branch master to f81d55c create test5.txt
         Attempting rebase in-memory...
         [1/1] Committed as: 2831fb5 create test6.txt
@@ -183,7 +183,7 @@ fn test_sync_pull() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        branchless: running command: <git-executable> fetch origin
         Not updating branch master at f81d55c create test5.txt
         Not moving up-to-date stack at 2831fb5 create test6.txt
         "###);
@@ -297,7 +297,7 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        branchless: running command: <git-executable> fetch origin
         Syncing branch master
         Attempting rebase in-memory...
         [1/1] Committed as: f81d55c create test5.txt
@@ -371,7 +371,7 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        branchless: running command: <git-executable> fetch origin
         Syncing branch master
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -469,10 +469,10 @@ fn test_sync_checked_out_main_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["--pull"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-            branchless: running command: <git-executable> fetch --all
-            Fast-forwarding branch master to 96d1c37 create test2.txt
-            branchless: running command: <git-executable> rebase 96d1c37a3d4363611c49f7e52186e189a04c531f
-            "###);
+        branchless: running command: <git-executable> fetch origin
+        Fast-forwarding branch master to 96d1c37 create test2.txt
+        branchless: running command: <git-executable> rebase 96d1c37a3d4363611c49f7e52186e189a04c531f
+        "###);
     }
 
     {
@@ -524,7 +524,7 @@ fn test_sync_checked_out_main_with_dirty_working_copy() -> eyre::Result<()> {
         error: Please commit or stash them.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        branchless: running command: <git-executable> fetch origin
         Not updating branch master at 62fc20d create test1.txt
         branchless: running command: <git-executable> rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         "###);
