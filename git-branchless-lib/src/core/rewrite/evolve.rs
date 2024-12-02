@@ -18,11 +18,7 @@ pub fn find_rewrite_target(
     event_cursor: EventCursor,
     oid: NonZeroOid,
 ) -> Option<MaybeZeroOid> {
-    let event = event_replayer.get_cursor_commit_latest_event(event_cursor, oid);
-    let event = match event {
-        Some(event) => event,
-        None => return None,
-    };
+    let event = event_replayer.get_cursor_commit_latest_event(event_cursor, oid)?;
     match event {
         Event::RewriteEvent {
             timestamp: _,

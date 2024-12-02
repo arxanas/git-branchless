@@ -449,7 +449,7 @@ pub enum AmendFastOptions<'repo> {
     },
 }
 
-impl<'repo> AmendFastOptions<'repo> {
+impl AmendFastOptions<'_> {
     /// Returns whether there are any paths to be amended.
     pub fn is_empty(&self) -> bool {
         match &self {

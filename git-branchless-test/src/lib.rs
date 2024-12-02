@@ -1164,7 +1164,7 @@ struct SearchGraph<'a> {
     commit_set: CommitSet,
 }
 
-impl<'a> BasicSourceControlGraph for SearchGraph<'a> {
+impl BasicSourceControlGraph for SearchGraph<'_> {
     type Node = NonZeroOid;
     type Error = SearchGraphError;
 
