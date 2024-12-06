@@ -34,4 +34,6 @@ pub use test::{
     make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TestCommand,
     TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
-pub use tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
+pub use tree::{
+    dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, make_empty_tree, Tree,
+};
