@@ -9,6 +9,7 @@ grammar;
 pub Expr: Expr<'input> = {
     <lhs:Expr> "|"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
     <lhs:Expr> "+"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
+    <lhs:Expr> "+"              => Expr::FunctionCall(Cow::Borrowed("sole"),  vec![Expr::FunctionCall(Cow::Borrowed("children"), vec![lhs])]),
     <lhs:Expr> "or" <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
     <Expr2>,
 }

@@ -667,4 +667,28 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_revset_child_operator() -> eyre::Result<()> {
+        // TODO can we get a revset operator to complement ~/^?
+        insta::assert_debug_snapshot!(parse("foo+"), @r###"
+        Ok(
+            FunctionCall(
+                "sole",
+                [
+                    FunctionCall(
+                        "children",
+                        [
+                            Name(
+                                "foo",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
 }
