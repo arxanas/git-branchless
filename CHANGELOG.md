@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+- (#1463): `git switch` now accepts a revset that evaluates to a set with a single head, and that head will be checked out
+
 ## [v0.10.0] - 2024-10-10
 
 ### Added
