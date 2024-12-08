@@ -75,9 +75,8 @@ pub fn split(
                 let Revset(expr) = revset;
                 writeln!(
                     effects.get_error_stream(),
-                    "Expected revset to expand to exactly 1 commit (got {}): {}",
-                    other.len(),
-                    expr,
+                    "Expected revset to expand to exactly 1 commit (got {count}): {expr}",
+                    count = other.len(),
                 )?;
                 return Ok(Err(ExitCode(1)));
             }
@@ -123,6 +122,17 @@ pub fn split(
     let mut split_tree = commit_to_split.get_tree()?;
     for file in files_to_extract.iter() {
         let path = Path::new(&file);
+
+        if let Ok(Some(false)) = commit_to_split.contains_touched_path(path) {
+            writeln!(
+                effects.get_error_stream(),
+                "Aborting: file '{filename}' was not changed in commit {oid}.",
+                filename = path.to_string_lossy(),
+                oid = commit_to_split.get_short_oid()?
+            )?;
+            return Ok(Err(ExitCode(1)));
+        }
+
         let parent_entry = match parent_tree.get_path(path) {
             Ok(entry) => entry,
             Err(err) => {
@@ -176,6 +186,15 @@ pub fn split(
     let split_commit_oid =
         commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?;
     let split_commit = repo.find_commit_or_fail(split_commit_oid)?;
+
+    if split_commit.is_empty() {
+        writeln!(
+            effects.get_error_stream(),
+            "Aborting: refusing to split all changes out of commit {oid}.",
+            oid = commit_to_split.get_short_oid()?,
+        )?;
+        return Ok(Err(ExitCode(1)));
+    };
 
     let extracted_tree = repo.cherry_pick_fast(
         &commit_to_split,
