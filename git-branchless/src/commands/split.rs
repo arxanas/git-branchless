@@ -119,9 +119,35 @@ pub fn split(
         }
     };
 
+    let mut message = match files_to_extract.as_slice() {
+        [] => unreachable!("Clap should have required at least 1 file"),
+        [_] => None,
+        other => Some(format!("{} files", other.len())),
+    };
+
     let mut split_tree = commit_to_split.get_tree()?;
     for file in files_to_extract.iter() {
-        let path = Path::new(&file);
+        let path = Path::new(&file).to_path_buf();
+        let cwd = std::env::current_dir()?;
+        let working_copy_path = repo
+            .get_working_copy_path()
+            .expect("FIXME running in bare root");
+
+        let path = if cwd != working_copy_path && path.exists() {
+            let mut repo_relative_path = cwd
+                .strip_prefix(working_copy_path)
+                .expect("FIXME not running in working copy?")
+                .to_path_buf();
+            repo_relative_path.push(path);
+            repo_relative_path
+        } else if let Some(stripped_filename) = file.strip_prefix(':') {
+            // https://git-scm.com/docs/gitrevisions#Documentation/gitrevisions.txt-emltngtltpathgtemegem0READMEememREADMEem
+            Path::new(stripped_filename).to_path_buf()
+        } else {
+            path
+        };
+        let path = path.as_path();
+        message = message.or(Some(path.to_string_lossy().to_string()));
 
         if let Ok(Some(false)) = commit_to_split.contains_touched_path(path) {
             writeln!(
@@ -171,17 +197,14 @@ pub fn split(
                 } else {
                     writeln!(
                         effects.get_error_stream(),
-                        "Aborting: the file '{file}' doesn't exist.",
+                        "Aborting: the file '{file}' does not exist.",
                     )?;
                 }
                 return Ok(Err(ExitCode(1)));
             }
         }
     }
-    let message = match files_to_extract.as_slice() {
-        [only_file] => only_file.clone(),
-        other => format!("{} files", other.len()),
-    };
+    let message = message.expect("at least 1 file should have been given");
 
     let split_commit_oid =
         commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?;
