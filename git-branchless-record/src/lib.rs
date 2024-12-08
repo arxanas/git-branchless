@@ -157,6 +157,11 @@ fn record(
             )?);
         }
     } else {
+        let messages = if messages.is_empty() && stash {
+            vec!["temp: stash".to_string()]
+        } else {
+            messages
+        };
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
