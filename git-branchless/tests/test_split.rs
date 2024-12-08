@@ -1,4 +1,4 @@
-use lib::testing::make_git;
+use lib::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_split_detached_head() -> eyre::Result<()> {
@@ -532,9 +532,76 @@ fn test_split_undo_works() -> eyre::Result<()> {
     Ok(())
 }
 
-// TODO split w/ relative path (ie working in monorepo)
-// TODO when splitting checked out branch head, branch should extend to newly extacted commit
+#[test]
+fn test_split_unchanged_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "contents1")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 8e5c74b first commit
+        "###);
+    }
+
+    {
+        let (_stdout, stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "initial.txt"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stderr, @r###"
+            Aborting: file 'initial.txt' was not changed in commit 8e5c74b.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_split_will_not_split_to_empty_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "contents1")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 8e5c74b first commit
+        "###);
+    }
+
+    {
+        let (_stdout, stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "test1.txt"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stderr, @r###"
+            Aborting: refusing to split all changes out of commit 8e5c74b.
+        "###);
+    }
+
+    Ok(())
+}
+
 // TODO report of which files were split and which were not found
-// TODO(error) revset_resolves_to_multiple_commits -> error
-// TODO(error) file not changed in commit -> error
-// TODO(error) split all files out of commit (leaving empty) -> error and do nothing
