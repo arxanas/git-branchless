@@ -3,7 +3,6 @@
 use eyre::Context;
 use rayon::ThreadPoolBuilder;
 use std::{
-    collections::HashMap,
     fmt::Write,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -250,34 +249,65 @@ pub fn split(
         event_tx_id,
         commit_oid: extracted_commit_oid,
     }])?;
-    move_branches(effects, git_run_info, &repo, event_tx_id, &{
-        let mut result = HashMap::new();
-        result.insert(commit_to_split_oid, MaybeZeroOid::NonZero(split_commit_oid));
-        result
-    })?;
 
     let head_info = repo.get_head_info()?;
-    if let ResolvedReferenceInfo {
-        oid: Some(oid),
-        reference_name: _,
-    } = head_info
-    {
-        if oid == commit_to_split_oid {
-            try_exit_code!(check_out_commit(
-                effects,
-                git_run_info,
-                &repo,
-                &event_log_db,
-                event_tx_id,
-                Some(CheckoutTarget::Oid(split_commit_oid)),
-                &CheckOutCommitOptions {
-                    additional_args: Default::default(),
-                    force_detach: true,
-                    reset: false,
-                    render_smartlog: false,
-                },
-            )?);
-        }
+    let (checkout_target, rewritten_oids) = match head_info {
+        // branch @ split commit checked out: extend branch to include extracted
+        // commit; branch will stay checked out w/ any explicit checkout
+        ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: Some(_),
+        } if oid == commit_to_split_oid => (
+            None,
+            vec![(
+                commit_to_split_oid,
+                MaybeZeroOid::NonZero(extracted_commit_oid),
+            )],
+        ),
+
+        // commit to split checked out as detached HEAD, don't extend any
+        // branches, but explicitly check out the newly split commit
+        ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: None,
+        } if oid == commit_to_split_oid => (
+            Some(CheckoutTarget::Oid(split_commit_oid)),
+            vec![(commit_to_split_oid, MaybeZeroOid::NonZero(split_commit_oid))],
+        ),
+
+        // some other commit or branch was checked out, default behavior is fine
+        ResolvedReferenceInfo {
+            oid: _,
+            reference_name: _,
+        } => (
+            None,
+            vec![(commit_to_split_oid, MaybeZeroOid::NonZero(split_commit_oid))],
+        ),
+    };
+
+    move_branches(
+        effects,
+        git_run_info,
+        &repo,
+        event_tx_id,
+        &(rewritten_oids.into_iter().collect()),
+    )?;
+
+    if checkout_target.is_some() {
+        try_exit_code!(check_out_commit(
+            effects,
+            git_run_info,
+            &repo,
+            &event_log_db,
+            event_tx_id,
+            Some(CheckoutTarget::Oid(split_commit_oid)),
+            &CheckOutCommitOptions {
+                additional_args: Default::default(),
+                force_detach: true,
+                reset: false,
+                render_smartlog: false,
+            },
+        )?);
     }
 
     let mut builder = RebasePlanBuilder::new(&dag, permissions);

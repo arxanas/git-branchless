@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use lib::testing::{make_git, GitRunOptions};
 
 #[test]
@@ -364,23 +366,10 @@ fn test_split_attached_branch() -> eyre::Result<()> {
             Nothing to restack.
             O f777ecc (master) create initial.txt
             |
-            @ 2932db7 (> branch-name) first commit
+            o 2932db7 first commit
             |
-            o c159d6a temp(split): test2.txt
+            @ c159d6a (> branch-name) temp(split): test2.txt
         "###);
-    }
-
-    {
-        // TODO confirm that this is correct: the file exists as unstaged & new
-        // in this commit, but is still part of the next commit Should this
-        // instead delete the file from working copy and leave it only in the
-        // extracted commit?
-        let (stdout, _stderr) = git.run(&["status", "--short"])?;
-        insta::assert_snapshot!(&stdout, @r#"
-            A  test2.txt
-        "#);
-
-        git.branchless("next", &[])?;
 
         let (stdout, _stderr) = git.run(&["status", "--short"])?;
         insta::assert_snapshot!(&stdout, @r#""#);
