@@ -203,6 +203,7 @@ pub fn amend(
             Some(target),
             &CheckOutCommitOptions {
                 additional_args: Default::default(),
+                force_detach: false,
                 reset: true,
                 render_smartlog: false,
             },
@@ -297,6 +298,7 @@ pub fn amend(
             resolve_merge_conflicts: move_options.resolve_merge_conflicts,
             check_out_commit_options: CheckOutCommitOptions {
                 additional_args: Default::default(),
+                force_detach: false,
                 reset: false,
                 render_smartlog: false,
             },
