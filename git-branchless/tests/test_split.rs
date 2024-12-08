@@ -533,6 +533,157 @@ fn test_split_undo_works() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_split_supports_absolute_relative_and_repo_relative_paths() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "root contents1")?;
+    git.write_file_txt("test2", "root contents2")?;
+    git.write_file_txt("subdir/test1", "subdir contents1")?;
+    git.write_file_txt("subdir/test3", "subdir contents3")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 2998051 first commit
+        "###);
+    }
+
+    {
+        // test3.txt only exists in subdir
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "test3.txt"],
+            &GitRunOptions {
+                subdir: Some(PathBuf::from("subdir")),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout d9d41a308e25a71884831c865c356da43cc5294e
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            @ d9d41a3 first commit
+            |
+            o fc76a91 temp(split): subdir/test3.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            subdir/test1.txt | 1 +
+            test1.txt        | 1 +
+            test2.txt        | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    {
+        // test1.txt exists in root and subdir; try to resolve relative to cwd
+
+        git.branchless("undo", &["--yes"])?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "test1.txt"],
+            &GitRunOptions {
+                subdir: Some(PathBuf::from("subdir")),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout 0cb81546d386a2064603c05ce7dc9759591f5a93
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            @ 0cb8154 first commit
+            |
+            o 5d2c1d0 temp(split): subdir/test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            subdir/test3.txt | 1 +
+            test1.txt        | 1 +
+            test2.txt        | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    {
+        // test2.txt only exists in root; resolve it relative to root
+
+        git.branchless("undo", &["--yes"])?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "test2.txt"],
+            &GitRunOptions {
+                subdir: Some(PathBuf::from("subdir")),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout 912204674dfda3ab5fe089dddd1c9bf17b3c2965
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            @ 9122046 first commit
+            |
+            o ba3abaf temp(split): test2.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            subdir/test1.txt | 1 +
+            subdir/test3.txt | 1 +
+            test1.txt        | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    {
+        // test1.txt exists in root and subdir; support : to resolve relative to root
+
+        git.branchless("undo", &["--yes"])?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", ":test1.txt"],
+            &GitRunOptions {
+                subdir: Some(PathBuf::from("subdir")),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout 6d0cd9b8fb1938e50250f30427a0d4865b351f2f
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            @ 6d0cd9b first commit
+            |
+            o 2f03a38 temp(split): test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            subdir/test1.txt | 1 +
+            subdir/test3.txt | 1 +
+            test2.txt        | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_split_unchanged_file() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
