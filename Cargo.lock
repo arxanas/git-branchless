@@ -415,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.21"
+version = "4.5.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb3b4b9e5a7c7514dfa52869339ee98b3156b0bfb4e8a77c4ff4babb64b1604f"
+checksum = "3135e7ec2ef7b10c6ed8950f0f792ed96ee093fa088608f1c76e569722700c84"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -425,13 +425,13 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.21"
+version = "4.5.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b17a95aa67cc7b5ebd32aa5370189aa0d79069ef1c64ce893bd30fb24bff20ec"
+checksum = "30582fc632330df2bd26877bde0c1f4470d57c582bbc070376afcd04d8cb4838"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.7.2",
+ "clap_lex 0.7.4",
  "strsim 0.11.1",
 ]
 
@@ -458,9 +458,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.7.2"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
+checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "clap_mangen"
@@ -468,7 +468,7 @@ version = "0.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbae9cbfdc5d4fa8711c09bd7b83f644cb48281ac35bf97af3e47b0675864bdf"
 dependencies = [
- "clap 4.5.21",
+ "clap 4.5.23",
  "roff 0.2.2",
 ]
 
@@ -575,7 +575,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.5.21",
+ "clap 4.5.23",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1481,7 +1481,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.21",
+ "clap 4.5.23",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1570,7 +1570,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.21",
+ "clap 4.5.23",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.13.0",
@@ -1674,7 +1674,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.21",
+ "clap 4.5.23",
  "cursive_core",
  "esl01-dag",
  "eyre",
@@ -1702,7 +1702,7 @@ version = "0.10.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.5.21",
+ "clap 4.5.23",
  "crossbeam",
  "cursive",
  "esl01-dag",
@@ -2994,7 +2994,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adfb2974d3500342f111c2642357b8eda61977b8d4f2994274aa07a0ad834069"
 dependencies = [
- "clap 4.5.21",
+ "clap 4.5.23",
  "diffy",
  "scm-record",
  "sha1",
