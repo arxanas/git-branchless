@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#1461): Added `+` postfix revset operator; evaluates to "only child".
+
 ## [v0.10.0] - 2024-10-10
 
 ### Added
