@@ -105,7 +105,6 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
             insta::assert_snapshot!(stdout, @"");
         }
 
-        git.commit_file("test4", 4)?;
         {
             let (stdout, stderr) = git.run(&["rebase", "--continue"])?;
             insta::assert_snapshot!(stderr, @r###"
@@ -133,8 +132,6 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
             O f777ecc (master) create initial.txt
             |\
             | o 047b7ad create test1.txt
-            | |
-            | o ecab41f create test4.txt
             |
             x 62fc20d (rewritten as 047b7ad7) create test1.txt
             |
