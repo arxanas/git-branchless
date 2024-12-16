@@ -15,6 +15,15 @@ pub struct Diff<'repo> {
     pub(super) inner: git2::Diff<'repo>,
 }
 
+impl Diff<'_> {
+    /// TODO
+    pub fn short_stats(&self) -> eyre::Result<String> {
+        let stats = self.inner.stats()?;
+        let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
+        Ok(buf.as_str().expect("TODO").trim().to_string())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct GitHunk {
     old_start: usize,

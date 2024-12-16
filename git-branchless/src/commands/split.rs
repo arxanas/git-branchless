@@ -203,7 +203,18 @@ pub fn split(
             }
         }
     }
-    let message = message.expect("at least 1 file should have been given");
+    let message = {
+        let (effects, _progress) =
+            effects.start_operation(lib::core::effects::OperationType::CalculateDiff);
+        let diff = repo.get_diff_between_trees(
+            &effects,
+            Some(&commit_to_split.get_tree()?),
+            &split_tree,
+            0, // we don't care about the context here
+        )?;
+
+        diff.short_stats()?
+    };
 
     let split_commit_oid =
         commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?;
