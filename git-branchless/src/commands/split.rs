@@ -41,6 +41,7 @@ pub fn split(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     files_to_extract: Vec<String>,
+    detach: bool,
     git_run_info: &GitRunInfo,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
@@ -268,7 +269,7 @@ pub fn split(
         ResolvedReferenceInfo {
             oid: Some(oid),
             reference_name: Some(_),
-        } if oid == commit_to_split_oid => (
+        } if oid == commit_to_split_oid && !detach => (
             None,
             vec![(
                 commit_to_split_oid,
@@ -324,7 +325,11 @@ pub fn split(
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
     let children = dag.query_children(CommitSet::from(commit_to_split_oid))?;
     for child in dag.commit_set_to_vec(&children)? {
-        builder.move_subtree(child, vec![extracted_commit_oid])?;
+        if detach {
+            builder.move_subtree(child, vec![split_commit_oid])?;
+        } else {
+            builder.move_subtree(child, vec![extracted_commit_oid])?;
+        }
     }
     let rebase_plan = builder.build(effects, &pool, &repo_pool)?;
 
