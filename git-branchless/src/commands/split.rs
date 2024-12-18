@@ -8,7 +8,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use lib::{
     core::{
@@ -43,6 +43,7 @@ pub fn split(
     files_to_extract: Vec<String>,
     detach: bool,
     discard: bool,
+    move_options: &MoveOptions,
     git_run_info: &GitRunInfo,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
@@ -62,6 +63,16 @@ pub fn split(
     let event_tx_id = event_log_db.make_transaction_id(now, "split")?;
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
+
+    let MoveOptions {
+        force_rewrite_public_commits,
+        force_in_memory,
+        force_on_disk,
+        detect_duplicate_commits_via_patch_id,
+        resolve_merge_conflicts,
+        dump_rebase_constraints,
+        dump_rebase_plan,
+    } = *move_options;
 
     let commit_to_split_oid: NonZeroOid = match resolve_commits(
         effects,
@@ -91,10 +102,10 @@ pub fn split(
     let permissions = match RebasePlanPermissions::verify_rewrite_set(
         &dag,
         BuildRebasePlanOptions {
-            force_rewrite_public_commits: false,
-            dump_rebase_constraints: false,
-            dump_rebase_plan: false,
-            detect_duplicate_commits_via_patch_id: false,
+            force_rewrite_public_commits,
+            dump_rebase_constraints,
+            dump_rebase_plan,
+            detect_duplicate_commits_via_patch_id,
         },
         &vec![commit_to_split_oid].into_iter().collect(),
     )? {
@@ -271,6 +282,19 @@ pub fn split(
         Some(extracted_commit_oid)
     };
 
+    // push the new commits into the dag for the rebase planner
+    dag.sync_from_oids(
+        &effects,
+        &repo,
+        CommitSet::empty(),
+        match extracted_commit_oid {
+            None => CommitSet::from(split_commit_oid),
+            Some(extracted_commit_oid) => vec![split_commit_oid, extracted_commit_oid]
+                .into_iter()
+                .collect(),
+        },
+    )?;
+
     let head_info = repo.get_head_info()?;
     let (checkout_target, rewritten_oids) = match head_info {
         // branch @ split commit checked out: extend branch to include extracted
@@ -352,9 +376,9 @@ pub fn split(
                 now,
                 event_tx_id,
                 preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
-                force_in_memory: true,
-                force_on_disk: false,
-                resolve_merge_conflicts: false,
+                force_in_memory,
+                force_on_disk,
+                resolve_merge_conflicts,
                 check_out_commit_options: CheckOutCommitOptions {
                     additional_args: Default::default(),
                     force_detach: false,

@@ -671,6 +671,10 @@ pub enum Command {
         /// Options for resolving revset expressions.
         #[clap(flatten)]
         resolve_revset_options: ResolveRevsetOptions,
+
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
     },
 
     /// Push commits to a remote.
