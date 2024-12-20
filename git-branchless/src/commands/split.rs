@@ -26,8 +26,8 @@ use lib::{
         },
     },
     git::{
-        make_empty_tree, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-        ResolvedReferenceInfo,
+        make_empty_tree, summarize_diff_for_temporary_commit, CherryPickFastOptions, GitRunInfo,
+        MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -118,12 +118,6 @@ pub fn split(
         }
     };
 
-    let mut message = match files_to_extract.as_slice() {
-        [] => unreachable!("Clap should have required at least 1 file"),
-        [_] => None,
-        other => Some(format!("{} files", other.len())),
-    };
-
     let mut split_tree = commit_to_split.get_tree()?;
     for file in files_to_extract.iter() {
         let path = Path::new(&file).to_path_buf();
@@ -160,7 +154,6 @@ pub fn split(
             path
         };
         let path = path.as_path();
-        message = message.or(Some(path.to_string_lossy().to_string()));
 
         if let Ok(Some(false)) = commit_to_split.contains_touched_path(path) {
             writeln!(
@@ -217,7 +210,18 @@ pub fn split(
             }
         }
     }
-    let message = message.expect("at least 1 file should have been given");
+    let message = {
+        let (effects, _progress) =
+            effects.start_operation(lib::core::effects::OperationType::CalculateDiff);
+        let diff = repo.get_diff_between_trees(
+            &effects,
+            Some(&split_tree),
+            &commit_to_split.get_tree()?,
+            0, // we don't care about the context here
+        )?;
+
+        summarize_diff_for_temporary_commit(&diff)?
+    };
 
     let split_commit_oid =
         commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?;

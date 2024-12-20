@@ -32,7 +32,7 @@ fn test_split_detached_head() -> eyre::Result<()> {
             |
             @ 2932db7 first commit
             |
-            o c159d6a temp(split): test2.txt
+            o 01523cc temp(split): test2.txt (+1)
         "###);
     }
 
@@ -91,7 +91,7 @@ fn test_split_added_file() -> eyre::Result<()> {
             |
             @ 2f9e232 first commit
             |
-            o 067feb9 temp(split): test2.txt
+            o c4b067e temp(split): test2.txt (+1)
         "###);
     }
 
@@ -148,7 +148,7 @@ fn test_split_modified_file() -> eyre::Result<()> {
             |
             @ 495b4c0 first commit
             |
-            o 590b05e temp(split): test1.txt
+            o 5375cb6 temp(split): test1.txt (+1/-1)
         "###);
     }
 
@@ -215,7 +215,7 @@ fn test_split_deleted_file() -> eyre::Result<()> {
             |
             @ 495b4c0 first commit
             |
-            o bfc063a temp(split): test1.txt
+            o de6e4df temp(split): test1.txt (-1)
         "###);
     }
 
@@ -268,7 +268,7 @@ fn test_split_multiple_files() -> eyre::Result<()> {
             |
             @ 8e5c74b first commit
             |
-            o 0b1f3c6 temp(split): 2 files
+            o 57020b0 temp(split): 2 files (+2)
         "###);
     }
 
@@ -324,7 +324,7 @@ fn test_split_detached_branch() -> eyre::Result<()> {
             |
             @ 2932db7 (branch-name) first commit
             |
-            o c159d6a temp(split): test2.txt
+            o 01523cc temp(split): test2.txt (+1)
         "###);
     }
 
@@ -368,7 +368,7 @@ fn test_split_attached_branch() -> eyre::Result<()> {
             |
             o 2932db7 first commit
             |
-            @ c159d6a (> branch-name) temp(split): test2.txt
+            @ 01523cc (> branch-name) temp(split): test2.txt (+1)
         "###);
 
         let (stdout, _stderr) = git.run(&["status", "--short"])?;
@@ -407,17 +407,17 @@ fn test_split_restacks_descendents() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("split", &["HEAD~", "test2.txt"])?;
         insta::assert_snapshot!(&stdout, @r###"
             Attempting rebase in-memory...
-            [1/1] Committed as: 71d03a3 create test3.txt
+            [1/1] Committed as: a629a22 create test3.txt
             branchless: processing 1 rewritten commit
-            branchless: running command: <git-executable> checkout 71d03a33c534eda4253fc8772a4c0d5e9515127c
+            branchless: running command: <git-executable> checkout a629a22974b9232523701e66e6e2bcdf8ffc8ad1
             In-memory rebase succeeded.
             O f777ecc (master) create initial.txt
             |
             o 2932db7 first commit
             |
-            o c159d6a temp(split): test2.txt
+            o 01523cc temp(split): test2.txt (+1)
             |
-            @ 71d03a3 create test3.txt
+            @ a629a22 create test3.txt
         "###);
     }
 
@@ -468,17 +468,17 @@ fn test_split_undo_works() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("split", &["HEAD~", "test2.txt"])?;
         insta::assert_snapshot!(&stdout, @r###"
             Attempting rebase in-memory...
-            [1/1] Committed as: 71d03a3 create test3.txt
+            [1/1] Committed as: a629a22 create test3.txt
             branchless: processing 1 rewritten commit
-            branchless: running command: <git-executable> checkout 71d03a33c534eda4253fc8772a4c0d5e9515127c
+            branchless: running command: <git-executable> checkout a629a22974b9232523701e66e6e2bcdf8ffc8ad1
             In-memory rebase succeeded.
             O f777ecc (master) create initial.txt
             |
             o 2932db7 first commit
             |
-            o c159d6a temp(split): test2.txt
+            o 01523cc temp(split): test2.txt (+1)
             |
-            @ 71d03a3 create test3.txt
+            @ a629a22 create test3.txt
         "###);
     }
 
@@ -561,7 +561,7 @@ fn test_split_supports_absolute_relative_and_repo_relative_paths() -> eyre::Resu
             |
             @ d9d41a3 first commit
             |
-            o fc76a91 temp(split): subdir/test3.txt
+            o 98da165 temp(split): subdir/test3.txt (+1)
         "###);
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
@@ -593,7 +593,7 @@ fn test_split_supports_absolute_relative_and_repo_relative_paths() -> eyre::Resu
             |
             @ 0cb8154 first commit
             |
-            o 5d2c1d0 temp(split): subdir/test1.txt
+            o 89564a0 temp(split): subdir/test1.txt (+1)
         "###);
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
@@ -625,7 +625,7 @@ fn test_split_supports_absolute_relative_and_repo_relative_paths() -> eyre::Resu
             |
             @ 9122046 first commit
             |
-            o ba3abaf temp(split): test2.txt
+            o c3d37e6 temp(split): test2.txt (+1)
         "###);
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
@@ -657,7 +657,7 @@ fn test_split_supports_absolute_relative_and_repo_relative_paths() -> eyre::Resu
             |
             @ 6d0cd9b first commit
             |
-            o 2f03a38 temp(split): test1.txt
+            o 9eeb11b temp(split): test1.txt (+1)
         "###);
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
