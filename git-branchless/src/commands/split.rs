@@ -42,6 +42,7 @@ pub fn split(
     resolve_revset_options: &ResolveRevsetOptions,
     files_to_extract: Vec<String>,
     detach: bool,
+    discard: bool,
     move_options: &MoveOptions,
     git_run_info: &GitRunInfo,
 ) -> EyreExitOr<()> {
@@ -248,46 +249,57 @@ pub fn split(
         return Ok(Err(ExitCode(1)));
     };
 
-    let extracted_tree = repo.cherry_pick_fast(
-        &commit_to_split,
-        &split_commit,
-        &CherryPickFastOptions {
-            reuse_parent_tree_if_possible: true,
-        },
-    )?;
-    let extracted_commit_oid = repo.create_commit(
-        None,
-        &commit_to_split.get_author(),
-        &commit_to_split.get_committer(),
-        format!("temp(split): {message}").as_str(),
-        &extracted_tree,
-        vec![&split_commit],
-    )?;
-
-    // see git-branchless/src/commands/amend.rs:172
-    // TODO maybe this should happen after we've confirmed the rebase has succeeded
-    mark_commit_reachable(&repo, extracted_commit_oid)
-        .wrap_err("Marking commit as reachable for GC purposes.")?;
     event_log_db.add_events(vec![Event::RewriteEvent {
         timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
         event_tx_id,
         old_commit_oid: MaybeZeroOid::NonZero(commit_to_split_oid),
         new_commit_oid: MaybeZeroOid::NonZero(split_commit_oid),
     }])?;
-    event_log_db.add_events(vec![Event::CommitEvent {
-        timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
-        event_tx_id,
-        commit_oid: extracted_commit_oid,
-    }])?;
+
+    let extracted_commit_oid = if discard {
+        None
+    } else {
+        let extracted_tree = repo.cherry_pick_fast(
+            &commit_to_split,
+            &split_commit,
+            &CherryPickFastOptions {
+                reuse_parent_tree_if_possible: true,
+            },
+        )?;
+        let extracted_commit_oid = repo.create_commit(
+            None,
+            &commit_to_split.get_author(),
+            &commit_to_split.get_committer(),
+            format!("temp(split): {message}").as_str(),
+            &extracted_tree,
+            vec![&split_commit],
+        )?;
+
+        // see git-branchless/src/commands/amend.rs:172
+        // TODO maybe this should happen after we've confirmed the rebase has succeeded
+        mark_commit_reachable(&repo, extracted_commit_oid)
+            .wrap_err("Marking commit as reachable for GC purposes.")?;
+
+        event_log_db.add_events(vec![Event::CommitEvent {
+            timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+            event_tx_id,
+            commit_oid: extracted_commit_oid,
+        }])?;
+
+        Some(extracted_commit_oid)
+    };
 
     // push the new commits into the dag for the rebase planner
     dag.sync_from_oids(
         effects,
         &repo,
         CommitSet::empty(),
-        vec![split_commit_oid, extracted_commit_oid]
-            .into_iter()
-            .collect(),
+        match extracted_commit_oid {
+            None => CommitSet::from(split_commit_oid),
+            Some(extracted_commit_oid) => vec![split_commit_oid, extracted_commit_oid]
+                .into_iter()
+                .collect(),
+        },
     )?;
 
     let head_info = repo.get_head_info()?;
@@ -297,11 +309,11 @@ pub fn split(
         ResolvedReferenceInfo {
             oid: Some(oid),
             reference_name: Some(_),
-        } if oid == commit_to_split_oid && !detach => (
+        } if oid == commit_to_split_oid && !detach && extracted_commit_oid.is_some() => (
             None,
             vec![(
                 commit_to_split_oid,
-                MaybeZeroOid::NonZero(extracted_commit_oid),
+                MaybeZeroOid::NonZero(extracted_commit_oid.unwrap()),
             )],
         ),
 
@@ -353,10 +365,11 @@ pub fn split(
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
     let children = dag.query_children(CommitSet::from(commit_to_split_oid))?;
     for child in dag.commit_set_to_vec(&children)? {
-        if detach {
-            builder.move_subtree(child, vec![split_commit_oid])?;
-        } else {
-            builder.move_subtree(child, vec![extracted_commit_oid])?;
+        match (detach, extracted_commit_oid) {
+            (_, None) | (true, Some(_)) => builder.move_subtree(child, vec![split_commit_oid])?,
+            (_, Some(extracted_commit_oid)) => {
+                builder.move_subtree(child, vec![extracted_commit_oid])?
+            }
         }
     }
     let rebase_plan = builder.build(effects, &pool, &repo_pool)?;

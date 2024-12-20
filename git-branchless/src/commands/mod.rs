@@ -182,6 +182,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
 
         Command::Split {
             detach,
+            discard,
             files,
             resolve_revset_options,
             revset,
@@ -192,6 +193,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             &resolve_revset_options,
             files,
             detach,
+            discard,
             &move_options,
             &git_run_info,
         )?,
