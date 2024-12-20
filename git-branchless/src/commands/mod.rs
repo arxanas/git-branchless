@@ -181,14 +181,18 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         },
 
         Command::Split {
+            detach,
             files,
             resolve_revset_options,
             revset,
+            move_options,
         } => split::split(
             &effects,
             revset,
             &resolve_revset_options,
             files,
+            detach,
+            &move_options,
             &git_run_info,
         )?,
 
