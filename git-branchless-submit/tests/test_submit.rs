@@ -58,9 +58,8 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Skipped 2 commits (not yet on remote): bar, qux
-        These commits were skipped because they were not already associated with a remote
-        repository. To submit them, retry this operation with the --create option.
+        Skipped f57e36f create test4.txt (pass --create to submit)
+        Skipped 20230db create test5.txt (pass --create to submit)
         "###);
     }
 
@@ -69,9 +68,8 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "bar+qux"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Skipped 2 commits (not yet on remote): bar, qux
-        These commits were skipped because they were not already associated with a remote
-        repository. To submit them, retry this operation with the --create option.
+        Skipped f57e36f create test4.txt (pass --create to submit)
+        Skipped 20230db create test5.txt (pass --create to submit)
         "###);
     }
 
@@ -80,9 +78,8 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "bar", "qux"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Skipped 2 commits (not yet on remote): bar, qux
-        These commits were skipped because they were not already associated with a remote
-        repository. To submit them, retry this operation with the --create option.
+        Skipped f57e36f create test4.txt (pass --create to submit)
+        Skipped 20230db create test5.txt (pass --create to submit)
         "###);
     }
 
@@ -90,9 +87,8 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--dry-run"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Would skip 2 commits (not yet on remote): bar, qux
-        These commits would be skipped because they are not already associated with a remote
-        repository. To submit them, retry this operation with the --create option.
+        Would skip f57e36f create test4.txt (pass --create to submit)
+        Would skip 20230db create test5.txt (pass --create to submit)
         "###);
     }
 
@@ -100,7 +96,8 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create", "--dry-run"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Would submit 2 commits: bar, qux
+        Would submit f57e36f create test4.txt (as bar)
+        Would submit 20230db create test5.txt (as qux)
         "###);
     }
 
@@ -120,7 +117,8 @@ fn test_submit() -> eyre::Result<()> {
         branchless: running command: <git-executable> push --set-upstream origin bar qux
         branch 'bar' set up to track 'origin/bar'.
         branch 'qux' set up to track 'origin/qux'.
-        Submitted 2 commits: bar, qux
+        Submitted f57e36f create test4.txt (as bar)
+        Submitted 20230db create test5.txt (as qux)
         "###);
     }
 
@@ -150,8 +148,8 @@ fn test_submit() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
         branchless: running command: <git-executable> push --force-with-lease origin qux
-        Updated 1 commit: qux
-        Skipped 1 commit (already up-to-date): bar
+        Skipped f57e36f create test4.txt (already up-to-date)
+        Updated bae8307 updated message (as qux)
         "###);
     }
 
@@ -166,7 +164,8 @@ fn test_submit() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
-        Skipped 2 commits (already up-to-date): bar, qux
+        Skipped f57e36f create test4.txt (already up-to-date)
+        Skipped bae8307 updated message (already up-to-date)
         "###);
     }
 
@@ -323,7 +322,7 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin feature
         branch 'feature' set up to track 'origin/feature'.
-        Submitted 1 commit: feature
+        Submitted 70deb1e create test3.txt (as feature)
         "###);
     }
 
@@ -337,7 +336,7 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/feature
-        Skipped 1 commit (already up-to-date): feature
+        Skipped 70deb1e create test3.txt (already up-to-date)
         "###);
     }
 
