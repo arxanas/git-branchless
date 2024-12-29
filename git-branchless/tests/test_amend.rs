@@ -592,20 +592,26 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("undo", &["-y"])?;
         let stdout = trim_lines(stdout);
+        insta::with_settings!({filters => vec![
+            // ignore no-op checkouts, which is present in e.g. git 2.43
+            // but disappears in e.g. git 2.46
+            (r"\n2\. Check out from 94b1077 create file1.txt\s*to 94b1077 create file1.txt\n", "\n"),
+            // ignore different numbering of events
+            (r"(?m)^[0-9]+\. ", "#. "),
+            ("Applied ([0-9]+) inverse events.", "Applied # inverse events."),
+        ]}, {
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Move branch foo from 94b1077 create file1.txt
+        #. Move branch foo from 94b1077 create file1.txt
                              to 94b1077 create file1.txt
-        2. Check out from 94b1077 create file1.txt
-                       to 94b1077 create file1.txt
-        3. Restore snapshot for branch foo
+        #. Restore snapshot for branch foo
                     pointing to 94b1077 create file1.txt
                 backed up using b4371f8 branchless: automated working copy snapshot
-        4. Move branch foo from 94b1077 create file1.txt
+        #. Move branch foo from 94b1077 create file1.txt
                              to c0bdfb5 create file1.txt
-        5. Rewrite commit 94b1077 create file1.txt
+        #. Rewrite commit 94b1077 create file1.txt
                       as c0bdfb5 create file1.txt
-        6. Restore snapshot for branch foo
+        #. Restore snapshot for branch foo
                     pointing to c0bdfb5 create file1.txt
                 backed up using a293e0b branchless: automated working copy snapshot
         branchless: running command: <git-executable> checkout a293e0b4502882ced673f83b6742539ee06cbc74 -B foo
@@ -620,8 +626,9 @@ fn test_amend_undo() -> eyre::Result<()> {
         O f777ecc (master) create initial.txt
         |
         @ c0bdfb5 (> foo) create file1.txt
-        Applied 6 inverse events.
+        Applied # inverse events.
         "###);
+        });
     }
 
     {
