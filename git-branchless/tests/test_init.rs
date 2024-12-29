@@ -547,7 +547,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
-        Warning: the configuration value core.hooksPath was set to: my-hooks,
+        Warning: the configuration value core.hooksPath was set to: <repo-path>/my-hooks,
         which is not the expected default value of: <repo-path>/.git/hooks
         The Git hooks above may have been installed to an unexpected global location.
         Successfully installed git-branchless.
@@ -600,7 +600,7 @@ hooksPath = my-hooks
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
-        Warning: the configuration value core.hooksPath was set to: my-hooks,
+        Warning: the configuration value core.hooksPath was set to: <repo-path>/my-hooks,
         which is not the expected default value of: <repo-path>/.git/hooks
         The Git hooks above may have been installed to an unexpected global location.
         Successfully installed git-branchless.
