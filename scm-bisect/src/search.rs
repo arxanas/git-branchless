@@ -208,8 +208,11 @@ impl<'a, TNode: Debug + Eq + Hash + 'a, TError> LazySolution<'a, TNode, TError> 
 /// for `next_to_search` instead of an iterator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct EagerSolution<Node: Debug + Hash + Eq> {
-    pub(crate) bounds: Bounds<Node>,
-    pub(crate) next_to_search: Vec<Node>,
+    /// Same as [`LazySolution::bounds`].
+    pub bounds: Bounds<Node>,
+
+    /// Same as [`LazySolution::next_to_search`], but as a `Vec` instead of an `Iterator`.
+    pub next_to_search: Vec<Node>,
 }
 
 /// The error type returned by [`Search::search`].

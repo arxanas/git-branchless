@@ -1,4 +1,4 @@
-//! Example implementations of basic search strategies as defined in [`search`].
+//! Reference implementations of basic search strategies as defined in [`search`].
 //! See [`BasicStrategyKind`] for the list.
 
 use std::collections::{HashMap, HashSet};
@@ -162,17 +162,16 @@ pub enum BasicStrategyKind {
     /// remains to be tested.
     ///
     /// See also `git-bisect`'s skip algorithm:
-    /// <https://git-scm.com/docs/git-bisect-lk2009#_skip_algorithm>. This does
+    /// <https://git-scm.com/docs/git-bisect-lk2009#_skip_algorithm>. We do
     /// *not* use the same skip algorithm, and instead uses a deterministic
     /// approach. In order to solve the following problem:
     ///
-    /// > sometimes the best bisection points all happened to be in an area
+    /// > "sometimes the best bisection points all happened to be in an area
     /// > where all the commits are untestable. And in this case the user was
-    /// > asked to test many untestable commits, which could be very inefficient.
+    /// > asked to test many untestable commits, which could be very inefficient."
     ///
-    /// We instead consider the hypothetical case that the node is a success,
-    /// and yield further nodes as if it were a success, and then interleave
-    /// those nodes with the hypothetical failure case.
+    /// We instead speculate on the hypothetical success and failure cases, and
+    /// interleave the resulting search nodes.
     ///
     /// Resources:
     ///
