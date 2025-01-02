@@ -1,6 +1,7 @@
 //! Reference implementations of basic search strategies as defined in [`search`].
 //! See [`BasicStrategyKind`] for the list.
 
+use std::cmp::{min, Ordering};
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -24,8 +25,66 @@ pub trait BasicSourceControlGraph: Debug {
     /// An error type.
     type Error: Debug + std::error::Error + 'static;
 
-    /// Get every node `X` in the graph such that `X == node` or there exists a
-    /// child of `X` that is an ancestor of `node`.
+    /// The universe of nodes to search.
+    fn universe(&self) -> Result<search::NodeSet<Self::Node>, Self::Error>;
+
+    /// Topologically sort the provided nodes such that ancestor nodes come
+    /// before descendant nodes.
+    fn sort(
+        &self,
+        nodes: impl IntoIterator<Item = Self::Node>,
+    ) -> Result<Vec<Self::Node>, Self::Error> {
+        let mut nodes = nodes.into_iter().enumerate().collect::<Vec<_>>();
+        let mut sort_err = None;
+        nodes.sort_by(|(lhs_idx, lhs), (rhs_idx, rhs)| {
+            match (self.is_ancestor(lhs, rhs), self.is_ancestor(rhs, lhs)) {
+                (Ok(true), Ok(false)) => Ordering::Less,
+                (Ok(false), Ok(true)) => Ordering::Greater,
+                (Ok(true), Ok(true)) => Ordering::Equal,
+                (Ok(false), Ok(false)) => lhs_idx.cmp(rhs_idx),
+                (Err(err), _) | (_, Err(err)) => {
+                    sort_err = Some(err);
+                    Ordering::Equal
+                }
+            }
+        });
+        match sort_err {
+            Some(sort_err) => Err(sort_err),
+            None => Ok(nodes.into_iter().map(|(_, node)| node).collect()),
+        }
+    }
+
+    /// Compute the set of nodes that are in `lhs` but not in `rhs`.
+    fn difference(
+        &self,
+        lhs: search::NodeSet<Self::Node>,
+        rhs: search::NodeSet<Self::Node>,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        Ok(lhs
+            .into_iter()
+            .filter(|node| !rhs.contains(node))
+            .cloned()
+            .collect())
+    }
+
+    /// Return whether or not `node` is an ancestor of `descendant`. A node `X``
+    /// is said to be an "ancestor" of node `Y` if one of the following is true:
+    ///
+    /// - `X == Y`
+    /// - `X` is an immediate parent of `Y`.
+    /// - `X` is an ancestor of an immediate parent of `Y` (defined
+    ///   recursively).
+    fn is_ancestor(
+        &self,
+        ancestor: &Self::Node,
+        descendant: &Self::Node,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.ancestors(descendant)?.contains(ancestor))
+    }
+
+    /// Get every node `X` in the [`BasicSourceControlGraph::universe`] such
+    /// that `X == node` or there exists a child of `X` that is an ancestor of
+    /// `node`.
     fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
 
     /// Get the union of `ancestors(node)` for every node in `nodes`.
@@ -70,8 +129,9 @@ pub trait BasicSourceControlGraph: Debug {
         Ok(heads)
     }
 
-    /// Get every node `X` in the graph such that `X == node` or there exists a
-    /// parent of `X` that is a descendant of `node`.
+    /// Get every node `X` in the [`BasicSourceControlGraph::universe`] such
+    /// that `X == node` or there exists a parent of `X` that is a descendant of
+    /// `node`.
     fn descendants(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
 
     /// Filter `nodes` to only include nodes that are not descendants of any
@@ -126,8 +186,7 @@ impl<T: BasicSourceControlGraph> search::Graph for T {
         ancestor: &Self::Node,
         descendant: &Self::Node,
     ) -> Result<bool, Self::Error> {
-        let ancestors = self.ancestors(descendant)?;
-        Ok(ancestors.contains(ancestor))
+        self.is_ancestor(ancestor, descendant)
     }
 
     fn add_success_bound(
@@ -222,7 +281,7 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
             success: success_bounds,
             failure: failure_bounds,
         } = bounds;
-        let mut nodes_to_search = {
+        let nodes_to_search = {
             let implied_success_nodes = graph.ancestors_all(success_bounds.clone())?;
             let implied_failure_nodes = graph.descendants_all(failure_bounds.clone())?;
             statuses
@@ -238,20 +297,83 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
                 })
                 .collect::<Vec<_>>()
         };
-        let next_to_search: Option<G::Node> = match self.strategy {
-            BasicStrategyKind::Linear => nodes_to_search.into_iter().next(),
-            BasicStrategyKind::LinearReverse => nodes_to_search.into_iter().next_back(),
+        match self.strategy {
+            BasicStrategyKind::Linear => {
+                let remaining_nodes = graph.difference(
+                    graph.universe()?,
+                    graph.ancestors_all(success_bounds.clone())?,
+                )?;
+                let roots = graph.descendant_roots(remaining_nodes)?;
+                let roots = graph.sort(roots.into_iter().cloned())?;
+                Ok(roots)
+            }
+            BasicStrategyKind::LinearReverse => {
+                let remaining_nodes = graph.difference(
+                    graph.universe()?,
+                    graph.descendants_all(failure_bounds.clone())?,
+                )?;
+                let heads = graph.ancestor_heads(remaining_nodes)?;
+                let heads = graph.sort(heads.into_iter().cloned())?;
+                Ok(heads)
+            }
             BasicStrategyKind::Binary => {
-                let middle_index = nodes_to_search.len() / 2;
-                if middle_index < nodes_to_search.len() {
-                    Some(nodes_to_search.swap_remove(middle_index))
-                } else {
-                    None
+                let search_degrees: Vec<(G::Node, usize)> = nodes_to_search
+                    .into_iter()
+                    .map(|node| {
+                        let degree = search_degree(graph, bounds, &node)?;
+                        Ok((node, degree))
+                    })
+                    .try_collect()?;
+                let max_degree = search_degrees
+                    .iter()
+                    .map(|(_, degree)| degree)
+                    .copied()
+                    .max();
+                match max_degree {
+                    Some(max_degree) => {
+                        let max_degree_nodes = search_degrees
+                            .into_iter()
+                            .filter(|(_, degree)| *degree == max_degree)
+                            .map(|(node, _)| node)
+                            .collect_vec();
+                        let max_degree_nodes = graph.sort(max_degree_nodes)?;
+                        Ok(max_degree_nodes)
+                    }
+                    None => Ok(Default::default()),
                 }
             }
-        };
-        Ok(next_to_search.into_iter().collect())
+        }
     }
+}
+
+/// Calculate the "search degree" of a node for binary search. The "search
+/// degree" of a node is the minimum number of nodes that could be excluded from
+/// the next step of the binary search by testing that node.
+///
+/// FIXME: Performs a call to
+/// [`BasicSourceControlGraph::ancestors`]/[`BasicSourceControlGraph::descendants`]
+/// for each node, resulting in O(n^2) complexity when called on each node in
+/// the search range. This could be improved by walking the whole graph and
+/// keeping track of degree rather than recomputing common information for each
+/// node.
+///
+/// FIXME: Does not take into account nodes that returned
+/// [`search::Status::Indeterminate`].
+fn search_degree<G: BasicSourceControlGraph>(
+    graph: &G,
+    bounds: &search::Bounds<G::Node>,
+    node: &G::Node,
+) -> Result<usize, G::Error> {
+    let ancestors = graph.ancestors(node)?;
+    let success_ancestors = graph.ancestors_all(bounds.success.clone())?;
+    let remaining_ancestors = graph.difference(ancestors, success_ancestors)?;
+
+    let descendants = graph.descendants(node)?;
+    let failure_descendants = graph.descendants_all(bounds.failure.clone())?;
+    let remaining_descendants = graph.difference(descendants, failure_descendants)?;
+
+    let degree = min(remaining_ancestors.size(), remaining_descendants.size());
+    Ok(degree)
 }
 
 #[cfg(test)]
@@ -356,7 +478,7 @@ mod tests {
                     success: [2].into_iter().collect(),
                     failure: [].into_iter().collect(),
                 },
-                next_to_search: vec![5, 4, 6, 3],
+                next_to_search: vec![4, 5, 3, 6],
             }
         );
 
@@ -386,7 +508,7 @@ mod tests {
                     success: [2].into_iter().collect(),
                     failure: [5].into_iter().collect(),
                 },
-                next_to_search: vec![4, 3],
+                next_to_search: vec![3, 4],
             }
         );
 

@@ -1169,6 +1169,15 @@ impl BasicSourceControlGraph for SearchGraph<'_> {
     type Error = SearchGraphError;
 
     #[instrument]
+    fn universe(&self) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        Ok(self
+            .dag
+            .commit_set_to_vec(&self.commit_set)?
+            .into_iter()
+            .collect())
+    }
+
+    #[instrument]
     fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error> {
         let ancestors = self.dag.query_ancestors(CommitSet::from(*node))?;
         let ancestors = ancestors.intersection(&self.commit_set);

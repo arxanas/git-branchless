@@ -3,6 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
+use itertools::Itertools;
+
 use crate::basic_search::BasicSourceControlGraph;
 use crate::search::NodeSet;
 
@@ -20,6 +22,20 @@ pub struct UsizeGraph {
 impl BasicSourceControlGraph for UsizeGraph {
     type Node = usize;
     type Error = Infallible;
+
+    fn universe(&self) -> Result<NodeSet<Self::Node>, Self::Error> {
+        Ok((0..self.max).collect())
+    }
+
+    // @nocommit
+    // fn sort(
+    //     &self,
+    //     nodes: impl IntoIterator<Item = Self::Node>,
+    // ) -> Result<Vec<Self::Node>, Self::Error> {
+    //     let mut nodes = nodes.into_iter().collect::<Vec<_>>();
+    //     nodes.sort();
+    //     Ok(nodes)
+    // }
 
     fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
         assert!(*node < self.max);
@@ -44,6 +60,26 @@ pub struct TestGraph {
 impl BasicSourceControlGraph for TestGraph {
     type Node = char;
     type Error = Infallible;
+
+    fn universe(&self) -> Result<NodeSet<Self::Node>, Self::Error> {
+        Ok(self.nodes.keys().copied().collect())
+    }
+
+    // @nocommit
+    fn sort(
+        &self,
+        nodes: impl IntoIterator<Item = Self::Node>,
+    ) -> Result<Vec<Self::Node>, Self::Error> {
+        let mut nodes = nodes.into_iter().collect::<Vec<_>>();
+        nodes.sort();
+        for (lhs, rhs) in nodes.iter().tuple_windows() {
+            assert!(
+                !self.is_ancestor(rhs, lhs)?,
+                "graph must be defined such that {lhs:?} is not an ancestor of {rhs:?}"
+            );
+        }
+        Ok(nodes)
+    }
 
     /// FIXME: O(n^2) complexity due to intermediate container allocations.
     fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
@@ -83,7 +119,6 @@ pub fn arb_strategy(
 pub fn arb_test_graph_and_nodes(
     max_num_nodes: usize,
 ) -> impl proptest::strategy::Strategy<Value = (TestGraph, Vec<char>)> {
-    use itertools::Itertools;
     use proptest::prelude::*;
 
     let possible_nodes = 'a'..='z';
