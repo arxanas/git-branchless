@@ -1383,7 +1383,7 @@ fn run_tests_inner<'a>(
             dag,
             commit_set: commits.iter().map(|c| c.get_oid()).collect(),
         };
-        let search = search::Search::new(graph, commits.iter().map(|c| c.get_oid()));
+        let search = search::Search::new_with_nodes(graph, commits.iter().map(|c| c.get_oid()));
 
         let work_queue = WorkQueue::new();
         let repo_dir = repo.get_path();

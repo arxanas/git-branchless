@@ -105,23 +105,68 @@ pub trait Strategy<G: Graph>: Debug {
     /// An error type.
     type Error: std::error::Error;
 
-    /// Return a "midpoint" for the search. Such a midpoint lies between the
-    /// success bounds and failure bounds, for some meaning of "lie between",
-    /// which depends on the strategy details.
+    /// Return a **midpoint** for the search. The returned value becomes a
+    /// potential next node to test.
     ///
-    /// For example, linear search would return a node immediately "after"
-    /// the node(s) in `success_bounds`, while binary search would return the
-    /// node in the middle of `success_bounds` and `failure_bounds`.`
+    /// A midpoint "lies between" the success bounds and failure bounds, for
+    /// some meaning of "lie between". The definition of "midpoint" is the key
+    /// characteristic of the search strategy.
     ///
-    /// If `None` is returned, then the search exits. You should arrange for
-    /// this to happen when the bounds are maximally tight; that is, when no
-    /// choice of return value could change the bounds after being tested.
+    /// - Example: Linear search would try to return a child node of a node in
+    ///   `success_bounds`.
+    /// - Example: Binary search would try to return a node in the "middle" of
+    ///   `success_bounds` and `failure_bounds`, such that the returned value has
+    ///   a roughly equal number of untested ancestor nodes vs untested descendant
+    ///   nodes.
     ///
-    /// NOTE: The returned value does not need to be present in `statuses`.
+    /// ## Parameters
+    ///
+    /// - `graph`: The graph to search in.
+    /// - `bounds`: The current bounds of the search. The returned midpoint
+    ///   should lie between the bounds.
+    /// - `statuses`: The results of all nodes that have been tested
+    ///   ([`Search::notify`]) so far.
+    ///   - Every node which has been tested will appear in this map.
+    ///   - However, not every node in the graph will have a status in this map
+    ///     (which may be prohibitive if the graph is large). A node without a
+    ///     status should be treated logically the same as being
+    ///     `Status::Untested`.
+    ///   - The implementor may treat the set of nodes in `statuses` as an
+    ///     additional set of search bounds
+    ///
+    /// ## Return
+    ///
+    /// Returns a midpoint between the search bounds, or `None` when the search
+    /// should exit.
+    ///
+    /// - The implementor should arrange for the search to exit when the bounds
+    ///   are maximally "tight". That is, when no choice of return value, after
+    ///   being tested, could change the bounds.
+    ///
+    /// NOTE: This function should be deterministic. The `Search` may call it
+    /// multiple times with inconsistent arguments as part of parallel
+    /// speculative search.
+    ///
+    /// - Example: A status in `statuses` may undergo a normally-illegal state
+    ///   transition between subsequent calls, such as from `Status::Success` to
+    ///   `Status::Failure`.
+    ///
+    /// NOTE: The returned value does not need to be present in `statuses` (not
+    /// even as `Status::Untested`).
+    ///
+    /// NOTE: The implementor must decide what the behavior of the strategy is
+    /// when one or both bounds are empty.
+    ///
+    /// - One option is for the caller to always initialize the `Search` with
+    ///   some number of nodes via the `Search::new_with_nodes` constructor, and
+    ///   use that set of nodes as implicit bounds on the graph.
     ///
     /// NOTE: This must not return a value that has already been excluded by the
     /// success or failure bounds, since then you would search it again in a
     /// loop indefinitely. In that case, you must return `None` instead.
+    ///
+    /// - This coincides with the condition that the node is either not present in
+    ///   `statuses` or is `Status::Untested.
     fn midpoint(
         &self,
         graph: &G,
@@ -159,14 +204,15 @@ impl<'a, TNode: Debug + Eq + Hash + 'a, TError> LazySolution<'a, TNode, TError> 
     }
 }
 
-/// A `LazySolution` with a `Vec<Node>` for `next_to_search`. This is primarily
-/// for debugging.
+/// Primarily for debugging. This is like `LazySolution` but with a `Vec<Node>`
+/// for `next_to_search` instead of an iterator.
 #[derive(Debug, Eq, PartialEq)]
 pub struct EagerSolution<Node: Debug + Hash + Eq> {
     pub(crate) bounds: Bounds<Node>,
     pub(crate) next_to_search: Vec<Node>,
 }
 
+/// The error type returned by [`Search::search`].
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum SearchError<TNode, TGraphError, TStrategyError> {
@@ -180,7 +226,7 @@ pub enum SearchError<TNode, TGraphError, TStrategyError> {
     Strategy(TStrategyError),
 }
 
-/// The error type for the search.
+/// The error type returned by [`Search::notify`].
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum NotifyError<TNode, TGraphError> {
@@ -212,18 +258,27 @@ pub struct Search<G: Graph> {
 
 impl<G: Graph> Search<G> {
     /// Construct a new search. The provided `graph` represents the universe of
+    /// all nodes as a directed acyclic graph.
+    pub fn new(graph: G) -> Self {
+        Self {
+            graph,
+            nodes: Default::default(),
+        }
+    }
+
+    /// Construct a new search. The provided `graph` represents the universe of
     /// all nodes, and `initial_nodes` represents a subset of that universe to
-    /// start the search in.
-    ///
-    /// For example, `graph` might correspond to the entire source control
-    /// directed acyclic graph, and `nodes` might correspond to a recent range
-    /// of commits where the first one is passing and the last one is failing.
+    /// search in.
     ///
     /// The provided `initial_nodes` set is just a convenience parameter
     /// equivalent to calling `Search::notify(node, Status::Untested)` for each
     /// `node` in the set. It's oftentimes easier to implement
     /// `Strategy::midpoint` if the input set of `statuses` is non-empty.
-    pub fn new(graph: G, initial_nodes: impl IntoIterator<Item = G::Node>) -> Self {
+    ///
+    /// For example, if `graph` corresponds to the source control graph, then
+    /// `nodes` might correspond to a recent range of commits where the first
+    /// one is passing and the last one is failing.
+    pub fn new_with_nodes(graph: G, initial_nodes: impl IntoIterator<Item = G::Node>) -> Self {
         let nodes = initial_nodes
             .into_iter()
             .map(|node| (node, Status::Untested))
