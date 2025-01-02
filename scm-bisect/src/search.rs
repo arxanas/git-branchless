@@ -80,7 +80,7 @@ pub enum Status {
 }
 
 /// The upper and lower bounds of the search.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
@@ -106,7 +106,7 @@ pub trait Strategy<G: Graph>: Debug {
     type Error: std::error::Error;
 
     /// Return a **midpoint** for the search. The returned value becomes a
-    /// potential next node to test.
+    /// potential next node to test. @nocommit: update docs
     ///
     /// A midpoint "lies between" the success bounds and failure bounds, for
     /// some meaning of "lie between". The definition of "midpoint" is the key
@@ -167,12 +167,12 @@ pub trait Strategy<G: Graph>: Debug {
     ///
     /// - This coincides with the condition that the node is either not present in
     ///   `statuses` or is `Status::Untested.
-    fn midpoint(
+    fn midpoints(
         &self,
         graph: &G,
         bounds: &Bounds<G::Node>,
         statuses: &IndexMap<G::Node, Status>,
-    ) -> Result<Option<G::Node>, Self::Error>;
+    ) -> Result<Vec<G::Node>, Self::Error>;
 }
 
 /// The results of the search so far. The search is complete if `next_to_search` is empty.
@@ -276,7 +276,7 @@ impl<G: Graph> Search<G> {
     /// The provided `initial_nodes` set is just a convenience parameter
     /// equivalent to calling `Search::notify(node, Status::Untested)` for each
     /// `node` in the set. It's oftentimes easier to implement
-    /// `Strategy::midpoint` if the input set of `statuses` is non-empty.
+    /// [`Strategy::midpoints`] if the input set of `statuses` is non-empty.
     ///
     /// For example, if `graph` corresponds to the source control graph, then
     /// `nodes` might correspond to a recent range of commits where the first
@@ -338,6 +338,7 @@ impl<G: Graph> Search<G> {
         let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
 
         let initial_state = SearchState {
+            next_node: None,
             bounds: Bounds {
                 success: success_bounds.clone(),
                 failure: failure_bounds.clone(),
@@ -428,6 +429,12 @@ impl<G: Graph> Search<G> {
 /// that the test for a given node passed/failed.
 #[derive(Debug)]
 struct SearchState<G: Graph> {
+    /// - If [`Some`], then the search yields this node next.
+    /// - If [`None`], then the next node(s) are calculated from the
+    ///   [`Strategy::midpoints`] of the [`SearchState::bounds`], and any
+    ///   speculative search states are also queued.
+    next_node: Option<G::Node>,
+
     /// The bounds at this point in the search.
     bounds: Bounds<G::Node>,
 
@@ -452,7 +459,7 @@ struct SearchIter<'a, G: Graph, S: Strategy<G>> {
 
 impl<G: Graph, S: Strategy<G>> SearchIter<'_, G, S> {
     /// Returns [`Err`] if the provided node has already been searched. This
-    /// should only happen if the caller's [`Strategy::midpoint`] yields a node
+    /// should only happen if the caller's [`Strategy::midpoints`] yields a node
     /// that's already in `statuses`, which it shouldn't do.
     #[allow(clippy::type_complexity)]
     fn check_node_not_searched(
@@ -500,6 +507,7 @@ impl<G: Graph, S: Strategy<G>> SearchIter<'_, G, S> {
         let Bounds { success, failure } = bounds;
 
         let speculate_failure_state = SearchState {
+            next_node: None,
             bounds: Bounds {
                 success: success.clone(),
                 failure: {
@@ -519,6 +527,7 @@ impl<G: Graph, S: Strategy<G>> SearchIter<'_, G, S> {
         };
 
         let speculate_success_state = SearchState {
+            next_node: None,
             bounds: Bounds {
                 success: {
                     let mut success_bounds = success.clone();
@@ -544,15 +553,33 @@ impl<G: Graph, S: Strategy<G>> SearchIter<'_, G, S> {
 impl<G: Graph, S: Strategy<G>> Iterator for SearchIter<'_, G, S> {
     type Item = Result<G::Node, SearchError<G::Node, G::Error, S::Error>>;
 
+    /// FIXME: Each call to `next` can do O(n) work due to cloning graph
+    /// traversal data structures. (This could be fixed with some form of
+    /// persistent data structures.)
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(state) = self.states.pop_front() {
             debug!(?state, "Popped speculation state");
-            let SearchState { bounds, statuses } = state;
+            let SearchState {
+                next_node,
+                bounds,
+                statuses,
+            } = state;
 
-            let next_node = match self.strategy.midpoint(self.graph, &bounds, &statuses) {
-                Ok(Some(node)) => node,
-                Ok(None) => continue,
-                Err(err) => return Some(Err(SearchError::Strategy(err))),
+            let next_node = match next_node {
+                Some(next_node) => next_node,
+                None => {
+                    let next_nodes = match self.strategy.midpoints(self.graph, &bounds, &statuses) {
+                        Ok(nodes) => nodes,
+                        Err(err) => return Some(Err(SearchError::Strategy(err))),
+                    };
+                    self.states
+                        .extend(next_nodes.into_iter().map(|next_node| SearchState {
+                            next_node: Some(next_node),
+                            bounds: bounds.clone(),
+                            statuses: statuses.clone(),
+                        }));
+                    continue;
+                }
             };
 
             match self.check_node_not_searched(&next_node, &bounds) {
