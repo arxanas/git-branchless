@@ -105,68 +105,77 @@ pub trait Strategy<G: Graph>: Debug {
     /// An error type.
     type Error: std::error::Error;
 
-    /// Return a **midpoint** for the search. The returned value becomes a
-    /// potential next node to test. @nocommit: update docs
+    /// Return a set of **midpoints** for the search. The returned values become
+    /// potential next nodes to test.
     ///
     /// A midpoint "lies between" the success bounds and failure bounds, for
     /// some meaning of "lie between". The definition of "midpoint" is the key
     /// characteristic of the search strategy.
     ///
-    /// - Example: Linear search would try to return a child node of a node in
-    ///   `success_bounds`.
-    /// - Example: Binary search would try to return a node in the "middle" of
-    ///   `success_bounds` and `failure_bounds`, such that the returned value has
-    ///   a roughly equal number of untested ancestor nodes vs untested descendant
-    ///   nodes.
+    /// - Example: Linear search on a [`Vec`] would try to return a child node
+    ///   of a node in the provided [`Bounds::success`].
+    /// - Example: Binary search on a [`Vec`] would try to return a node in the
+    ///   "middle" of the provided [`Bounds::success`] and [`Bounds::failure`],
+    ///   such that the returned value has a roughly equal number of untested
+    ///   ancestor nodes vs untested descendant nodes.
     ///
     /// ## Parameters
     ///
     /// - `graph`: The graph to search in.
     /// - `bounds`: The current bounds of the search. The returned midpoint
-    ///   should lie between the bounds.
-    /// - `statuses`: The results of all nodes that have been tested
-    ///   ([`Search::notify`]) so far.
+    ///   should lie between [`Bounds::success`] and [`Bounds::failure`].
+    /// - `statuses`: The results of all nodes that have been tested (by
+    ///   [`Search::notify`]) so far.
     ///   - Every node which has been tested will appear in this map.
     ///   - However, not every node in the graph will have a status in this map
     ///     (which may be prohibitive if the graph is large). A node without a
     ///     status should be treated logically the same as being
-    ///     `Status::Untested`.
+    ///     [`Status::Untested`].
     ///   - The implementor may treat the set of nodes in `statuses` as an
-    ///     additional set of search bounds
+    ///     additional set of search bounds, if desired. (This most likely depends
+    ///     on whether the implementor uses [`Search::new_with_nodes`] to
+    ///     initialize the [`Search`]).
     ///
     /// ## Return
     ///
-    /// Returns a midpoint between the search bounds, or `None` when the search
-    /// should exit.
+    /// Returns a list of equally-"good" midpoints between the search bounds,
+    /// or the empty list when the search should exit.
     ///
+    /// - Example: searching a graph may produce multiple unorderable midpoint
+    ///   nodes that split the search space equally well, in which case all
+    ///   midpoint nodes can be returned.
+    /// - For ease of implementation, the implementor could choose to just find
+    ///   and return the first "good" midpoint (or the empty list if no midpoints
+    ///   exist).
     /// - The implementor should arrange for the search to exit when the bounds
     ///   are maximally "tight". That is, when no choice of return value, after
     ///   being tested, could change the bounds.
     ///
-    /// NOTE: This function should be deterministic. The `Search` may call it
+    /// The return value must not include any nodes that are an ancestor of the
+    /// provided [`Bounds::success`] or a descendant of the provided
+    /// [`Bounds::failure`], or any nodes that are already present in the
+    /// provided [`statuses`], since then you would search it again in a loop
+    /// indefinitely.
+    ///
+    /// NOTE: This function should be deterministic. The [`Search`] may call it
     /// multiple times with inconsistent arguments as part of parallel
     /// speculative search.
     ///
     /// - Example: A status in `statuses` may undergo a normally-illegal state
-    ///   transition between subsequent calls, such as from `Status::Success` to
-    ///   `Status::Failure`.
+    ///   transition between subsequent calls, such as from [`Status::Success`] to
+    ///   [`Status::Failure`].
     ///
     /// NOTE: The returned value does not need to be present in `statuses` (not
-    /// even as `Status::Untested`).
+    /// even as [`Status::Untested`]).
     ///
     /// NOTE: The implementor must decide what the behavior of the strategy is
-    /// when one or both bounds are empty.
+    /// when [`Bounds::success`] and/or [`Bounds::failure`] are empty:
     ///
-    /// - One option is for the caller to always initialize the `Search` with
-    ///   some number of nodes via the `Search::new_with_nodes` constructor, and
-    ///   use that set of nodes as implicit bounds on the graph.
-    ///
-    /// NOTE: This must not return a value that has already been excluded by the
-    /// success or failure bounds, since then you would search it again in a
-    /// loop indefinitely. In that case, you must return `None` instead.
-    ///
-    /// - This coincides with the condition that the node is either not present in
-    ///   `statuses` or is `Status::Untested.
+    /// - One option is for the caller to always initialize the [`Search`] with
+    ///   some number of nodes via the [`Search::new_with_nodes`] constructor, and
+    ///   use that set of nodes as implicit bounds on the graph. Then, the
+    ///   midpoint can lie between those bounds without having to evaluate the
+    ///   full search graph.
     fn midpoints(
         &self,
         graph: &G,
