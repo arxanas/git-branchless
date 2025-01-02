@@ -7,7 +7,7 @@ use itertools::Itertools;
 use proptest::prelude::Strategy as ProptestStrategy;
 use proptest::prelude::*;
 
-use crate::basic::{BasicSourceControlGraph, BasicStrategyKind};
+use crate::basic_search::{BasicSourceControlGraph, BasicStrategyKind};
 
 /// Graph that represents a "stick" of nodes, represented as increasing
 /// integers. The node `n` is the immediate parent of `n + 1`.
