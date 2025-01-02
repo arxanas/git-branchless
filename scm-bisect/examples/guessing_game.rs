@@ -18,8 +18,8 @@ impl search::Graph for Graph {
 
     fn is_ancestor(
         &self,
-        ancestor: Self::Node,
-        descendant: Self::Node,
+        ancestor: &Self::Node,
+        descendant: &Self::Node,
     ) -> Result<bool, Self::Error> {
         // Note that a node is always considered an ancestor of itself.
         Ok(ancestor <= descendant)

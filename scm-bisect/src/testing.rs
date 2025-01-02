@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
 use crate::basic_search::BasicSourceControlGraph;
+use crate::search::NodeSet;
 
 /// Testing graph representing a "stick" of nodes, represented as increasing
 /// integers. The node `n` is the immediate parent of `n + 1`. Hence each node
@@ -20,14 +21,14 @@ impl BasicSourceControlGraph for UsizeGraph {
     type Node = usize;
     type Error = Infallible;
 
-    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-        assert!(node < self.max);
-        Ok((0..=node).collect())
+    fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+        assert!(*node < self.max);
+        Ok((0..=*node).collect())
     }
 
-    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-        assert!(node < self.max);
-        Ok((node..self.max).collect())
+    fn descendants(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+        assert!(*node < self.max);
+        Ok((*node..self.max).collect())
     }
 }
 
@@ -44,24 +45,22 @@ impl BasicSourceControlGraph for TestGraph {
     type Node = char;
     type Error = Infallible;
 
-    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-        let mut result = HashSet::new();
-        result.insert(node);
-        let parents: HashSet<char> = self
+    /// FIXME: O(n^2) complexity due to intermediate container allocations.
+    fn ancestors(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+        let parents: NodeSet<char> = self
             .nodes
             .iter()
-            .filter_map(|(k, v)| if v.contains(&node) { Some(*k) } else { None })
+            .filter_map(|(k, v)| if v.contains(node) { Some(*k) } else { None })
             .collect();
-        result.extend(self.ancestors_all(parents)?);
-        Ok(result)
+        let ancestors = &self.ancestors_all(parents)?;
+        Ok(ancestors.insert(*node))
     }
 
-    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-        let mut result = HashSet::new();
-        result.insert(node);
-        let children: HashSet<char> = self.nodes[&node].clone();
-        result.extend(self.descendants_all(children)?);
-        Ok(result)
+    /// FIXME: O(n^2) complexity due to intermediate container allocations.
+    fn descendants(&self, node: &Self::Node) -> Result<NodeSet<Self::Node>, Infallible> {
+        let children: NodeSet<char> = self.nodes[node].iter().copied().collect();
+        let descendants = self.descendants_all(children)?;
+        Ok(descendants.insert(*node))
     }
 }
 

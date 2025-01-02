@@ -1,14 +1,15 @@
 //! Reference implementations of basic search strategies as defined in [`search`].
 //! See [`BasicStrategyKind`] for the list.
 
-use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
 use indexmap::IndexMap;
+use itertools::Itertools;
 use tracing::instrument;
 
 use crate::search;
+use crate::search::NodeSetExt;
 
 /// Directed acyclic graph commonly used in source control.
 ///
@@ -25,38 +26,38 @@ pub trait BasicSourceControlGraph: Debug {
 
     /// Get every node `X` in the graph such that `X == node` or there exists a
     /// child of `X` that is an ancestor of `node`.
-    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
+    fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
 
     /// Get the union of `ancestors(node)` for every node in `nodes`.
     #[instrument]
     fn ancestors_all(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let mut ancestors = HashSet::new();
-        for node in nodes {
-            ancestors.extend(self.ancestors(node)?);
-        }
-        Ok(ancestors)
+        nodes: search::NodeSet<Self::Node>,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let result = nodes
+            .into_iter()
+            .map(|node| self.ancestors(node))
+            .try_fold(search::NodeSet::default(), |acc, set| Ok(acc.union(set?)))?;
+        Ok(result)
     }
 
     /// Filter `nodes` to only include nodes that are not ancestors of any other
     /// node in `nodes`.
     fn ancestor_heads(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let node_to_ancestors: HashMap<Self::Node, HashSet<Self::Node>> = nodes
+        nodes: search::NodeSet<Self::Node>,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let node_to_ancestors: Vec<(Self::Node, search::NodeSet<Self::Node>)> = nodes
             .iter()
-            .map(|node| Ok((node.clone(), self.ancestors(node.clone())?)))
-            .collect::<Result<_, _>>()?;
-        let heads: HashSet<Self::Node> = nodes
+            .map(|node| Ok((node.clone(), self.ancestors(node)?)))
+            .try_collect()?;
+        let heads: search::NodeSet<Self::Node> = nodes
             .into_iter()
             .filter(|node| {
                 node_to_ancestors
                     .iter()
                     .filter_map(|(other_node, ancestors)| {
-                        if node == other_node {
+                        if *node == other_node {
                             None
                         } else {
                             Some(ancestors)
@@ -64,31 +65,32 @@ pub trait BasicSourceControlGraph: Debug {
                     })
                     .all(|ancestors| !ancestors.contains(node))
             })
+            .cloned()
             .collect();
         Ok(heads)
     }
 
     /// Get every node `X` in the graph such that `X == node` or there exists a
     /// parent of `X` that is a descendant of `node`.
-    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
+    fn descendants(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
 
     /// Filter `nodes` to only include nodes that are not descendants of any
     /// other node in `nodes`.
     fn descendant_roots(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let node_to_descendants: HashMap<Self::Node, HashSet<Self::Node>> = nodes
+        nodes: search::NodeSet<Self::Node>,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let node_to_descendants: Vec<(Self::Node, search::NodeSet<Self::Node>)> = nodes
             .iter()
-            .map(|node| Ok((node.clone(), self.descendants(node.clone())?)))
+            .map(|node| Ok((node.clone(), self.descendants(node)?)))
             .collect::<Result<_, _>>()?;
-        let roots: HashSet<Self::Node> = nodes
+        let roots: search::NodeSet<Self::Node> = nodes
             .into_iter()
             .filter(|node| {
                 node_to_descendants
                     .iter()
                     .filter_map(|(other_node, descendants)| {
-                        if node == other_node {
+                        if *node == other_node {
                             None
                         } else {
                             Some(descendants)
@@ -96,6 +98,7 @@ pub trait BasicSourceControlGraph: Debug {
                     })
                     .all(|descendants| !descendants.contains(node))
             })
+            .cloned()
             .collect();
         Ok(roots)
     }
@@ -104,12 +107,12 @@ pub trait BasicSourceControlGraph: Debug {
     #[instrument]
     fn descendants_all(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let mut descendants = HashSet::new();
-        for node in nodes {
-            descendants.extend(self.descendants(node)?);
-        }
+        nodes: search::NodeSet<Self::Node>,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        let descendants = nodes
+            .into_iter()
+            .map(|node| self.descendants(node))
+            .try_fold(search::NodeSet::default(), |acc, set| Ok(acc.union(set?)))?;
         Ok(descendants)
     }
 }
@@ -120,25 +123,37 @@ impl<T: BasicSourceControlGraph> search::Graph for T {
 
     fn is_ancestor(
         &self,
-        ancestor: Self::Node,
-        descendant: Self::Node,
+        ancestor: &Self::Node,
+        descendant: &Self::Node,
     ) -> Result<bool, Self::Error> {
         let ancestors = self.ancestors(descendant)?;
-        Ok(ancestors.contains(&ancestor))
+        Ok(ancestors.contains(ancestor))
     }
 
-    fn simplify_success_bounds(
+    fn add_success_bound(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        self.ancestor_heads(nodes)
+        nodes: search::NodeSet<Self::Node>,
+        node: &Self::Node,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        for success_node in nodes.iter() {
+            if self.is_ancestor(node, success_node)? {
+                return Ok(nodes);
+            }
+        }
+        self.ancestor_heads(nodes.insert(node.clone()))
     }
 
-    fn simplify_failure_bounds(
+    fn add_failure_bound(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        self.descendant_roots(nodes)
+        nodes: search::NodeSet<Self::Node>,
+        node: &Self::Node,
+    ) -> Result<search::NodeSet<Self::Node>, Self::Error> {
+        for failure_node in nodes.iter() {
+            if self.is_ancestor(failure_node, node)? {
+                return Ok(nodes);
+            }
+        }
+        self.descendant_roots(nodes.insert(node.clone()))
     }
 }
 
@@ -245,6 +260,8 @@ mod tests {
 
     use crate::search::Bounds;
     use crate::search::EagerSolution;
+    use crate::search::NodeSet;
+    use crate::search::NodeSetExt;
     use crate::search::Search;
     use crate::search::Status;
     use crate::testing::arb_strategy;
@@ -254,7 +271,6 @@ mod tests {
 
     use itertools::Itertools;
     use maplit::hashmap;
-    use maplit::hashset;
 
     #[test]
     fn test_search_stick() {
@@ -323,8 +339,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {2},
-                    failure: hashset! {},
+                    success: [2].into_iter().collect(),
+                    failure: [].into_iter().collect(),
                 },
                 next_to_search: vec![3, 4, 5, 6],
             }
@@ -337,8 +353,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {2},
-                    failure: hashset! {},
+                    success: [2].into_iter().collect(),
+                    failure: [].into_iter().collect(),
                 },
                 next_to_search: vec![5, 4, 6, 3],
             }
@@ -353,8 +369,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {2},
-                    failure: hashset! {5},
+                    success: [2].into_iter().collect(),
+                    failure: [5].into_iter().collect(),
                 },
                 next_to_search: vec![3, 4],
             }
@@ -367,8 +383,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {2},
-                    failure: hashset! {5},
+                    success: [2].into_iter().collect(),
+                    failure: [5].into_iter().collect(),
                 },
                 next_to_search: vec![4, 3],
             }
@@ -383,8 +399,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {2},
-                    failure: hashset! {5},
+                    success: [2].into_iter().collect(),
+                    failure: [5].into_iter().collect(),
                 },
                 next_to_search: vec![4],
             }
@@ -438,21 +454,27 @@ mod tests {
             // a -> b -> e -> f -> g
             // c -> d ->   -> h
             nodes: hashmap! {
-                'a' => hashset! {'b'},
-                'b' => hashset! {'e'},
-                'c' => hashset! {'d'},
-                'd' => hashset! {'e'},
-                'e' => hashset! {'f', 'h'},
-                'f' => hashset! {'g'},
-                'g' => hashset! {},
-                'h' => hashset! {},
+                'a' =>  ['b'].into_iter().collect(),
+                'b' =>  ['e'].into_iter().collect(),
+                'c' =>  ['d'].into_iter().collect(),
+                'd' =>  ['e'].into_iter().collect(),
+                'e' =>  ['f', 'h'].into_iter().collect(),
+                'f' =>  ['g'].into_iter().collect(),
+                'g' =>  [].into_iter().collect(),
+                'h' =>  [].into_iter().collect(),
             },
         };
         let linear_strategy = BasicStrategy {
             strategy: BasicStrategyKind::Linear,
         };
-        assert_eq!(graph.descendants('e'), Ok(hashset! {'e', 'f', 'g', 'h'}));
-        assert_eq!(graph.ancestors('e'), Ok(hashset! {'a', 'b', 'c', 'd', 'e'}));
+        assert_eq!(
+            graph.descendants(&'e'),
+            Ok(['e', 'f', 'g', 'h'].into_iter().collect())
+        );
+        assert_eq!(
+            graph.ancestors(&'e'),
+            Ok(['a', 'b', 'c', 'd', 'e'].into_iter().collect())
+        );
 
         let mut search = Search::new_with_nodes(graph, 'a'..='h');
         assert_eq!(
@@ -479,8 +501,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {'b'},
-                    failure: hashset! {'g'},
+                    success: ['b'].into_iter().collect(),
+                    failure: ['g'].into_iter().collect(),
                 },
                 next_to_search: vec!['c', 'd', 'e', 'f', 'h'],
             }
@@ -495,8 +517,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {'e'},
-                    failure: hashset! {'g'},
+                    success: ['e'].into_iter().collect(),
+                    failure: ['g'].into_iter().collect(),
                 },
                 next_to_search: vec!['f', 'h'],
             }
@@ -511,8 +533,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {'f'},
-                    failure: hashset! {'g'},
+                    success: ['f'].into_iter().collect(),
+                    failure: ['g'].into_iter().collect(),
                 },
                 next_to_search: vec!['h'],
             }
@@ -527,8 +549,8 @@ mod tests {
                 .unwrap(),
             EagerSolution {
                 bounds: Bounds {
-                    success: hashset! {'f', 'h'},
-                    failure: hashset! {'g'},
+                    success: ['f', 'h'].into_iter().collect(),
+                    failure: ['g'].into_iter().collect(),
                 },
                 next_to_search: vec![],
             }
@@ -566,7 +588,7 @@ mod tests {
                 }
             };
 
-            let nodes = graph.nodes.keys().copied().collect::<HashSet<_>>();
+            let nodes = graph.nodes.keys().copied().collect::<NodeSet<_>>();
             assert!(solution.bounds.success.is_subset(&nodes));
             assert!(solution.bounds.failure.is_subset(&nodes));
             assert!(solution.bounds.success.is_disjoint(&solution.bounds.failure));
@@ -574,7 +596,7 @@ mod tests {
             let all_failure_nodes = graph.descendants_all(solution.bounds.failure).unwrap();
             assert!(all_success_nodes.is_disjoint(&all_failure_nodes));
             assert!(
-                all_success_nodes.union(&all_failure_nodes).copied().collect::<HashSet<_>>() == nodes,
+                all_success_nodes.clone().union(all_failure_nodes.clone()) == nodes,
                 "all_success_nodes: {all_success_nodes:?}, all_failure_nodes: {all_failure_nodes:?}, nodes: {nodes:?}",
             );
         }
