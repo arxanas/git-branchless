@@ -73,7 +73,7 @@ git2 = { version = "0.19.0", default-features = false }
 glob = "0.3.2"
 indexmap = "2.7.0"
 indicatif = { version = "0.17.9", features = ["improved_unicode"] }
-itertools = "0.13.0"
+itertools = "0.14.0"
 lalrpop = "0.19.12"
 lalrpop-util = "0.19.12"
 lazy_static = "1.5.0"
