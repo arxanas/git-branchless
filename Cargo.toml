@@ -106,5 +106,5 @@ vt100 = "0.15.2"
 assert_cmd = "2.0.16"
 cc = "1.2.7"
 criterion = { version = "0.5.1", features = ["html_reports"] }
-insta = "1.41.1"
+insta = "1.42.0"
 maplit = "1.0.2"
