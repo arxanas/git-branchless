@@ -324,8 +324,8 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = local_repo.branchless("sync", &["--pull"])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch --all
+        insta::assert_snapshot!(stdout, @r"
+        branchless: running command: <git-executable> fetch origin
         Fast-forwarding branch master to 047b7ad create test1.txt
         Attempting rebase in-memory...
         [1/2] Skipped commit (was already applied upstream): 62fc20d create test1.txt
@@ -335,7 +335,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
         and have 2 and 2 different commits each, respectively.
         In-memory rebase succeeded.
         Synced 62fc20d create test1.txt
-        "###);
+        ");
     }
     {
         let stdout = local_repo.smartlog()?;

@@ -96,7 +96,6 @@ pub fn sync(
     let repo_pool = RepoResource::new_pool(&repo)?;
 
     if pull {
-        let head_info = repo.get_head_info()?;
         try_exit_code!(pull_main_branch(
             effects,
             git_run_info,
@@ -109,7 +108,6 @@ pub fn sync(
             &execute_options,
             &thread_pool,
             &repo_pool,
-            &head_info,
         )?);
     }
 
@@ -144,9 +142,22 @@ fn pull_main_branch(
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
-    head_info: &ResolvedReferenceInfo,
 ) -> EyreExitOr<()> {
-    try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?);
+    let head_info = repo.get_head_info()?;
+    let main_branch = repo.get_main_branch()?;
+
+    match main_branch.get_pull_remote_name()? {
+        Some(main_branch_pull_remote) => {
+            try_exit_code!(git_run_info.run(
+                effects,
+                Some(event_tx_id),
+                &["fetch", &main_branch_pull_remote]
+            )?);
+        }
+        None => {
+            tracing::warn!(?main_branch, "Main branch has no remote; not fetching it");
+        }
+    }
 
     try_exit_code!(execute_main_branch_sync_plan(
         effects,
@@ -157,7 +168,7 @@ fn pull_main_branch(
         execute_options,
         thread_pool,
         repo_pool,
-        head_info,
+        &head_info,
     )?);
 
     Ok(Ok(()))
