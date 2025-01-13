@@ -241,7 +241,7 @@ impl Forge for PhabricatorForge<'_> {
     fn query_status(
         &mut self,
         commit_set: CommitSet,
-    ) -> eyre::Result<std::result::Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CommitStatus>> {
         let commit_oids = self.dag.commit_set_to_vec(&commit_set)?;
         let commit_oid_to_revision: HashMap<NonZeroOid, Option<Id>> = commit_oids
             .into_iter()
@@ -319,7 +319,7 @@ impl Forge for PhabricatorForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<std::result::Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CreateStatus>> {
         let SubmitOptions {
             create: _,
             draft,
@@ -371,7 +371,9 @@ impl Forge for PhabricatorForge<'_> {
             TestCommand::Args(args.into_iter().map(ToString::to_string).collect())
         } else {
             TestCommand::String(
-                r#"(git show | grep 'BROKEN') && exit 1 || git commit --amend --message "$(git show --no-patch --format=%B HEAD)
+                // Convoluted way to check if the commit message contains the
+                // given string without a dependency on `grep`, etc.
+                r#"[ "$(git log --max-count=1 HEAD^..HEAD --grep='BROKEN')" != '' ] && exit 1 || git commit --amend --message "$(git show --no-patch --format=%B HEAD)
 
 Differential Revision: https://phabricator.example.com/D000$(git rev-list --count HEAD)
             "

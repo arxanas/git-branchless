@@ -265,7 +265,7 @@ fn test_submit_phabricator_failure_commit() -> eyre::Result<()> {
         Stopped at d5bb8b5 (create test3.txt)
         branchless: processing 1 update: ref HEAD
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -274,7 +274,6 @@ fn test_submit_phabricator_failure_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         Failed (exit code 1): 5b9de4b BROKEN: test2.txt
         Stdout:
-            BROKEN: test2.txt
         Stderr:
         Attempting rebase in-memory...
         [1/3] Committed as: 55af3db create test1.txt
@@ -293,7 +292,7 @@ fn test_submit_phabricator_failure_commit() -> eyre::Result<()> {
         Failed to create 2 commits:
         5b9de4b BROKEN: test2.txt
         e9d3664 create test3.txt
-        "###);
+        ");
     }
 
     {
