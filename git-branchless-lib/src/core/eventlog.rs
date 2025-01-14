@@ -580,7 +580,6 @@ INSERT INTO event_log VALUES (
     ///
     /// Returns: All the events in the database, ordered from oldest to newest.
     #[instrument]
-
     pub fn get_events(&self) -> eyre::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "

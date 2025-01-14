@@ -371,10 +371,11 @@ stderr:
                 if subcommand_mtime > main_command_mtime {
                     result.suggestion(format!(
                         "\
-The modified time for {main_command_exe:?} was before the modified time for
-{subcommand_exe:?}, which may indicate that you made changes to the subcommand
-without building the main executable. This may cause spurious test failures
-because the main executable code is out of date.
+The modified time for {main_command_exe:?}: {main_command_mtime:?}
+was before the modified time for {subcommand_exe:?}: {subcommand_mtime:?}
+which may indicate that you made changes to the subcommand without building the
+main executable. This may cause spurious test failures because the main
+executable code is out of date.
 
 If so, you should either explicitly run: cargo -p git-branchless
 to build the main executable before running this test; or, if it's okay to skip

@@ -20,8 +20,6 @@ use std::{io, time};
 
 use bstr::ByteVec;
 use chrono::{DateTime, Utc};
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
 use git2::DiffOptions;
 use itertools::Itertools;
 use thiserror::Error;
@@ -29,7 +27,7 @@ use tracing::{instrument, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
-use crate::core::formatting::Glyphs;
+use crate::core::formatting::{BaseColor, Glyphs, StyledString};
 use crate::git::config::{Config, ConfigRead};
 use crate::git::object::Blob;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};

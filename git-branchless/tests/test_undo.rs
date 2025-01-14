@@ -2,7 +2,7 @@ use std::mem::swap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use git_branchless_undo::testing::{select_past_event, undo_events};
+use git_branchless_undo::testing::{select_past_event, undo_events, Cursive, CursiveRunner, Key};
 use git_branchless_undo::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
@@ -13,9 +13,6 @@ use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
 use lib::testing::{make_git, trim_lines, Git, GitInitOptions, GitRunOptions};
-
-use cursive_core::event::Key;
-use cursive_core::{Cursive, CursiveRunner};
 use lib::util::ExitCode;
 
 fn run_select_past_event(
