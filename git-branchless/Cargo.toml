@@ -21,7 +21,6 @@ bstr = { workspace = true }
 bugreport = { workspace = true }
 color-eyre = { workspace = true }
 console = { workspace = true }
-cursive_core = { workspace = true }
 eden_dag = { workspace = true }
 eyre = { workspace = true }
 fslock = { workspace = true }

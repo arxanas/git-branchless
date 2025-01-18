@@ -4,12 +4,10 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use cursive::theme::{BaseColor, Effect, Style};
-use cursive::utils::markup::StyledString;
 use eyre::Context;
 use tracing::{instrument, warn};
 
-use crate::core::formatting::StyledStringBuilder;
+use crate::core::formatting::{BaseColor, Effect, Style, StyledString, StyledStringBuilder};
 use crate::git::{ConfigRead, GitRunInfo, GitRunOpts, Repo};
 
 use super::effects::Effects;
