@@ -90,7 +90,7 @@ scm-bisect = { version = "0.3.0", path = "scm-bisect" }
 scm-diff-editor = "0.4.0"
 scm-record = "0.5.0"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.134"
+serde_json = "1.0.137"
 shell-words = "1.1.0"
 skim = "0.10.4"
 tempfile = "3.15.0"
