@@ -157,6 +157,42 @@ fn record(
             )?);
         }
     } else {
+        let messages = if messages.is_empty() && stash {
+            let diff_stats = {
+                let (old_tree, new_tree) = match working_copy_changes_type {
+                    WorkingCopyChangesType::Unstaged => {
+                        let old_tree = snapshot.commit_stage0.get_tree()?;
+                        let new_tree = snapshot.commit_unstaged.get_tree()?;
+                        (Some(old_tree), new_tree)
+                    }
+                    WorkingCopyChangesType::Staged => {
+                        let old_tree = match snapshot.head_commit {
+                            None => None,
+                            Some(ref commit) => Some(commit.get_tree()?),
+                        };
+                        let new_tree = snapshot.commit_stage0.get_tree()?;
+                        (old_tree, new_tree)
+                    }
+                    WorkingCopyChangesType::None | WorkingCopyChangesType::Conflicts => {
+                        unreachable!("already handled via early exit")
+                    }
+                };
+
+                let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
+                let diff = repo.get_diff_between_trees(
+                    &effects,
+                    old_tree.as_ref(),
+                    &new_tree,
+                    0, // we don't care about the context here
+                )?;
+
+                diff.short_stats()?
+            };
+
+            vec![format!("stash: {diff_stats}")]
+        } else {
+            messages
+        };
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
