@@ -172,13 +172,15 @@ pub struct SwitchOptions {
 
     /// The commit or branch to check out.
     ///
+    /// If a revset is provided, it must evaluate to set with exactly 1 head.
+    ///
     /// If this is not provided, then interactive commit selection starts as
     /// if `--interactive` were passed.
     ///
     /// If this is provided and the `--interactive` flag is passed, this
     /// text is used to pre-fill the interactive commit selector.
     #[clap(value_parser)]
-    pub target: Option<String>,
+    pub target: Option<Revset>,
 }
 
 /// Internal use.

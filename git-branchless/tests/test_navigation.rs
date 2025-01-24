@@ -852,6 +852,67 @@ fn test_navigation_switch_target_only() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_navigation_switch_revset() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD~"])?;
+
+    {
+        {
+            let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+            insta::assert_snapshot!(stdout, @r###"
+            @ f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            "###);
+        }
+
+        let (stdout, _stderr) = git.branchless("switch", &["descendants(master)"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d create test1.txt
+        "###);
+    }
+
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+
+    {
+        {
+            let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+            insta::assert_snapshot!(stdout, @r###"
+            @ f777ecc (master) create initial.txt
+            |\
+            | o 62fc20d create test1.txt
+            |
+            o fe65c1f create test2.txt
+            "###);
+        }
+
+        let (_stdout, stderr) = git.branchless_with_options(
+            "switch",
+            &["descendants(master)"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Cannot switch to target: expected 'descendants(master)' to contain 1 head, but found 2.
+        Target should be a commit or a set of commits with exactly 1 head. Aborting.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 #[cfg(unix)]
 fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
     let git = make_git()?;

@@ -25,11 +25,11 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::{ExitCode, EyreExitOr};
 use tracing::{instrument, warn};
 
-use git_branchless_opts::{SwitchOptions, TraverseCommitsOptions};
-use git_branchless_revset::resolve_default_smartlog_commits;
+use git_branchless_opts::{ResolveRevsetOptions, Revset, SwitchOptions, TraverseCommitsOptions};
+use git_branchless_revset::{resolve_commits, resolve_default_smartlog_commits};
 use git_branchless_smartlog::make_smartlog_graph;
 use lib::core::config::get_next_interactive;
-use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::Pluralize;
@@ -515,17 +515,28 @@ pub fn switch(
         /// query in the commit selector.
         Interactive(String),
 
+        /// The target expression is probably a git revision or reference and
+        /// should be passed directly to git for resolution.
+        Passthrough(String),
+
+        /// The target expression should be interpreted as a revset.
+        Revset(Revset),
+
         /// No target expression was specified.
         None,
     }
     let initial_query = match (interactive, target) {
-        (true, Some(target)) => Target::Interactive(target.clone()),
+        (true, Some(target)) => Target::Interactive(target.to_string()),
         (true, None) => Target::Interactive(String::new()),
-        (false, Some(_)) => Target::None,
+        (false, Some(target)) => match repo.revparse_single_commit(target.to_string().as_ref()) {
+            Ok(Some(_)) => Target::Passthrough(target.to_string()),
+            Ok(None) | Err(_) => Target::Revset(target.clone()),
+        },
         (false, None) => Target::None,
     };
     let target: Option<CheckoutTarget> = match initial_query {
         Target::None => None,
+        Target::Passthrough(target) => Some(CheckoutTarget::Unknown(target)),
         Target::Interactive(initial_query) => {
             match prompt_select_commit(
                 None,
@@ -546,6 +557,35 @@ pub fn switch(
             )? {
                 Some(oid) => Some(CheckoutTarget::Oid(oid)),
                 None => return Ok(Err(ExitCode(1))),
+            }
+        }
+        Target::Revset(target) => {
+            let commit_sets = resolve_commits(
+                effects,
+                &repo,
+                &mut dag,
+                &[target.clone()],
+                &ResolveRevsetOptions::default(),
+            )?;
+
+            let commit_set = union_all(&commit_sets);
+            let commit_set = dag.query_heads(commit_set)?;
+            let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
+
+            match commits.as_slice() {
+                [commit] => Some(CheckoutTarget::Unknown(commit.get_oid().to_string())),
+                [] | [..] => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Cannot switch to target: expected '{target}' to contain 1 head, but found {}.",
+                        commits.len()
+                    )?;
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Target should be a commit or a set of commits with exactly 1 head. Aborting."
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
             }
         }
     };
