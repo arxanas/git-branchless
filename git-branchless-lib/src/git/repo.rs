@@ -938,6 +938,9 @@ impl Repo {
             return Err(Error::UnsupportedRevParseSpec(spec.to_owned()));
         }
 
+        // `libgit2` doesn't understand that `-` is short for `@{-1}`
+        let spec = if spec == "-" { "@{-1}" } else { spec };
+
         match self.inner.revparse_single(spec) {
             Ok(object) => match object.into_commit() {
                 Ok(commit) => Ok(Some(Commit { inner: commit })),
