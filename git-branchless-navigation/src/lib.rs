@@ -474,7 +474,7 @@ pub fn switch(
     switch_options: &SwitchOptions,
 ) -> EyreExitOr<()> {
     let SwitchOptions {
-        interactive: _,
+        interactive,
         branch_name,
         force,
         merge,
@@ -510,27 +510,23 @@ pub fn switch(
         false,
     )?;
 
-    let initial_query = match switch_options {
-        SwitchOptions {
-            interactive: true,
-            branch_name: _,
-            force: _,
-            merge: _,
-            detach: _,
-            target,
-        } => Some(target.clone().unwrap_or_default()),
-        SwitchOptions {
-            interactive: false,
-            branch_name: _,
-            force: _,
-            merge: _,
-            detach: _,
-            target: _,
-        } => None,
+    enum Target {
+        /// The (possibly empty) target expression should be used as the initial
+        /// query in the commit selector.
+        Interactive(String),
+
+        /// No target expression was specified.
+        None,
+    }
+    let initial_query = match (interactive, target) {
+        (true, Some(target)) => Target::Interactive(target.clone()),
+        (true, None) => Target::Interactive(String::new()),
+        (false, Some(_)) => Target::None,
+        (false, None) => Target::None,
     };
     let target: Option<CheckoutTarget> = match initial_query {
-        None => target.clone().map(CheckoutTarget::Unknown),
-        Some(initial_query) => {
+        Target::None => None,
+        Target::Interactive(initial_query) => {
             match prompt_select_commit(
                 None,
                 &initial_query,
