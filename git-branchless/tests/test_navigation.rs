@@ -909,6 +909,67 @@ fn test_navigation_switch_revset() -> eyre::Result<()> {
         "###);
     }
 
+    {
+        // switching back to "last checkout"
+        let (stdout, _stderr) = git.branchless("switch", &["@{-1}"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout @{-1}
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
+    }
+
+    {
+        // switching back to "last checkout"
+        let (stdout, _stderr) = git.branchless("switch", &["-"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout -
+        @ f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        o fe65c1f create test2.txt
+        "###);
+    }
+
+    {
+        // switching back to "last checkout" will also checkout last checked out
+        // branch, if any
+
+        let (stdout, _stderr) = git.branchless("switch", &["master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout master
+        @ f777ecc (> master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        o fe65c1f create test2.txt
+        "###);
+
+        let (stdout, _stderr) = git.branchless("switch", &["@{-2}"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout @{-2}
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
+
+        let (stdout, _stderr) = git.branchless("switch", &["-"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout -
+        @ f777ecc (> master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        o fe65c1f create test2.txt
+        "###);
+    }
+
     Ok(())
 }
 
