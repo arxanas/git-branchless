@@ -15,12 +15,75 @@ pub struct Diff<'repo> {
     pub(super) inner: git2::Diff<'repo>,
 }
 
+impl Diff<'_> {
+    /// TODO
+    pub fn short_stats(&self) -> eyre::Result<String> {
+        let stats = self.inner.stats()?;
+        let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
+        Ok(buf.as_str().expect("TODO").trim().to_string())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct GitHunk {
     old_start: usize,
     old_lines: usize,
     new_start: usize,
     new_lines: usize,
+}
+
+/// TODO
+pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> {
+    // this returns something like `1 file changed, 1 deletion(-)`
+    // let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
+    // Ok(buf.as_str().expect("TODO").trim().to_string())
+
+    // this returns something like `test2.txt (-1)`
+    let stats = diff.inner.stats()?;
+    let prefix = if stats.files_changed() == 1 {
+        let mut prefix = None;
+        // return false to terminate iteration, but that also returns Err; catch
+        // and ignore
+        let _ = diff.inner.foreach(
+            &mut |delta: git2::DiffDelta, _| {
+                if let Some(path) = delta.old_file().path() {
+                    // prefix = Some(format!("{}", path.file_name().unwrap().to_string_lossy()));
+                    prefix = Some(format!("{}", path.display()));
+                } else if let Some(path) = delta.new_file().path() {
+                    prefix = Some(format!("{}", path.display()));
+                }
+
+                false
+            },
+            None,
+            None,
+            None,
+        );
+        prefix
+    } else {
+        Some(format!("{} files", stats.files_changed()))
+    };
+
+    let i = stats.insertions();
+    let d = stats.deletions();
+    Ok(format!(
+        "{prefix} ({i}{slash}{d})",
+        prefix = prefix.unwrap(),
+        i = if i > 0 {
+            format!("+{i}")
+        } else {
+            String::new()
+        },
+        slash = if i > 0 && d > 0 { "/" } else { "" },
+        d = if d > 0 {
+            format!("-{d}")
+        } else {
+            String::new()
+        }
+    ))
+    // stats.files_changed()
+    // stats.insertions()
+    // stats.deletions()
 }
 
 /// Calculate the diff between the index and the working copy.
