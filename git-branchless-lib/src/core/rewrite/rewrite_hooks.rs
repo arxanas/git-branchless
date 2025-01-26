@@ -518,11 +518,14 @@ pub fn hook_drop_commit_if_empty(
     Ok(())
 }
 
-/// For rebases, if a commit is known to have been applied upstream, skip it
-/// without attempting to apply it.
+/// For rebases, update the status of a commit that is known to have been
+/// applied upstream. It can either be skipped entirely (when called with
+/// `MaybeZeroOid::Zero`) or be marked as having been rewritten to a
+/// different commit entirely.
 pub fn hook_skip_upstream_applied_commit(
     effects: &Effects,
     commit_oid: NonZeroOid,
+    rewritten_oid: MaybeZeroOid,
 ) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let commit = repo.find_commit_or_fail(commit_oid)?;
@@ -548,7 +551,7 @@ pub fn hook_skip_upstream_applied_commit(
     add_rewritten_list_entries(
         &repo.get_tempfile_dir()?,
         &repo.get_rebase_state_dir_path().join("rewritten-list"),
-        &[(commit_oid, MaybeZeroOid::Zero)],
+        &[(commit_oid, rewritten_oid)],
     )?;
 
     Ok(())
