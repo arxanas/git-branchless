@@ -19,9 +19,7 @@ use super::eventlog::EventTransactionId;
 /// overridden it.
 #[instrument]
 pub fn get_default_hooks_dir(repo: &Repo) -> eyre::Result<PathBuf> {
-    let parent_repo = repo.open_worktree_parent_repo()?;
-    let repo = parent_repo.as_ref().unwrap_or(repo);
-    Ok(repo.get_path().join("hooks"))
+    Ok(repo.get_shared_path().join("hooks"))
 }
 
 /// Get the path where the main worktree's Git hooks are stored on disk.
