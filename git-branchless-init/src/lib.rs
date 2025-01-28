@@ -544,7 +544,7 @@ fn create_isolated_config(
 
     let config = Config::open(&config_path)?;
     let config_path_relative = config_path
-        .strip_prefix(repo.get_path())
+        .strip_prefix(repo.get_shared_path())
         .wrap_err("Getting relative config path")?;
     // Be careful when setting paths on Windows. Since the path would have a
     // backslash, naively using it produces
@@ -606,8 +606,7 @@ fn command_init(
     main_branch_name: Option<&str>,
 ) -> EyreExitOr<()> {
     let mut in_ = BufReader::new(stdin());
-    let repo = Repo::from_current_dir()?;
-    let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
+    let mut repo = Repo::from_current_dir()?;
 
     let default_config = Config::open_default()?;
     let readonly_config = repo.get_readonly_config()?;
