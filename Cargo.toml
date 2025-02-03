@@ -72,7 +72,7 @@ git-branchless-undo = { version = "0.10.0", path = "git-branchless-undo" }
 git2 = { version = "0.20.0", default-features = false }
 glob = "0.3.2"
 indexmap = "2.7.1"
-indicatif = { version = "0.17.9", features = ["improved_unicode"] }
+indicatif = { version = "0.17.11", features = ["improved_unicode"] }
 itertools = "0.14.0"
 lalrpop = "0.19.12"
 lalrpop-util = "0.19.12"
