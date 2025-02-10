@@ -80,7 +80,7 @@ lazy_static = "1.5.0"
 lib = { package = "git-branchless-lib", version = "0.10.0", path = "git-branchless-lib" }
 man = "0.3.0"
 num_cpus = "1.16.0"
-once_cell = "1.19.0"
+once_cell = "1.20.3"
 path-slash = "0.2.1"
 portable-pty = "0.8.1"
 rayon = "1.10.0"
