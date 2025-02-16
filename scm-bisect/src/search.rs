@@ -265,7 +265,7 @@ impl<G: Graph> Search<G> {
         &'a self,
         strategy: &'a S,
     ) -> Result<
-        LazySolution<G::Node, SearchError<G::Node, G::Error, S::Error>>,
+        LazySolution<'a, G::Node, SearchError<G::Node, G::Error, S::Error>>,
         SearchError<G::Node, G::Error, S::Error>,
     > {
         let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
@@ -284,7 +284,7 @@ impl<G: Graph> Search<G> {
             states: VecDeque<State<G>>,
         }
 
-        impl<'a, G: Graph, S: Strategy<G>> Iterator for Iter<'a, G, S> {
+        impl<G: Graph, S: Strategy<G>> Iterator for Iter<'_, G, S> {
             type Item = Result<G::Node, SearchError<G::Node, G::Error, S::Error>>;
 
             fn next(&mut self) -> Option<Self::Item> {

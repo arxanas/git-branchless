@@ -86,7 +86,7 @@ pub struct ResourceHandle<'pool, R: Resource> {
     inner: Option<R::Output>,
 }
 
-impl<'a, R: Resource> Drop for ResourceHandle<'a, R> {
+impl<R: Resource> Drop for ResourceHandle<'_, R> {
     fn drop(&mut self) {
         let mut resources = self
             .parent
@@ -97,7 +97,7 @@ impl<'a, R: Resource> Drop for ResourceHandle<'a, R> {
     }
 }
 
-impl<'a, R: Resource> Deref for ResourceHandle<'a, R> {
+impl<R: Resource> Deref for ResourceHandle<'_, R> {
     type Target = R::Output;
 
     fn deref(&self) -> &Self::Target {

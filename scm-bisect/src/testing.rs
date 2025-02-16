@@ -1,3 +1,5 @@
+//! Testing utilities.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
@@ -7,8 +9,12 @@ use proptest::prelude::*;
 
 use crate::basic::{BasicSourceControlGraph, BasicStrategyKind};
 
+/// Graph that represents a "stick" of nodes, represented as increasing
+/// integers. The node `n` is the immediate parent of `n + 1`.
 #[derive(Clone, Debug)]
 pub struct UsizeGraph {
+    /// The maximum node value for this graph. Valid nodes are in `0..max` (a
+    /// half-open [`std::ops::Range`]).
     pub max: usize,
 }
 
@@ -27,8 +33,10 @@ impl BasicSourceControlGraph for UsizeGraph {
     }
 }
 
+/// Directed acyclic graph with nodes `char` and edges `char -> char`.
 #[derive(Clone, Debug)]
 pub struct TestGraph {
+    /// Mapping from parent to children.
     pub nodes: HashMap<char, HashSet<char>>,
 }
 
@@ -57,6 +65,7 @@ impl BasicSourceControlGraph for TestGraph {
     }
 }
 
+/// Select an arbitrary [`BasicStrategyKind`].
 pub fn arb_strategy() -> impl ProptestStrategy<Value = BasicStrategyKind> {
     prop_oneof![
         Just(BasicStrategyKind::Linear),
@@ -65,6 +74,7 @@ pub fn arb_strategy() -> impl ProptestStrategy<Value = BasicStrategyKind> {
     ]
 }
 
+/// Create an arbitrary [`TestGraph`] and an arbitrary set of failing nodes.
 pub fn arb_test_graph_and_nodes() -> impl ProptestStrategy<Value = (TestGraph, Vec<char>)> {
     let nodes = prop::collection::hash_set(
         prop::sample::select(vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),

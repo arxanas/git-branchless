@@ -78,7 +78,7 @@ jobs:
           override: true
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
 
       - name: Compile (all features)
         run: cargo build --all-features --all-targets --workspace
@@ -89,7 +89,7 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --all-features --examples --tests --workspace
+          cargo test --all-features --examples --tests --workspace --no-fail-fast
 
       # Note that `--doc` can't be combined with other tests.
       - name: Run Rust doc-tests (all features)
@@ -97,7 +97,7 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --all-features --doc --workspace
+          cargo test --all-features --doc --workspace --no-fail-fast
 
       - name: Compile (no features)
         run: cargo build --no-default-features --all-targets --workspace
@@ -107,4 +107,4 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --no-default-features --examples --tests --workspace
+          cargo test --no-default-features --examples --tests --workspace --no-fail-fast

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
-use chrono::{Local, NaiveDateTime};
+use chrono::{DateTime, Local};
 use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
 use chronoutil::RelativeDuration;
 use eden_dag::nameset::hints::{Flags, Hints};
@@ -22,8 +22,8 @@ pub(super) enum Pattern {
     Substring(String),
     Glob(glob::Pattern),
     Regex(regex::Regex),
-    Before(NaiveDateTime),
-    After(NaiveDateTime),
+    Before(DateTime<Local>),
+    After(DateTime<Local>),
 }
 
 #[derive(Debug, Error)]
@@ -64,11 +64,11 @@ impl Pattern {
             Pattern::Exact(_) | Pattern::Substring(_) | Pattern::Glob(_) | Pattern::Regex(_) => {
                 false
             }
-            Pattern::Before(date) => match time.to_naive_date_time() {
+            Pattern::Before(date) => match time.to_date_time() {
                 Some(time) => &time <= date,
                 None => false,
             },
-            Pattern::After(date) => match time.to_naive_date_time() {
+            Pattern::After(date) => match time.to_date_time() {
                 Some(time) => &time >= date,
                 None => false,
             },
@@ -94,9 +94,9 @@ impl Pattern {
             return Ok(Pattern::Regex(pattern));
         }
 
-        fn parse_date(pattern: &str) -> Result<NaiveDateTime, PatternError> {
+        fn parse_date(pattern: &str) -> Result<DateTime<Local>, PatternError> {
             if let Ok(date) = parse_date_string(pattern, Local::now(), Dialect::Us) {
-                return Ok(date.naive_local());
+                return Ok(date.with_timezone(&Local));
             }
             if let Ok(interval) = parse_duration(pattern) {
                 let delta = match interval {
@@ -104,7 +104,7 @@ impl Pattern {
                     Interval::Days(days) => RelativeDuration::days(days.into()),
                     Interval::Months(months) => RelativeDuration::months(months),
                 };
-                let date = Local::now().naive_local() + delta;
+                let date = Local::now() + delta;
                 return Ok(date);
             }
             Err(PatternError::ConstructMatcher(eyre::eyre!(

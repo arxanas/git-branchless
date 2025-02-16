@@ -1000,7 +1000,7 @@ impl Drop for ProgressHandle<'_> {
     }
 }
 
-impl<'a> ProgressHandle<'a> {
+impl ProgressHandle<'_> {
     /// Notify the progress meter that the current operation has `total`
     /// discrete units of work, and it's currently `current` units of the way
     /// through the operation.

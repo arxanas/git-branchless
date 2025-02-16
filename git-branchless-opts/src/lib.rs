@@ -454,7 +454,7 @@ pub enum Command {
 
     /// Use the partial commit selector UI as a Git-compatible difftool; see
     /// git-difftool(1) for more information on Git difftools.
-    Difftool(scm_record::scm_diff_editor::Opts),
+    Difftool(scm_diff_editor::Opts),
 
     /// Run internal garbage collection.
     Gc,
