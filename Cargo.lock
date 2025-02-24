@@ -430,9 +430,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.28"
+version = "4.5.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e77c3243bd94243c03672cb5154667347c457ca271254724f9f393aee1c05ff"
+checksum = "027bb0d98429ae334a8698531da7077bdf906419543a35a55c2cb1b66437d767"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -440,9 +440,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.27"
+version = "4.5.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b26884eb4b57140e4d2d93652abfa49498b938b3c9179f9fc487b0acc3edad7"
+checksum = "5589e0cba072e0f3d23791efac0fd8627b49c829c196a492e88168e6a669d863"
 dependencies = [
  "anstream",
  "anstyle",
@@ -483,7 +483,7 @@ version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "724842fa9b144f9b89b3f3d371a89f3455eea660361d13a554f68f8ae5d6c13a"
 dependencies = [
- "clap 4.5.28",
+ "clap 4.5.31",
  "roff 0.2.2",
 ]
 
@@ -604,7 +604,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.5.28",
+ "clap 4.5.31",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1539,7 +1539,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.28",
+ "clap 4.5.31",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1628,7 +1628,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.28",
+ "clap 4.5.31",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.14.0",
@@ -1732,7 +1732,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.10.0"
 dependencies = [
- "clap 4.5.28",
+ "clap 4.5.31",
  "cursive_core",
  "esl01-dag",
  "eyre",
@@ -1760,7 +1760,7 @@ version = "0.10.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.5.28",
+ "clap 4.5.31",
  "crossbeam",
  "cursive",
  "esl01-dag",
@@ -3136,7 +3136,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adfb2974d3500342f111c2642357b8eda61977b8d4f2994274aa07a0ad834069"
 dependencies = [
- "clap 4.5.28",
+ "clap 4.5.31",
  "diffy",
  "scm-record 0.4.0",
  "sha1",
