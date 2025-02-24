@@ -181,6 +181,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         },
 
         Command::Split {
+            before,
             detach,
             discard,
             files,
@@ -192,6 +193,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             revset,
             &resolve_revset_options,
             files,
+            before,
             detach,
             discard,
             &move_options,

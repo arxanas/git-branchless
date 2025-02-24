@@ -41,6 +41,7 @@ pub fn split(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     files_to_extract: Vec<String>,
+    before: bool,
     detach: bool,
     discard: bool,
     move_options: &MoveOptions,
@@ -266,13 +267,18 @@ pub fn split(
                 reuse_parent_tree_if_possible: true,
             },
         )?;
+        let parents = if before {
+            split_commit.get_parents()
+        } else {
+            vec![split_commit]
+        };
         let extracted_commit_oid = repo.create_commit(
             None,
             &commit_to_split.get_author(),
             &commit_to_split.get_committer(),
             format!("temp(split): {message}").as_str(),
             &extracted_tree,
-            vec![&split_commit],
+            parents.iter().collect(),
         )?;
 
         // see git-branchless/src/commands/amend.rs:172
