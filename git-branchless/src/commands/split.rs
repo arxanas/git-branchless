@@ -41,6 +41,7 @@ pub fn split(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     files_to_extract: Vec<String>,
+    before: bool,
     detach: bool,
     discard: bool,
     move_options: &MoveOptions,
@@ -116,12 +117,35 @@ pub fn split(
         }
     };
 
+    //
+    // a-s-b
+    //
+    // a-S-e-b (default)
+    // a-e-S-b (before)
+    // a-S-b   (detach)
+    //   \-e
+    // a-S-b   (discard)
+    //
+    // default: e has s tree, S is s with changes removed
+    // before:  S has s tree, e is a with changes added
+    // detach:  (same as default, different rebase)
+    // discard: (same as default, w/o any rebase)
+    //
+    // below:
+    // a => parent_tree
+    // s => commit_to_split_tree
+    // S => split_tree
+    // e => extracted_tree
+
     let commit_to_split = repo.find_commit_or_fail(commit_to_split_oid)?;
+    let commit_to_split_tree = commit_to_split.get_tree()?;
     let parent_commits = commit_to_split.get_parents();
-    let parent_tree = match parent_commits.as_slice() {
-        [only_parent] => only_parent.get_tree()?,
-        [] => make_empty_tree(&repo)?,
-        [..] => {
+    let (parent_tree, mut split_tree) = match (before, parent_commits.as_slice()) {
+        (false, [only_parent]) => (only_parent.get_tree()?, commit_to_split.get_tree()?),
+        (true, [only_parent]) => (only_parent.get_tree()?, only_parent.get_tree()?),
+        (false, []) => (make_empty_tree(&repo)?, commit_to_split.get_tree()?),
+        (true, []) => (make_empty_tree(&repo)?, make_empty_tree(&repo)?),
+        (_, [..]) => {
             writeln!(
                 effects.get_error_stream(),
                 "Cannot split merge commit {}.",
@@ -131,7 +155,6 @@ pub fn split(
         }
     };
 
-    let mut split_tree = commit_to_split.get_tree()?;
     for file in files_to_extract.iter() {
         let path = Path::new(&file).to_path_buf();
         let cwd = std::env::current_dir()?;
@@ -189,25 +212,33 @@ pub fn split(
             }
         };
 
-        let commit_has_entry = split_tree.get_path(path)?.is_some();
-        match parent_entry {
-            // added => remove from commit
-            None if commit_has_entry => {
+        let commit_entry = commit_to_split_tree.get_path(path)?;
+        match (parent_entry, commit_entry) {
+            // added & before => add to extracted commit
+            (None, Some(commit_entry)) if before => {
+                let new_split_tree_oid = split_tree.add_or_replace(&repo, path, &commit_entry)?;
+                split_tree = repo
+                    .find_tree(new_split_tree_oid)?
+                    .expect("should have been found");
+            }
+
+            // added & after => remove from split commit
+            (None, Some(_)) => {
                 let new_split_tree_oid = split_tree.remove(&repo, path)?;
                 split_tree = repo
                     .find_tree(new_split_tree_oid)?
                     .expect("should have been found");
             }
 
-            // deleted or modified => replace w/ parent content
-            Some(parent_entry) => {
+            // deleted or modified & after => replace w/ parent content in split commit
+            (Some(parent_entry), _) => {
                 let new_split_tree_oid = split_tree.add_or_replace(&repo, path, &parent_entry)?;
                 split_tree = repo
                     .find_tree(new_split_tree_oid)?
                     .expect("should have been found");
             }
 
-            None => {
+            (None, _) => {
                 if path.exists() {
                     writeln!(
                         effects.get_error_stream(),
@@ -226,18 +257,36 @@ pub fn split(
     let message = {
         let (effects, _progress) =
             effects.start_operation(lib::core::effects::OperationType::CalculateDiff);
+        let (old_tree, new_tree) = if before {
+            (&parent_tree, &split_tree)
+        } else {
+            (&split_tree, &commit_to_split_tree)
+        };
         let diff = repo.get_diff_between_trees(
             &effects,
-            Some(&split_tree),
-            &commit_to_split.get_tree()?,
+            Some(old_tree),
+            new_tree,
             0, // we don't care about the context here
         )?;
 
         summarize_diff_for_temporary_commit(&diff)?
     };
 
-    let split_commit_oid =
-        commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?;
+    // before => split commit is created on parent as "extracted", target is rebased onto split
+    // after => target is amended as "split", split is cherry picked onto split as "extracted"
+
+    let split_commit_oid = if before {
+        repo.create_commit(
+            None,
+            &commit_to_split.get_author(),
+            &commit_to_split.get_committer(),
+            format!("temp(split): {message}").as_str(),
+            &split_tree,
+            parent_commits.iter().collect(),
+        )?
+    } else {
+        commit_to_split.amend_commit(None, None, None, None, Some(&split_tree))?
+    };
     let split_commit = repo.find_commit_or_fail(split_commit_oid)?;
 
     if split_commit.is_empty() {
@@ -256,7 +305,7 @@ pub fn split(
         new_commit_oid: MaybeZeroOid::NonZero(split_commit_oid),
     }])?;
 
-    let extracted_commit_oid = if discard {
+    let extracted_commit_oid = if before || discard {
         None
     } else {
         let extracted_tree = repo.cherry_pick_fast(
@@ -272,7 +321,11 @@ pub fn split(
             &commit_to_split.get_committer(),
             format!("temp(split): {message}").as_str(),
             &extracted_tree,
-            vec![&split_commit],
+            if before {
+                parent_commits.iter().collect()
+            } else {
+                vec![&split_commit]
+            },
         )?;
 
         // see git-branchless/src/commands/amend.rs:172
@@ -363,12 +416,18 @@ pub fn split(
     }
 
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
-    let children = dag.query_children(CommitSet::from(commit_to_split_oid))?;
-    for child in dag.commit_set_to_vec(&children)? {
-        match (detach, extracted_commit_oid) {
-            (_, None) | (true, Some(_)) => builder.move_subtree(child, vec![split_commit_oid])?,
-            (_, Some(extracted_commit_oid)) => {
-                builder.move_subtree(child, vec![extracted_commit_oid])?
+    if before {
+        builder.move_subtree(commit_to_split_oid, vec![split_commit_oid])?
+    } else {
+        let children = dag.query_children(CommitSet::from(commit_to_split_oid))?;
+        for child in dag.commit_set_to_vec(&children)? {
+            match (detach, extracted_commit_oid) {
+                (_, None) | (true, Some(_)) => {
+                    builder.move_subtree(child, vec![split_commit_oid])?
+                }
+                (_, Some(extracted_commit_oid)) => {
+                    builder.move_subtree(child, vec![extracted_commit_oid])?
+                }
             }
         }
     }
