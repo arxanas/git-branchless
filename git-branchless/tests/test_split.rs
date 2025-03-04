@@ -641,6 +641,40 @@ fn test_split_insert_before() -> eyre::Result<()> {
         ");
     }
 
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test3.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: e67f93e second commit
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout e67f93ea0ca5590da3fadadb04584394c6cf6ee1
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o d02e8c5 temp(split): test2.txt (+1)
+            |
+            o 7014c04 first commit
+            |
+            o 52cc08f temp(split): test3.txt (+1/-1)
+            |
+            @ e67f93e second commit
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test3.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
     Ok(())
 }
 
