@@ -14,7 +14,7 @@ color-eyre = { workspace = true }
 cursive_core = { workspace = true }
 eyre = { workspace = true }
 git-branchless-opts = { workspace = true }
-git2 = { workspace = true }
+git2 = { version = "0.18.0", default-features = false }
 lib = { workspace = true }
 tracing = { workspace = true }
 tracing-chrome = { workspace = true }

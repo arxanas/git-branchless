@@ -69,7 +69,7 @@ git-branchless-smartlog = { version = "0.10.0", path = "git-branchless-smartlog"
 git-branchless-submit = { version = "0.10.0", path = "git-branchless-submit" }
 git-branchless-test = { version = "0.10.0", path = "git-branchless-test" }
 git-branchless-undo = { version = "0.10.0", path = "git-branchless-undo" }
-git2 = { version = "0.20.0", default-features = false }
+git2 = { version = "0.18.0", default-features = false }
 glob = "0.3.2"
 indexmap = "2.7.1"
 indicatif = { version = "0.17.11", features = ["improved_unicode"] }

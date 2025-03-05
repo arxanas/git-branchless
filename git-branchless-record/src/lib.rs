@@ -156,20 +156,22 @@ fn record(
                 &repo,
                 &snapshot,
                 event_tx_id,
-                message.as_deref(),
+                messages.clone(),
                 sign_option,
             )?);
         }
     } else {
-        let mut args = vec!["commit"];
-        if let Some(message) = &message {
-            args.extend(["--message", message]);
+        let message = messages.first().map_or_else(|| String::new(), |m| m.clone());
+        let mut args = vec!["commit".to_string()];
+        if !message.is_empty() {
+            args.push("--message".to_string());
+            args.push(message);
         }
         if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-            args.push("--all");
+            args.push("--all".to_string());
         }
         let sign_flag = sign_option.as_git_flag();
-        if let Some(flag) = &sign_flag {
+        if let Some(flag) = sign_flag {
             args.push(flag);
         }
 
@@ -347,7 +349,7 @@ fn record_interactive(
             return Ok(Err(ExitCode(1)));
         }
     };
-    let message = commits[0].message.clone().unwrap_or_default();
+    let _message = commits[0].message.clone().unwrap_or_default();
 
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
@@ -415,11 +417,14 @@ fn record_interactive(
         &update_index_script,
     )?;
 
-    let mut args = vec!["commit"];
+    let message = messages.first().map_or_else(|| String::new(), |m| m.clone());
+
+    let mut args = vec!["commit".to_string()];
     if !message.is_empty() {
-        args.extend(["--message", &message]);
+        args.push("--message".to_string());
+        args.push(message);
     }
-    // The new GPG-sign logic: append --gpg-sign if needed
+    
     let sign_flag = sign_option.as_git_flag();
     if let Some(flag) = sign_flag {
         args.push(flag);

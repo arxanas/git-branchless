@@ -438,9 +438,8 @@ mod in_memory {
     use crate::git::{
         self, // from the incoming changes
         AmendFastOptions,       // from HEAD side
-        CherryPickFastError,    // from incoming
+        CreateCommitFastError,  // from incoming
         CherryPickFastOptions,  // from both sides
-        CreateCommitFastError,  // from HEAD side
         GitRunInfo,             // from both
         MaybeZeroOid,           // from both
         NonZeroOid,             // from both
@@ -609,12 +608,12 @@ mod in_memory {
                     } else {
                         original_commit.get_committer().update_timestamp(*now)?
                     };
-                    let rebased_commit_oid = repo
+                    let mut rebased_commit_oid = repo
                         .create_commit(
-                            &commit_to_apply.get_author(),
+                            &original_commit.get_author(),
                             &committer_signature,
                             commit_message,
-                            &commit_tree,
+                            &current_commit.get_tree()?,
                             vec![&current_commit],
                             signer.as_deref(),
                         )
@@ -650,7 +649,9 @@ mod in_memory {
                         // Is it even possible to repeatedly amend a tree and then commit
                         // it once at the end?
 
-                        let maybe_tree = if rebased_commit.is_none() {
+                        let have_rebased_commit = true;
+                        
+                        let maybe_tree = if !have_rebased_commit {
                             repo.cherry_pick_fast(
                                 &commit_to_apply,
                                 &current_commit,
@@ -659,8 +660,10 @@ mod in_memory {
                                 },
                             )
                         } else {
+                            // Find the commit from the oid
+                            let rebased_commit = repo.find_commit_or_fail(rebased_commit_oid)?;
                             repo.amend_fast(
-                                &rebased_commit.expect("rebased commit should not be None"),
+                                &rebased_commit,
                                 &AmendFastOptions::FromCommit {
                                     commit: commit_to_apply,
                                 },
@@ -676,7 +679,10 @@ mod in_memory {
                                     },
                                 ))
                             }
-                            Err(other) => eyre::bail!(other),
+                            Err(other) => {
+                                let err: eyre::Report = other.into();
+                                return Err(err);
+                            }
                         };
 
                         // this is the description of each fixup commit
@@ -686,23 +692,17 @@ mod in_memory {
                             OperationIcon::InProgress,
                             format!("Committing to repository: {commit_description}"),
                         );
-                        rebased_commit_oid = Some(
-                            repo.create_commit(
-                                None,
-                                &commit_author,
-                                &committer_signature,
-                                commit_message,
-                                &commit_tree,
-                                vec![&current_commit],
-                            )
-                            .wrap_err("Applying rebased commit")?,
-                        );
-
-                        rebased_commit = repo.find_commit(rebased_commit_oid.unwrap())?;
+                        rebased_commit_oid = repo.create_commit(
+                            &commit_author,
+                            &committer_signature,
+                            commit_message,
+                            &commit_tree,
+                            vec![&current_commit],
+                            signer.as_deref(),
+                        )
+                        .wrap_err("Applying rebased commit")?;
                     }
 
-                    let rebased_commit_oid =
-                        rebased_commit_oid.expect("rebased oid should not be None");
                     let commit_description =
                         effects
                             .get_glyphs()
@@ -711,9 +711,9 @@ mod in_memory {
                                 rebased_commit_oid,
                             )?)?;
 
-                    if rebased_commit
-                        .expect("rebased commit should not be None")
-                        .is_empty()
+                    // Get the rebased commit to check if it's empty
+                    let rebased_commit = repo.find_commit_or_fail(rebased_commit_oid)?;
+                    if rebased_commit.is_empty()
                     {
                         rewritten_oids.insert(*original_commit_oid, MaybeZeroOid::Zero);
                         maybe_set_skipped_head_new_oid(*original_commit_oid, current_oid);

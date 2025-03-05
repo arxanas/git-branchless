@@ -1,5 +1,9 @@
 use tracing::instrument;
 
+#[allow(unused_attributes)]
+#[path = ""]
+extern crate git2_ext;
+
 use super::{repo::Result, Repo, RepoError};
 
 /// GPG-signing option.

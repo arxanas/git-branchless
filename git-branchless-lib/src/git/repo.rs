@@ -23,6 +23,9 @@ use chrono::{DateTime, Utc};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use git2::DiffOptions;
+#[allow(unused_attributes)]
+#[path = ""]
+extern crate git2_ext;
 use git2_ext::ops::Sign;
 use itertools::Itertools;
 use thiserror::Error;
