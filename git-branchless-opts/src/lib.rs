@@ -662,6 +662,10 @@ pub enum Command {
         #[clap(value_parser, required = true)]
         files: Vec<String>,
 
+        /// Insert the extracted commit before (as a parent of) the split commit.
+        #[clap(action, short = 'b', long)]
+        before: bool,
+
         /// Restack any descendents onto the split commit, not the extracted commit.
         #[clap(action, short = 'd', long)]
         detach: bool,
