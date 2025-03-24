@@ -38,6 +38,7 @@ use tracing::instrument;
 /// What should `split` do with the extracted changes?
 pub enum SplitMode {
     DetachAfter,
+    Discard,
     InsertAfter,
 }
 
@@ -128,12 +129,14 @@ pub fn split(
     let (parent_tree, mut remainder_tree) = match (&split_mode, parent_commits.as_slice()) {
         // split the commit by removing the changes from the target, and then
         // cherry picking the orignal target as the "extracted" commit
-        (SplitMode::InsertAfter, [only_parent]) | (SplitMode::DetachAfter, [only_parent]) => {
+        (SplitMode::InsertAfter, [only_parent])
+        | (SplitMode::Discard, [only_parent])
+        | (SplitMode::DetachAfter, [only_parent]) => {
             (only_parent.get_tree()?, target_commit.get_tree()?)
         }
 
         // no parent: use an empty tree for comparison
-        (SplitMode::InsertAfter, []) | (SplitMode::DetachAfter, []) => {
+        (SplitMode::InsertAfter, []) | (SplitMode::Discard, []) | (SplitMode::DetachAfter, []) => {
             (make_empty_tree(&repo)?, target_commit.get_tree()?)
         }
 
@@ -207,9 +210,9 @@ pub fn split(
         let target_entry = target_tree.get_path(path)?;
         let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
             // added => remove from remainder commit
-            (None, Some(_), SplitMode::InsertAfter) | (None, Some(_), SplitMode::DetachAfter) => {
-                remainder_tree.remove(&repo, path)?
-            }
+            (None, Some(_), SplitMode::InsertAfter)
+            | (None, Some(_), SplitMode::DetachAfter)
+            | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
 
             // deleted/modified => replace w/ parent content in split commit
             (Some(parent_entry), _, _) => {
@@ -271,6 +274,7 @@ pub fn split(
     }])?;
 
     let extracted_commit_oid = match split_mode {
+        SplitMode::Discard => None,
         SplitMode::InsertAfter | SplitMode::DetachAfter => {
             let extracted_tree = repo.cherry_pick_fast(
                 &target_commit,

@@ -503,6 +503,59 @@ fn test_split_detach() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_split_discard() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.write_file_txt("test3", "contents3")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    git.commit_file("test3", 1)?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o e48cdc5 first commit
+        |
+        @ 3d220e0 create test3.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD~", "test2.txt", "--discard"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: f88fbe5 create test3.txt
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout f88fbe5901493ffe1c669cdb8aa5f056dc0bb605
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o 2932db7 first commit
+            |
+            @ f88fbe5 create test3.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test3.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_split_undo_works() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
