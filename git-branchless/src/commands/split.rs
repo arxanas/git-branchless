@@ -34,6 +34,13 @@ use lib::{
 };
 use tracing::instrument;
 
+#[derive(Debug, PartialEq)]
+/// What should `split` do with the extracted changes?
+pub enum SplitMode {
+    DetachAfter,
+    InsertAfter,
+}
+
 /// Split a commit and restack its descendants.
 #[instrument]
 pub fn split(
@@ -41,6 +48,7 @@ pub fn split(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     files_to_extract: Vec<String>,
+    split_mode: SplitMode,
     move_options: &MoveOptions,
     git_run_info: &GitRunInfo,
 ) -> EyreExitOr<()> {
@@ -117,15 +125,19 @@ pub fn split(
     let target_commit = repo.find_commit_or_fail(target_oid)?;
     let target_tree = target_commit.get_tree()?;
     let parent_commits = target_commit.get_parents();
-    let (parent_tree, mut remainder_tree) = match parent_commits.as_slice() {
+    let (parent_tree, mut remainder_tree) = match (&split_mode, parent_commits.as_slice()) {
         // split the commit by removing the changes from the target, and then
         // cherry picking the orignal target as the "extracted" commit
-        [only_parent] => (only_parent.get_tree()?, target_commit.get_tree()?),
+        (SplitMode::InsertAfter, [only_parent]) | (SplitMode::DetachAfter, [only_parent]) => {
+            (only_parent.get_tree()?, target_commit.get_tree()?)
+        }
 
         // no parent: use an empty tree for comparison
-        [] => (make_empty_tree(&repo)?, target_commit.get_tree()?),
+        (SplitMode::InsertAfter, []) | (SplitMode::DetachAfter, []) => {
+            (make_empty_tree(&repo)?, target_commit.get_tree()?)
+        }
 
-        [..] => {
+        (_, [..]) => {
             writeln!(
                 effects.get_error_stream(),
                 "Cannot split merge commit {}.",
@@ -193,14 +205,18 @@ pub fn split(
         };
 
         let target_entry = target_tree.get_path(path)?;
-        let temp_tree_oid = match (parent_entry, target_entry) {
+        let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
             // added => remove from remainder commit
-            (None, Some(_)) => remainder_tree.remove(&repo, path)?,
+            (None, Some(_), SplitMode::InsertAfter) | (None, Some(_), SplitMode::DetachAfter) => {
+                remainder_tree.remove(&repo, path)?
+            }
 
             // deleted/modified => replace w/ parent content in split commit
-            (Some(parent_entry), _) => remainder_tree.add_or_replace(&repo, path, &parent_entry)?,
+            (Some(parent_entry), _, _) => {
+                remainder_tree.add_or_replace(&repo, path, &parent_entry)?
+            }
 
-            (None, _) => {
+            (None, _, _) => {
                 if path.exists() {
                     writeln!(
                         effects.get_error_stream(),
@@ -254,35 +270,37 @@ pub fn split(
         new_commit_oid: MaybeZeroOid::NonZero(remainder_commit_oid),
     }])?;
 
-    let extracted_commit_oid = {
-        let extracted_tree = repo.cherry_pick_fast(
-            &target_commit,
-            &remainder_commit,
-            &CherryPickFastOptions {
-                reuse_parent_tree_if_possible: true,
-            },
-        )?;
-        let extracted_commit_oid = repo.create_commit(
-            None,
-            &target_commit.get_author(),
-            &target_commit.get_committer(),
-            format!("temp(split): {message}").as_str(),
-            &extracted_tree,
-            vec![&remainder_commit],
-        )?;
+    let extracted_commit_oid = match split_mode {
+        SplitMode::InsertAfter | SplitMode::DetachAfter => {
+            let extracted_tree = repo.cherry_pick_fast(
+                &target_commit,
+                &remainder_commit,
+                &CherryPickFastOptions {
+                    reuse_parent_tree_if_possible: true,
+                },
+            )?;
+            let extracted_commit_oid = repo.create_commit(
+                None,
+                &target_commit.get_author(),
+                &target_commit.get_committer(),
+                format!("temp(split): {message}").as_str(),
+                &extracted_tree,
+                vec![&remainder_commit],
+            )?;
 
-        // see git-branchless/src/commands/amend.rs:172
-        // TODO maybe this should happen after we've confirmed the rebase has succeeded
-        mark_commit_reachable(&repo, extracted_commit_oid)
-            .wrap_err("Marking commit as reachable for GC purposes.")?;
+            // see git-branchless/src/commands/amend.rs:172
+            // TODO maybe this should happen after we've confirmed the rebase has succeeded
+            mark_commit_reachable(&repo, extracted_commit_oid)
+                .wrap_err("Marking commit as reachable for GC purposes.")?;
 
-        event_log_db.add_events(vec![Event::CommitEvent {
-            timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
-            event_tx_id,
-            commit_oid: extracted_commit_oid,
-        }])?;
+            event_log_db.add_events(vec![Event::CommitEvent {
+                timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+                event_tx_id,
+                commit_oid: extracted_commit_oid,
+            }])?;
 
-        Some(extracted_commit_oid)
+            Some(extracted_commit_oid)
+        }
     };
 
     // push the new commits into the dag for the rebase planner
@@ -305,13 +323,18 @@ pub fn split(
         ResolvedReferenceInfo {
             oid: Some(oid),
             reference_name: Some(_),
-        } if oid == target_oid && extracted_commit_oid.is_some() => (
-            None,
-            vec![(
-                target_oid,
-                MaybeZeroOid::NonZero(extracted_commit_oid.unwrap()),
-            )],
-        ),
+        } if oid == target_oid
+            && split_mode != SplitMode::DetachAfter
+            && extracted_commit_oid.is_some() =>
+        {
+            (
+                None,
+                vec![(
+                    target_oid,
+                    MaybeZeroOid::NonZero(extracted_commit_oid.unwrap()),
+                )],
+            )
+        }
 
         // commit to split checked out as detached HEAD, don't extend any
         // branches, but explicitly check out the newly split commit
@@ -361,9 +384,18 @@ pub fn split(
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
     let children = dag.query_children(CommitSet::from(target_oid))?;
     for child in dag.commit_set_to_vec(&children)? {
-        match extracted_commit_oid {
-            None => builder.move_subtree(child, vec![remainder_commit_oid])?,
-            Some(extracted_commit_oid) => {
+        match (&split_mode, extracted_commit_oid) {
+            (_, None) => builder.move_subtree(child, vec![remainder_commit_oid])?,
+            (_, Some(extracted_commit_oid)) => {
+                builder.move_subtree(child, vec![extracted_commit_oid])?
+            }
+        }
+
+        match (&split_mode, extracted_commit_oid) {
+            (_, None) | (SplitMode::DetachAfter, Some(_)) => {
+                builder.move_subtree(child, vec![remainder_commit_oid])?
+            }
+            (_, Some(extracted_commit_oid)) => {
                 builder.move_subtree(child, vec![extracted_commit_oid])?
             }
         }
