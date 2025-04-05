@@ -237,6 +237,10 @@ pub enum HookSubcommand {
         /// The OID of the commit that was skipped.
         #[clap(value_parser)]
         commit_oid: String,
+
+        /// The OID of the commit that was skipped (if Some) or removed (if None).
+        #[clap(value_parser)]
+        rewritten_oid: Option<String>,
     },
 }
 

@@ -665,9 +665,16 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
             hook_register_extra_post_rewrite_hook()?;
         }
 
-        HookSubcommand::SkipUpstreamAppliedCommit { commit_oid } => {
+        HookSubcommand::SkipUpstreamAppliedCommit {
+            commit_oid,
+            rewritten_oid,
+        } => {
             let commit_oid: NonZeroOid = commit_oid.parse()?;
-            hook_skip_upstream_applied_commit(&effects, commit_oid)?;
+            let rewritten_oid: MaybeZeroOid = match rewritten_oid {
+                Some(rewritten_oid) => rewritten_oid.parse()?,
+                None => MaybeZeroOid::Zero,
+            };
+            hook_skip_upstream_applied_commit(&effects, commit_oid, rewritten_oid)?;
         }
     }
 
