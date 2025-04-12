@@ -406,6 +406,10 @@ pub struct SmartlogArgs {
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,
+
+    /// Show GPG signature status for each commit.
+    #[clap(action, long = "show-signature")]
+    pub show_signature: bool,
 }
 
 /// The Git hosting provider to use, called a "forge".

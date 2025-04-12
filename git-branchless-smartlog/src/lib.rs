@@ -34,7 +34,7 @@ use lib::core::formatting::Pluralize;
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
-    RelativeTimeDescriptor,
+    RelativeTimeDescriptor, SignatureStatusDescriptor,
 };
 use lib::git::{GitRunInfo, Repo};
 
@@ -753,6 +753,9 @@ mod render {
 
         /// Normally HEAD and the main branch are included. Set this to exclude them.
         pub exact: bool,
+
+        /// Show GPG signature status for each commit.
+        pub show_signature: bool,
     }
 }
 
@@ -769,6 +772,7 @@ pub fn smartlog(
         resolve_revset_options,
         reverse,
         exact,
+        show_signature,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -845,6 +849,7 @@ pub fn smartlog(
                 &Redactor::Disabled,
             )?,
             &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
+            &mut SignatureStatusDescriptor::new(&repo, show_signature)?,
             &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
     )?
@@ -916,6 +921,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
         resolve_revset_options,
         reverse,
         exact,
+        show_signature,
     } = args;
 
     smartlog(
@@ -927,6 +933,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
             resolve_revset_options,
             reverse,
             exact,
+            show_signature,
         },
     )
 }
