@@ -516,6 +516,79 @@ impl NodeDescriptor for RelativeTimeDescriptor {
     }
 }
 
+/// Display the GPG signature status for a commit.
+#[derive(Debug)]
+pub struct SignatureStatusDescriptor {
+    is_enabled: bool,
+    repo_path: String,
+}
+
+impl SignatureStatusDescriptor {
+    /// Constructor.
+    pub fn new(repo: &Repo, is_enabled: bool) -> eyre::Result<Self> {
+        let repo_path = repo.get_path().to_string_lossy().to_string();
+        Ok(Self {
+            is_enabled,
+            repo_path,
+        })
+    }
+}
+
+impl NodeDescriptor for SignatureStatusDescriptor {
+    #[instrument]
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
+        if !self.is_enabled {
+            return Ok(None);
+        }
+
+        let oid = object.get_oid().to_string();
+
+        // Use git command-line to get signature information as git2 doesn't
+        // expose GPG signature verification directly
+        let output = std::process::Command::new("git")
+            .args(["-C", &self.repo_path, "verify-commit", &oid, "--raw"])
+            .output();
+
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    // Good signature
+                    let mut result = StyledString::new();
+                    result.append_styled("[G]", BaseColor::Green.light());
+                    Ok(Some(result))
+                } else {
+                    // Bad signature
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    if stderr.contains("BAD signature") {
+                        let mut result = StyledString::new();
+                        result.append_styled("[B]", BaseColor::Red.light());
+                        Ok(Some(result))
+                    } else if stderr.contains("No signature") {
+                        let mut result = StyledString::new();
+                        result.append_styled("[N]", BaseColor::Yellow.light());
+                        Ok(Some(result))
+                    } else {
+                        // Unknown error
+                        let mut result = StyledString::new();
+                        result.append_styled("[?]", BaseColor::Magenta.light());
+                        Ok(Some(result))
+                    }
+                }
+            }
+            Err(_) => {
+                // Error running command
+                let mut result = StyledString::new();
+                result.append_styled("[E]", BaseColor::Red.light());
+                Ok(Some(result))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::ops::{Add, Sub};
