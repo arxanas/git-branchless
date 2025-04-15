@@ -592,6 +592,7 @@ impl NodeDescriptor for SignatureStatusDescriptor {
 #[cfg(test)]
 mod tests {
     use std::ops::{Add, Sub};
+    use std::str::FromStr;
     use std::time::Duration;
 
     use super::*;
@@ -647,6 +648,35 @@ Differential Revision: phabricator.com/D123";
             let delta = RelativeTimeDescriptor::describe_time_delta(now, previous_time)?;
             assert_eq!(delta, expected);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_signature_status_descriptor() -> eyre::Result<()> {
+        // Create a mock where is_enabled is false
+        let mut descriptor = SignatureStatusDescriptor {
+            is_enabled: false,
+            repo_path: String::from("/tmp"),
+        };
+
+        // Create a mock object - doesn't matter what it contains since is_enabled is false
+        let object = NodeObject::GarbageCollected {
+            oid: NonZeroOid::from_str("1234567890123456789012345678901234567890").unwrap(),
+        };
+
+        // With is_enabled = false, it should return None
+        let glyphs = Glyphs::text();
+        let result = descriptor.describe_node(&glyphs, &object)?;
+        assert!(result.is_none());
+
+        // Now test with is_enabled = true
+        descriptor.is_enabled = true;
+
+        // We can't easily test the actual git command execution in a unit test,
+        // but we can verify that the method doesn't panic and returns a result
+        let result = descriptor.describe_node(&glyphs, &object);
+        assert!(result.is_ok());
 
         Ok(())
     }
