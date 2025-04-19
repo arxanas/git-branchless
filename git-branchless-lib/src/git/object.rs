@@ -4,14 +4,16 @@ use bstr::{BString, ByteSlice};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use git2::message_trailers_bytes;
-use tracing::instrument;
+use git2_ext::ops::Sign;
+use itertools::Itertools;
+use tracing::{error, instrument};
 
 use crate::core::formatting::{Glyphs, StyledStringBuilder};
 use crate::core::node_descriptors::{
     render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject, Redactor,
 };
 use crate::git::oid::make_non_zero_oid;
-use crate::git::repo::{Error, Result, Signature};
+use crate::git::repo::{Error, Repo, Result, Signature};
 use crate::git::{NonZeroOid, Time, Tree};
 
 use super::MaybeZeroOid;
@@ -291,26 +293,59 @@ impl<'repo> Commit<'repo> {
 
     /// Amend this existing commit.
     /// Returns the OID of the resulting new commit.
-    #[instrument]
+    #[instrument(skip(signer))]
     pub fn amend_commit(
         &self,
-        update_ref: Option<&str>,
+        repo: &'repo Repo,
         author: Option<&Signature>,
         committer: Option<&Signature>,
         message: Option<&str>,
         tree: Option<&Tree>,
+        signer: Option<&dyn Sign>,
     ) -> Result<NonZeroOid> {
-        let oid = self
-            .inner
-            .amend(
-                update_ref,
-                author.map(|author| &author.inner),
-                committer.map(|committer| &committer.inner),
-                None,
-                message,
-                tree.map(|tree| &tree.inner),
-            )
-            .map_err(Error::Amend)?;
+        let parents = self.get_parents();
+        let parents = parents.iter().map(|parent| &parent.inner).collect_vec();
+
+        let new_author = match author {
+            Some(author) => &author.inner,
+            None => &self.inner.author(),
+        };
+        let new_committer = match committer {
+            Some(committer) => &committer.inner,
+            None => &self.inner.committer(),
+        };
+        let new_message = match message {
+            Some(message) => message,
+            None => match std::str::from_utf8(self.inner.message_bytes()) {
+                Ok(message) => message,
+                Err(e) => {
+                    error!(
+                        ?message,
+                        ?e,
+                        "failed to decode git commit message, not valid UTF-8"
+                    );
+                    return Err(Error::DecodeUtf8 { item: "message" });
+                }
+            },
+        };
+        let new_tree = match tree {
+            Some(tree) => &tree.inner,
+            None => &self.inner.tree().map_err(|err| Error::FindTree {
+                source: err,
+                oid: self.inner.tree_id().into(),
+            })?,
+        };
+
+        let oid = git2_ext::ops::commit(
+            &repo.inner,
+            new_author,
+            new_committer,
+            new_message,
+            new_tree,
+            parents.as_slice(),
+            signer,
+        )
+        .map_err(Error::Amend)?;
         Ok(make_non_zero_oid(oid))
     }
 }

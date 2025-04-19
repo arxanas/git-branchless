@@ -15,6 +15,7 @@ use branchless::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlan, RebasePlanBuilder, RepoResource,
 };
+use branchless::git::SignOption;
 use branchless::testing::{make_git, Git};
 
 #[test]
@@ -765,6 +766,7 @@ fn create_and_execute_plan(
             reset: false,
             render_smartlog: false,
         },
+        sign_option: SignOption::Disable,
     };
     let git_run_info = git.get_git_run_info();
     let result = execute_rebase_plan(

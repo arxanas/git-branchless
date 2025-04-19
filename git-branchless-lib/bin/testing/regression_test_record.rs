@@ -76,12 +76,12 @@ fn assert_trees_equal(
         let message = message.to_str_lossy();
         let parents = current_commit.get_parents();
         let actual_oid = repo.create_commit(
-            None,
             &author,
             &committer,
             &message,
             &actual_tree,
             parents.iter().collect(),
+            None,
         )?;
         repo.find_commit_or_fail(actual_oid)?
     };
