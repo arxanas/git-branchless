@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `scm-record` upgraded to [v0.5.0](https://github.com/arxanas/scm-record/releases/tag/v0.5.0).
 - (#1463): `git switch` now accepts a revset whose sole head will be checked out
+- BREAKING: The minimum supported Rust version (MSRV) is now 1.80.
 
 ## [v0.10.0] - 2024-10-10
 

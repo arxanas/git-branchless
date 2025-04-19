@@ -318,6 +318,16 @@ pub mod env_vars {
     /// See <https://git-scm.com/docs/git#Documentation/git.txt---exec-pathltpathgt>.
     pub const TEST_GIT_EXEC_PATH: &str = "TEST_GIT_EXEC_PATH";
 
+    /// Path to the `ssh-keygen` executable to use for signing functionality in
+    /// tests.
+    pub const TEST_SSH_KEYGEN: &str = "TEST_SSH_KEYGEN";
+
+    /// Path to the `gpg` executable to use for signing functionality in tests.
+    pub const TEST_GPG: &str = "TEST_GPG";
+
+    /// Path to the `gpgsm` executable to use for signing functionality in tests.
+    pub const TEST_GPGSM: &str = "TEST_GPGSM";
+
     /// Specifies `git-branchless` subcommands to invoke directly.
     ///
     /// For example, `TEST_SEPARATE_COMMAND_BINARIES=init test`, this function
@@ -379,6 +389,53 @@ or set `env.{0}` in your `config.toml` \
         })?;
         let git_exec_path = PathBuf::from(&git_exec_path);
         Ok(git_exec_path)
+    }
+
+    /// Get the path to the `ssh-keygen` executable for testing.
+    #[instrument]
+    pub fn get_path_to_ssh_keygen() -> eyre::Result<PathBuf> {
+        let path_to_ssh_keygen = std::env::var_os(TEST_SSH_KEYGEN).ok_or_else(|| {
+            eyre::eyre!(
+                "No path to `ssh-keygen` executable was set. \
+Try running as: `{0}=$(which ssh-keygen) cargo test ...` \
+or set `env.{0}` in your `config.toml` \
+(see https://doc.rust-lang.org/cargo/reference/config.html)",
+                TEST_SSH_KEYGEN,
+            )
+        })?;
+        let path_to_ssh_keygen = PathBuf::from(&path_to_ssh_keygen);
+        Ok(path_to_ssh_keygen)
+    }
+
+    /// Get the path to the `gpg` executable for testing.
+    #[instrument]
+    pub fn get_path_to_gpg() -> eyre::Result<PathBuf> {
+        let path_to_gpg = std::env::var_os(TEST_GPG).ok_or_else(|| {
+            eyre::eyre!(
+                "No path to `gpg` executable was set. \
+Try running as: `{0}=$(which gpg) cargo test ...` \
+or set `env.{0}` in your `config.toml` \
+(see https://doc.rust-lang.org/cargo/reference/config.html)",
+                TEST_GPG,
+            )
+        })?;
+        let path_to_gpg = PathBuf::from(&path_to_gpg);
+        Ok(path_to_gpg)
+    }
+    /// Get the path to the `gpgsm` executable for testing.
+    #[instrument]
+    pub fn get_path_to_gpgsm() -> eyre::Result<PathBuf> {
+        let path_to_gpgsm = std::env::var_os(TEST_GPGSM).ok_or_else(|| {
+            eyre::eyre!(
+                "No path to `gpgsm` executable was set. \
+Try running as: `{0}=$(which gpgsm) cargo test ...` \
+or set `env.{0}` in your `config.toml` \
+(see https://doc.rust-lang.org/cargo/reference/config.html)",
+                TEST_GPGSM,
+            )
+        })?;
+        let path_to_gpgsm = PathBuf::from(&path_to_gpgsm);
+        Ok(path_to_gpgsm)
     }
 
     /// Determine whether the specified binary should be run separately. See

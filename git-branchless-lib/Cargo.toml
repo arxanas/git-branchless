@@ -6,7 +6,7 @@ keywords = ["git"]
 license = "MIT OR Apache-2.0"
 name = "git-branchless-lib"
 repository = "https://github.com/arxanas/git-branchless"
-rust-version = "1.64.0"
+rust-version = "1.80"
 version = "0.10.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,6 +17,9 @@ name = "branchless"
 [features]
 default = []
 integration-test-bin = []
+test_gpg = []
+test_ssh = []
+test_x509 = []
 
 [[bench]]
 harness = false
@@ -56,6 +59,7 @@ eden_dag = { workspace = true }
 eyre = { workspace = true }
 futures = { workspace = true }
 git2 = { workspace = true }
+git2-ext = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }

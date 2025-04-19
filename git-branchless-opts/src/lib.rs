@@ -7,7 +7,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 // These URLs are printed verbatim in help output, so we don't want to add extraneous Markdown
 // formatting.
 #![allow(rustdoc::bare_urls)]
@@ -94,6 +94,10 @@ pub struct MoveOptions {
     /// executing it.
     #[clap(action, long = "debug-dump-rebase-plan")]
     pub dump_rebase_plan: bool,
+
+    /// GPG-sign commits.
+    #[clap(flatten)]
+    pub sign_options: SignOptions,
 }
 
 /// Options for traversing commits.
@@ -181,6 +185,46 @@ pub struct SwitchOptions {
     /// text is used to pre-fill the interactive commit selector.
     #[clap(value_parser)]
     pub target: Option<Revset>,
+}
+
+/// Options for signing commits
+#[derive(Args, Debug, Clone)]
+pub struct SignOptions {
+    /// GPG-sign commits. The `keyid` argument is optional and defaults to the committer
+    /// identity.
+    #[clap(
+        short = 'S',
+        long = "gpg-sign",
+        value_name = "keyid",
+        conflicts_with = "no_gpg_sign",
+        num_args(0..=1),
+        default_missing_value(""),
+    )]
+    pub gpg_sign: Option<String>,
+
+    /// Countermand `commit.gpgSign` configuration variable.
+    #[clap(long = "no-gpg-sign", conflicts_with = "gpg_sign")]
+    pub no_gpg_sign: bool,
+}
+
+impl From<SignOptions> for lib::git::SignOption {
+    fn from(value: SignOptions) -> Self {
+        let SignOptions {
+            gpg_sign,
+            no_gpg_sign,
+        } = value;
+        if no_gpg_sign {
+            Self::Disable
+        } else if let Some(keyid) = gpg_sign {
+            if keyid.as_str() != "" {
+                Self::KeyOverride(keyid)
+            } else {
+                Self::UseConfigKey
+            }
+        } else {
+            Self::UseConfig
+        }
+    }
 }
 
 /// Internal use.
@@ -329,6 +373,10 @@ pub struct RecordArgs {
     /// After making the new commit, switch back to the previous commit.
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
+
+    /// Options for signing commits.
+    #[clap(flatten)]
+    pub sign_options: SignOptions,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
@@ -358,6 +406,10 @@ pub struct SmartlogArgs {
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,
+
+    /// Show GPG signature status for each commit.
+    #[clap(action, long = "show-signature")]
+    pub show_signature: bool,
 }
 
 /// The Git hosting provider to use, called a "forge".
@@ -639,6 +691,10 @@ pub enum Command {
         /// use with `git rebase --autosquash`) targeting the supplied commit.
         #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages", "discard"]))]
         commit_to_fixup: Option<Revset>,
+
+        /// GPG-sign commits.
+        #[clap(flatten)]
+        sign_options: SignOptions,
     },
 
     /// `smartlog` command.

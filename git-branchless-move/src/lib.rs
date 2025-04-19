@@ -10,7 +10,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -261,6 +261,7 @@ pub fn r#move(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        ref sign_options,
     } = *move_options;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
@@ -486,6 +487,7 @@ pub fn r#move(
                 force_on_disk,
                 resolve_merge_conflicts,
                 check_out_commit_options: Default::default(),
+                sign_option: sign_options.to_owned().into(),
             };
             execute_rebase_plan(
                 effects,
