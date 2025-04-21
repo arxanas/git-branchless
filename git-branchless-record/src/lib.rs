@@ -32,7 +32,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{
     process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo,
-    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand,
+    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, SignOption, Stage, UpdateIndexCommand,
     WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::try_exit_code;
@@ -58,6 +58,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        sign_options,
     } = args;
     record(
         &effects,
@@ -68,6 +69,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        &sign_options.into(),
     )
 }
 
@@ -81,6 +83,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -154,17 +157,23 @@ fn record(
                 &snapshot,
                 event_tx_id,
                 messages,
+                sign_option,
             )?);
         }
     } else {
-        let args = {
-            let mut args = vec!["commit"];
-            args.extend(messages.iter().flat_map(|message| ["--message", message]));
-            if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-                args.push("--all");
-            }
-            args
-        };
+        let mut args = vec!["commit"];
+
+        args.extend(messages.iter().flat_map(|message| ["--message", message]));
+
+        if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
+            args.push("--all");
+        }
+
+        let sign_flag = sign_option.as_git_flag();
+        if let Some(flag) = &sign_flag {
+            args.push(flag);
+        }
+
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
     }
 
@@ -239,7 +248,8 @@ fn record(
             effects,
             git_run_info,
             now,
-            event_tx_id
+            event_tx_id,
+            sign_option,
         )?);
     }
 
@@ -254,6 +264,7 @@ fn record_interactive(
     snapshot: &WorkingCopySnapshot,
     event_tx_id: EventTransactionId,
     messages: Vec<String>,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     let old_tree = snapshot.commit_stage0.get_tree()?;
     let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -405,13 +416,17 @@ fn record_interactive(
         &update_index_script,
     )?;
 
-    let args = {
-        let mut args = vec!["commit"];
-        if !message.is_empty() {
-            args.extend(["--message", &message]);
-        }
-        args
-    };
+    let mut args = vec!["commit"];
+
+    if !message.is_empty() {
+        args.extend(["--message", &message]);
+    }
+
+    let sign_flag = sign_option.as_git_flag();
+    if let Some(flag) = &sign_flag {
+        args.push(flag);
+    }
+
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
 
@@ -421,6 +436,7 @@ fn insert_before_siblings(
     git_run_info: &GitRunInfo,
     now: SystemTime,
     event_tx_id: EventTransactionId,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     // Reopen the repository since references may have changed.
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -548,6 +564,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         force_on_disk: false,
         resolve_merge_conflicts: false,
         check_out_commit_options: Default::default(),
+        sign_option: sign_option.to_owned(),
     };
     let result = execute_rebase_plan(
         effects,

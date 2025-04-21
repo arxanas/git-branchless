@@ -52,8 +52,9 @@ use lib::core::rewrite::{
 use lib::git::{
     get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
     make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid,
-    Repo, SerializedNonZeroOid, SerializedTestResult, TestCommand, WorkingCopyChangesType,
-    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    Repo, SerializedNonZeroOid, SerializedTestResult, SignOption, TestCommand,
+    WorkingCopyChangesType, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE,
 };
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
@@ -388,6 +389,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                 resolve_merge_conflicts,
                 dump_rebase_constraints,
                 dump_rebase_plan,
+                sign_options,
             } = move_options;
 
             let force_in_memory = true;
@@ -416,6 +418,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                     render_smartlog: false,
                     ..Default::default()
                 },
+                sign_option: sign_options.to_owned().into(),
             };
             let permissions =
                 match RebasePlanPermissions::verify_rewrite_set(dag, build_options, commits)? {
@@ -731,6 +734,7 @@ fn set_abort_trap(
                 render_smartlog: false,
                 ..Default::default()
             },
+            sign_option: SignOption::Disable,
         },
     )? {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
@@ -1983,12 +1987,12 @@ fn apply_fixes(
                 .try_collect()?;
             let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
             let fixed_commit_oid = repo.create_commit(
-                None,
                 &original_commit.get_author(),
                 &original_commit.get_committer(),
                 commit_message,
                 &fixed_tree,
                 parents.iter().collect(),
+                None,
             )?;
             if original_commit_oid == fixed_commit_oid {
                 continue;

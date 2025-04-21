@@ -42,7 +42,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_opts::{ResolveRevsetOptions, Revset, SignOptions};
 use git_branchless_revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
@@ -90,6 +90,7 @@ pub fn reword(
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
     force_rewrite_public_commits: bool,
+    sign_options: SignOptions,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
@@ -262,7 +263,7 @@ pub fn reword(
             let message = messages.get(&commit.get_oid()).unwrap();
             // This looks funny, but just means "leave everything but the message as is"
             let replacement_oid =
-                commit.amend_commit(None, None, None, Some(message.as_str()), None)?;
+                commit.amend_commit(&repo, None, None, Some(message.as_str()), None, None)?;
             builder.move_subtree(commit.get_oid(), commit.get_parent_oids())?;
             builder.replace_commit(commit.get_oid(), replacement_oid)?;
         }
@@ -295,6 +296,7 @@ pub fn reword(
             reset: false,
             render_smartlog: false,
         },
+        sign_option: sign_options.into(),
     };
     let result = execute_rebase_plan(
         effects,

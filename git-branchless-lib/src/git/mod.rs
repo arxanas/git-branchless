@@ -8,6 +8,7 @@ mod oid;
 mod reference;
 mod repo;
 mod run;
+mod sign;
 mod snapshot;
 mod status;
 mod test;
@@ -27,6 +28,7 @@ pub use repo::{
     Result as RepoResult, Time,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
+pub use sign::{get_signer, SignOption};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
 pub use status::{FileMode, FileStatus, StatusEntry};
 pub use test::{

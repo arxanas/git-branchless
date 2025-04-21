@@ -23,6 +23,7 @@ use chrono::{DateTime, Utc};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use git2::DiffOptions;
+use git2_ext::ops::Sign;
 use itertools::Itertools;
 use thiserror::Error;
 use tracing::{instrument, warn};
@@ -1254,31 +1255,30 @@ impl Repo {
     }
 
     /// Create a new commit.
-    #[instrument]
+    #[instrument(skip(signer))]
     pub fn create_commit(
         &self,
-        update_ref: Option<&str>,
         author: &Signature,
         committer: &Signature,
         message: &str,
         tree: &Tree,
         parents: Vec<&Commit>,
+        signer: Option<&dyn Sign>,
     ) -> Result<NonZeroOid> {
         let parents = parents
             .iter()
             .map(|commit| &commit.inner)
             .collect::<Vec<_>>();
-        let oid = self
-            .inner
-            .commit(
-                update_ref,
-                &author.inner,
-                &committer.inner,
-                message,
-                &tree.inner,
-                parents.as_slice(),
-            )
-            .map_err(Error::CreateCommit)?;
+        let oid = git2_ext::ops::commit(
+            &self.inner,
+            &author.inner,
+            &committer.inner,
+            message,
+            &tree.inner,
+            parents.as_slice(),
+            signer,
+        )
+        .map_err(Error::CreateCommit)?;
         Ok(make_non_zero_oid(oid))
     }
 
@@ -1463,13 +1463,14 @@ impl Repo {
         } else {
             vec![]
         };
+        // TODO: See whether this needs signature support
         let dehydrated_commit_oid = self.create_commit(
-            None,
             &signature,
             &signature,
             &message,
             &dehydrated_tree,
             parents.iter().collect_vec(),
+            None,
         )?;
         let dehydrated_commit = self.find_commit_or_fail(dehydrated_commit_oid)?;
         Ok(dehydrated_commit)
