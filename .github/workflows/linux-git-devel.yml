@@ -66,6 +66,9 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git-master/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
+          export TEST_GPG=$(which gpg)
+          export TEST_GPGSM=$(which gpgsm)
+          export TEST_SSH_KEYGEN=$(which ssh-keygen)
           (cd git-branchless && cargo test --all-features --examples --tests --workspace --no-fail-fast)
 
       - name: Run Rust tests on Git `next`

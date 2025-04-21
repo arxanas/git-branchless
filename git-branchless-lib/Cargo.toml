@@ -17,6 +17,9 @@ name = "branchless"
 [features]
 default = []
 integration-test-bin = []
+test_gpg = []
+test_ssh = []
+test_x509 = []
 
 [[bench]]
 harness = false
