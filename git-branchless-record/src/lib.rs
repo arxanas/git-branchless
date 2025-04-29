@@ -129,6 +129,7 @@ fn record(
             None,
             &CheckOutCommitOptions {
                 additional_args: vec![OsString::from("-b"), OsString::from(branch_name)],
+                force_detach: false,
                 reset: false,
                 render_smartlog: false,
             },
@@ -227,6 +228,7 @@ fn record(
                 checkout_target,
                 &CheckOutCommitOptions {
                     additional_args: vec![],
+                    force_detach: false,
                     reset: false,
                     render_smartlog: false,
                 },
