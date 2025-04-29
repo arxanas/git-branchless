@@ -44,6 +44,9 @@ pub struct CheckOutCommitOptions {
     /// Additional arguments to pass to `git checkout`.
     pub additional_args: Vec<OsString>,
 
+    /// Ignore the `autoSwitchBranches` setting?
+    pub force_detach: bool,
+
     /// Use `git reset` rather than `git checkout`; that is, leave the index and
     /// working copy unchanged, and just adjust the `HEAD` pointer.
     pub reset: bool,
@@ -56,6 +59,7 @@ impl Default for CheckOutCommitOptions {
     fn default() -> Self {
         Self {
             additional_args: Default::default(),
+            force_detach: false,
             reset: false,
             render_smartlog: true,
         }
@@ -116,6 +120,7 @@ pub fn check_out_commit(
 ) -> EyreExitOr<()> {
     let CheckOutCommitOptions {
         additional_args,
+        force_detach,
         reset,
         render_smartlog,
     } = options;
@@ -134,7 +139,7 @@ pub fn check_out_commit(
         create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
     }
 
-    let target = if get_auto_switch_branches(repo)? && !reset {
+    let target = if get_auto_switch_branches(repo)? && !reset && !force_detach {
         maybe_get_branch_name(target, oid, repo)?
     } else {
         target
