@@ -737,6 +737,9 @@ fn test_install_man_pages() -> eyre::Result<()> {
     git\-branchless\-smartlog(1)
     `smartlog` command
     .TP
+    git\-branchless\-split(1)
+    Split commits
+    .TP
     git\-branchless\-submit(1)
     Push commits to a remote
     .TP

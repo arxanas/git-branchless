@@ -95,6 +95,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("restack", "restack"),
     ("reword", "reword"),
     ("sl", "smartlog"),
+    ("split", "split"),
     ("smartlog", "smartlog"),
     ("submit", "submit"),
     ("sw", "switch"),

@@ -652,6 +652,25 @@ pub enum Command {
         subcommand: SnapshotSubcommand,
     },
 
+    /// Split commits.
+    Split {
+        /// Commit to split. If a revset is given, it must resolve to a single commit.
+        #[clap(value_parser)]
+        revset: Revset,
+
+        /// Files to extract from the commit.
+        #[clap(value_parser, required = true)]
+        files: Vec<String>,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
+    },
+
     /// Push commits to a remote.
     Submit(SubmitArgs),
 

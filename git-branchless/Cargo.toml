@@ -112,6 +112,9 @@ name = "test_reword"
 name = "test_snapshot"
 
 [[test]]
+name = "test_split"
+
+[[test]]
 name = "test_sync"
 
 [[test]]
