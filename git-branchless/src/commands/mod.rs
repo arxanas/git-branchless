@@ -182,14 +182,19 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
 
         Command::Split {
             detach,
+            discard,
             files,
             resolve_revset_options,
             revset,
             move_options,
         } => {
-            let split_mode = match detach {
-                true => split::SplitMode::DetachAfter,
-                false => split::SplitMode::InsertAfter,
+            let split_mode = match (detach, discard) {
+                (true, false) => split::SplitMode::DetachAfter,
+                (false, true) => split::SplitMode::Discard,
+                (false, false) => split::SplitMode::InsertAfter,
+                (true, true) => {
+                    unreachable!("clap should prevent this")
+                }
             };
 
             split::split(
