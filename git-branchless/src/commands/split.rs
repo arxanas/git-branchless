@@ -38,6 +38,7 @@ use tracing::instrument;
 /// What should `split` do with the extracted changes?
 pub enum SplitMode {
     DetachAfter,
+    Discard,
     InsertAfter,
 }
 
@@ -128,12 +129,14 @@ pub fn split(
     let (parent_tree, mut remainder_tree) = match (&split_mode, parent_commits.as_slice()) {
         // split the commit by removing the changes from the target, and then
         // cherry picking the orignal target as the "extracted" commit
-        (SplitMode::InsertAfter, [only_parent]) | (SplitMode::DetachAfter, [only_parent]) => {
+        (SplitMode::InsertAfter, [only_parent])
+        | (SplitMode::Discard, [only_parent])
+        | (SplitMode::DetachAfter, [only_parent]) => {
             (only_parent.get_tree()?, target_commit.get_tree()?)
         }
 
         // no parent: use an empty tree for comparison
-        (SplitMode::InsertAfter, []) | (SplitMode::DetachAfter, []) => {
+        (SplitMode::InsertAfter, []) | (SplitMode::Discard, []) | (SplitMode::DetachAfter, []) => {
             (make_empty_tree(&repo)?, target_commit.get_tree()?)
         }
 
@@ -218,9 +221,9 @@ pub fn split(
         let target_entry = target_tree.get_path(path)?;
         let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
             // added => remove from remainder commit
-            (None, Some(_), SplitMode::InsertAfter) | (None, Some(_), SplitMode::DetachAfter) => {
-                remainder_tree.remove(&repo, path)?
-            }
+            (None, Some(_), SplitMode::InsertAfter)
+            | (None, Some(_), SplitMode::DetachAfter)
+            | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
 
             // deleted or modified => replace w/ parent content in split commit
             (Some(parent_entry), _, _) => {
@@ -280,6 +283,7 @@ pub fn split(
     }])?;
 
     let extracted_commit_oid = match split_mode {
+        SplitMode::Discard => None,
         SplitMode::InsertAfter | SplitMode::DetachAfter => {
             let extracted_tree = repo.cherry_pick_fast(
                 &target_commit,
@@ -354,6 +358,7 @@ pub fn split(
     struct CleanUp {
         checkout_target: Option<CheckoutTarget>,
         rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)>,
+        reset_index: bool,
     }
 
     let cleanup = match (target_state, &split_mode, extracted_commit_oid) {
@@ -363,26 +368,36 @@ pub fn split(
             CleanUp {
                 checkout_target: None,
                 rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(extracted_commit_oid))],
+                reset_index: false,
             }
         }
+
+        (TargetState::CurrentBranch, SplitMode::Discard, None) => CleanUp {
+            checkout_target: None,
+            rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            reset_index: true,
+        },
 
         // commit to split checked out as detached HEAD, don't extend any
         // branches, but explicitly check out the newly split commit
         (TargetState::DetachedHead, _, _) => CleanUp {
             checkout_target: Some(CheckoutTarget::Oid(remainder_commit_oid)),
             rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            reset_index: false,
         },
 
         // some other commit or branch was checked out, default behavior is fine
-        (TargetState::CurrentBranch, _, _) | (TargetState::Other, _, _) => CleanUp {
+        (TargetState::CurrentBranch | TargetState::Other, _, _) => CleanUp {
             checkout_target: None,
             rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            reset_index: false,
         },
     };
 
     let CleanUp {
         checkout_target,
         rewritten_oids,
+        reset_index,
     } = cleanup;
 
     move_branches(
@@ -408,6 +423,11 @@ pub fn split(
                 render_smartlog: false,
             },
         )?);
+    }
+
+    if reset_index {
+        let mut index = repo.get_index()?;
+        index.update_from_tree(&remainder_tree)?;
     }
 
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
