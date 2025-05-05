@@ -5,7 +5,7 @@ use tracing::instrument;
 
 use crate::core::eventlog::EventTransactionId;
 
-use super::{FileMode, GitRunInfo, GitRunOpts, GitRunResult, MaybeZeroOid, NonZeroOid, Repo};
+use super::{FileMode, GitRunInfo, GitRunOpts, GitRunResult, MaybeZeroOid, NonZeroOid, Repo, Tree};
 
 /// The possible stages for items in the index.
 #[derive(Copy, Clone, Debug)]
@@ -87,6 +87,12 @@ impl Index {
                     FileMode::from(mode)
                 },
             })
+    }
+
+    /// Update the index from the given tree and write it to disk.
+    pub fn update_from_tree(&mut self, tree: &Tree) -> eyre::Result<()> {
+        self.inner.read_tree(&tree.inner)?;
+        self.inner.write().wrap_err("writing index")
     }
 }
 

@@ -663,8 +663,12 @@ pub enum Command {
         files: Vec<String>,
 
         /// Restack any descendents onto the split commit, not the extracted commit.
-        #[clap(action, short = 'd', long = "detach")]
+        #[clap(action, short = 'd', long)]
         detach: bool,
+
+        /// After extracting the changes, don't recommit them.
+        #[clap(action, short = 'D', long = "discard", conflicts_with("detach"))]
+        discard: bool,
 
         /// Options for resolving revset expressions.
         #[clap(flatten)]
