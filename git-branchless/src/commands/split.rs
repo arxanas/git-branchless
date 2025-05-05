@@ -40,6 +40,7 @@ pub enum SplitMode {
     DetachAfter,
     Discard,
     InsertAfter,
+    InsertBefore,
 }
 
 /// Split a commit and restack its descendants.
@@ -123,6 +124,26 @@ pub fn split(
         }
     };
 
+    //
+    // a-t-b
+    //
+    // a-r-x-b (default)
+    // a-x-r-b (before)
+    // a-r-b   (detach)
+    //   \-x
+    // a-r-b   (discard)
+    //
+    // default: x == t tree, x is t with changes removed
+    // before:  r == t tree, e is a with changes added
+    // detach:  (same as default, different rebase)
+    // discard: (same as default, w/o any rebase)
+    //
+    // below:
+    // a => parent
+    // t => target
+    // r => remainder
+    // x => extracted
+
     let target_commit = repo.find_commit_or_fail(target_oid)?;
     let target_tree = target_commit.get_tree()?;
     let parent_commits = target_commit.get_parents();
@@ -135,10 +156,19 @@ pub fn split(
             (only_parent.get_tree()?, target_commit.get_tree()?)
         }
 
+        // split the commit by adding the changed to a copy of the parent tree,
+        // then rebasing the orignal target onto the extracted commit
+        (SplitMode::InsertBefore, [only_parent]) => {
+            (only_parent.get_tree()?, only_parent.get_tree()?)
+        }
+
         // no parent: use an empty tree for comparison
         (SplitMode::InsertAfter, []) | (SplitMode::Discard, []) | (SplitMode::DetachAfter, []) => {
             (make_empty_tree(&repo)?, target_commit.get_tree()?)
         }
+
+        // no parent: add extracted changes to an empty tree
+        (SplitMode::InsertBefore, []) => (make_empty_tree(&repo)?, make_empty_tree(&repo)?),
 
         (_, [..]) => {
             writeln!(
@@ -220,6 +250,15 @@ pub fn split(
 
         let target_entry = target_tree.get_path(path)?;
         let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
+            // added or modified & InsertBefore => add to extracted commit
+            (None, Some(commit_entry), SplitMode::InsertBefore)
+            | (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
+                remainder_tree.add_or_replace(&repo, path, &commit_entry)?
+            }
+
+            // removed & InsertBefore => remove from remainder commit
+            (Some(_), None, SplitMode::InsertBefore) => remainder_tree.remove(&repo, path)?,
+
             // added => remove from remainder commit
             (None, Some(_), SplitMode::InsertAfter)
             | (None, Some(_), SplitMode::DetachAfter)
@@ -251,7 +290,11 @@ pub fn split(
             .expect("should have been found");
     }
     let message = {
-        let (old_tree, new_tree) = (&remainder_tree, &target_tree);
+        let (old_tree, new_tree) = if let SplitMode::InsertBefore = &split_mode {
+            (&parent_tree, &remainder_tree)
+        } else {
+            (&remainder_tree, &target_tree)
+        };
         let diff = repo.get_diff_between_trees(
             effects,
             Some(old_tree),
@@ -262,8 +305,25 @@ pub fn split(
         summarize_diff_for_temporary_commit(&diff)?
     };
 
-    let remainder_commit_oid =
-        target_commit.amend_commit(None, None, None, None, Some(&remainder_tree))?;
+    // before => split commit is created on parent as "extracted", target is
+    //           rebased onto split
+    // after => target is amended as "split", split is cherry picked onto split
+    //          as "extracted"
+
+    // FIXME terminology is wrong here: "remainder" is correct for `After` mode,
+    // but this is actually the "extracted" commit for `InsertBefore` mode
+    let remainder_commit_oid = if let SplitMode::InsertBefore = split_mode {
+        repo.create_commit(
+            None,
+            &target_commit.get_author(),
+            &target_commit.get_committer(),
+            format!("temp(split): {message}").as_str(),
+            &remainder_tree,
+            parent_commits.iter().collect(),
+        )?
+    } else {
+        target_commit.amend_commit(None, None, None, None, Some(&remainder_tree))?
+    };
     let remainder_commit = repo.find_commit_or_fail(remainder_commit_oid)?;
 
     if remainder_commit.is_empty() {
@@ -282,8 +342,11 @@ pub fn split(
         new_commit_oid: MaybeZeroOid::NonZero(remainder_commit_oid),
     }])?;
 
+    // FIXME terminology is also wrong here: "extracted" is correct for `After`
+    // and `Discard` modes, but the extracted commit is not actually None for
+    // `InsertBefore`; it's just handled in a different way
     let extracted_commit_oid = match split_mode {
-        SplitMode::Discard => None,
+        SplitMode::InsertBefore | SplitMode::Discard => None,
         SplitMode::InsertAfter | SplitMode::DetachAfter => {
             let extracted_tree = repo.cherry_pick_fast(
                 &target_commit,
@@ -298,7 +361,11 @@ pub fn split(
                 &target_commit.get_committer(),
                 format!("temp(split): {message}").as_str(),
                 &extracted_tree,
-                vec![&remainder_commit],
+                if let SplitMode::InsertBefore = &split_mode {
+                    parent_commits.iter().collect()
+                } else {
+                    vec![&remainder_commit]
+                },
             )?;
 
             // see git-branchless/src/commands/amend.rs:172
@@ -358,31 +425,57 @@ pub fn split(
     struct CleanUp {
         checkout_target: Option<CheckoutTarget>,
         rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)>,
+        rebase_force_detach: bool,
         reset_index: bool,
     }
 
     let cleanup = match (target_state, &split_mode, extracted_commit_oid) {
-        // branch @ split commit checked out: extend branch to include extracted
-        // commit; branch will stay checked out w/o any explicit checkout
+        // branch @ target commit checked out: extend branch to include
+        // extracted commit; branch will stay checked out w/o any explicit
+        // checkout
         (TargetState::CurrentBranch, SplitMode::InsertAfter, Some(extracted_commit_oid)) => {
             CleanUp {
                 checkout_target: None,
                 rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(extracted_commit_oid))],
+                rebase_force_detach: false,
                 reset_index: false,
             }
         }
 
+        // same as above, but Discard; don't move branches, but do force reset
         (TargetState::CurrentBranch, SplitMode::Discard, None) => CleanUp {
             checkout_target: None,
             rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            rebase_force_detach: false,
             reset_index: true,
         },
 
-        // commit to split checked out as detached HEAD, don't extend any
-        // branches, but explicitly check out the newly split commit
-        (TargetState::DetachedHead, _, _) => CleanUp {
+        // same as above, but InsertBefore; do not move branches
+        (TargetState::CurrentBranch, SplitMode::InsertBefore, _) => CleanUp {
+            checkout_target: None,
+            rewritten_oids: vec![],
+            rebase_force_detach: false,
+            reset_index: false,
+        },
+
+        // target checked out as detached HEAD, don't extend any branches, but
+        // explicitly check out the newly split commit
+        (
+            TargetState::DetachedHead,
+            SplitMode::InsertAfter | SplitMode::Discard | SplitMode::DetachAfter,
+            _,
+        ) => CleanUp {
             checkout_target: Some(CheckoutTarget::Oid(remainder_commit_oid)),
             rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            rebase_force_detach: false,
+            reset_index: false,
+        },
+
+        // same as above, but InsertBefore; do not move branches
+        (TargetState::DetachedHead, SplitMode::InsertBefore, _) => CleanUp {
+            checkout_target: None,
+            rewritten_oids: vec![],
+            rebase_force_detach: true,
             reset_index: false,
         },
 
@@ -390,6 +483,7 @@ pub fn split(
         (TargetState::CurrentBranch | TargetState::Other, _, _) => CleanUp {
             checkout_target: None,
             rewritten_oids: vec![(target_oid, MaybeZeroOid::NonZero(remainder_commit_oid))],
+            rebase_force_detach: false,
             reset_index: false,
         },
     };
@@ -397,6 +491,7 @@ pub fn split(
     let CleanUp {
         checkout_target,
         rewritten_oids,
+        rebase_force_detach,
         reset_index,
     } = cleanup;
 
@@ -431,21 +526,18 @@ pub fn split(
     }
 
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
-    let children = dag.query_children(CommitSet::from(target_oid))?;
-    for child in dag.commit_set_to_vec(&children)? {
-        match (&split_mode, extracted_commit_oid) {
-            (_, None) => builder.move_subtree(child, vec![remainder_commit_oid])?,
-            (_, Some(extracted_commit_oid)) => {
-                builder.move_subtree(child, vec![extracted_commit_oid])?
-            }
-        }
-
-        match (&split_mode, extracted_commit_oid) {
-            (_, None) | (SplitMode::DetachAfter, Some(_)) => {
-                builder.move_subtree(child, vec![remainder_commit_oid])?
-            }
-            (_, Some(extracted_commit_oid)) => {
-                builder.move_subtree(child, vec![extracted_commit_oid])?
+    if let SplitMode::InsertBefore = &split_mode {
+        builder.move_subtree(target_oid, vec![remainder_commit_oid])?
+    } else {
+        let children = dag.query_children(CommitSet::from(target_oid))?;
+        for child in dag.commit_set_to_vec(&children)? {
+            match (&split_mode, extracted_commit_oid) {
+                (_, None) | (SplitMode::DetachAfter, Some(_)) => {
+                    builder.move_subtree(child, vec![remainder_commit_oid])?
+                }
+                (_, Some(extracted_commit_oid)) => {
+                    builder.move_subtree(child, vec![extracted_commit_oid])?
+                }
             }
         }
     }
@@ -466,7 +558,7 @@ pub fn split(
                 resolve_merge_conflicts,
                 check_out_commit_options: CheckOutCommitOptions {
                     additional_args: Default::default(),
-                    force_detach: false,
+                    force_detach: rebase_force_detach,
                     reset: false,
                     render_smartlog: false,
                 },

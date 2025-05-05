@@ -739,6 +739,361 @@ fn test_split_discard_bug_checked_out_branch() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_split_insert_before_added_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    // new files
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.write_file_txt("test3", "contents3")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    // modified file
+    git.commit_file("test3", 1)?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o e48cdc5 first commit
+        |
+        @ 3d220e0 create test3.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test3.txt | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test3.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD~", "test2.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/2] Committed as: 7014c04 first commit
+            [2/2] Committed as: 22bd240 create test3.txt
+            branchless: processing 2 rewritten commits
+            branchless: running command: <git-executable> checkout 22bd2405a4660938b88615fb2b1283bfa2a52f8e
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o d02e8c5 temp(split): test2.txt (+1)
+            |
+            o 7014c04 first commit
+            |
+            @ 22bd240 create test3.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~2"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test3.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_split_insert_before_modified_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    // new files
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.write_file_txt("test3", "contents3")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    // modified files
+    git.write_file_txt("test2", "contents2 again")?;
+    git.write_file_txt("test3", "contents3 again")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "second commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o e48cdc5 first commit
+        |
+        @ 7249f22 second commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test3.txt | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            test3.txt | 2 +-
+            2 files changed, 2 insertions(+), 2 deletions(-)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test2.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: 38fe8b7 second commit
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout 38fe8b76f889772efd0dd5cc1acb6ac02c85f9fb
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o e48cdc5 first commit
+            |
+            o 188b0a1 temp(split): test2.txt (+1/-1)
+            |
+            @ 38fe8b7 second commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test3.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_split_insert_before_deleted_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    // new files
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.write_file_txt("test3", "contents3")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    // modified files
+    git.delete_file("test2")?;
+    git.write_file_txt("test3", "contents3 again")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "second commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o e48cdc5 first commit
+        |
+        @ 98ebe2f second commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test3.txt | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 -
+            test3.txt | 2 +-
+            2 files changed, 1 insertion(+), 2 deletions(-)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test2.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: f8502a2 second commit
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout f8502a26000b8f90597f6861d7f3c0330fdf4351
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o e48cdc5 first commit
+            |
+            o e5b771d temp(split): test2.txt (-1)
+            |
+            @ f8502a2 second commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 -
+            1 file changed, 1 deletion(-)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test3.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_split_insert_before_attached_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+    git.run(&["switch", "-c", "branch-name"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 4d11d02 (> branch-name) first commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test2.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: c678b65 first commit
+            branchless: processing 1 update: branch branch-name
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout branch-name
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o d02e8c5 temp(split): test2.txt (+1)
+            |
+            @ c678b65 (> branch-name) first commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    Ok(())
+}
+
+// TODO fn test_split_insert_before_detached_branch_not_checked_out()
+//  -> branch is moved to the extracted commit, but should be left on the remainder commit
+
+#[test]
+fn test_split_insert_before_detached_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file_txt("test1", "contents1")?;
+    git.write_file_txt("test2", "contents2")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+    git.run(&["branch", "branch-name"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 4d11d02 (branch-name) first commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test2.txt", "--before"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: c678b65 first commit
+            branchless: processing 1 update: branch branch-name
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout c678b6529d8f33a6903e25f70327464bd77f1ca1
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o d02e8c5 temp(split): test2.txt (+1)
+            |
+            @ c678b65 (branch-name) first commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_split_undo_works() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
