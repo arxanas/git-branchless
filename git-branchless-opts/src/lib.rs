@@ -662,6 +662,10 @@ pub enum Command {
         #[clap(value_parser, required = true)]
         files: Vec<String>,
 
+        /// Restack any descendents onto the split commit, not the extracted commit.
+        #[clap(action, short = 'd', long = "detach")]
+        detach: bool,
+
         /// Options for resolving revset expressions.
         #[clap(flatten)]
         resolve_revset_options: ResolveRevsetOptions,

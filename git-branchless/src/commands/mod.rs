@@ -181,18 +181,27 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         },
 
         Command::Split {
+            detach,
             files,
             resolve_revset_options,
             revset,
             move_options,
-        } => split::split(
-            &effects,
-            revset,
-            &resolve_revset_options,
-            files,
-            &move_options,
-            &git_run_info,
-        )?,
+        } => {
+            let split_mode = match detach {
+                true => split::SplitMode::DetachAfter,
+                false => split::SplitMode::InsertAfter,
+            };
+
+            split::split(
+                &effects,
+                revset,
+                &resolve_revset_options,
+                files,
+                split_mode,
+                &move_options,
+                &git_run_info,
+            )?
+        }
 
         Command::Submit(args) => git_branchless_submit::command_main(ctx, args)?,
 
