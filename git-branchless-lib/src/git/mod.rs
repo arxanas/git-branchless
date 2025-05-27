@@ -14,7 +14,7 @@ mod test;
 mod tree;
 
 pub use config::{Config, ConfigRead, ConfigValue, ConfigWrite};
-pub use diff::{process_diff_for_record, Diff};
+pub use diff::{process_diff_for_record, summarize_diff_for_temporary_commit, Diff};
 pub use index::{update_index, Index, IndexEntry, Stage, UpdateIndexCommand};
 pub use object::Commit;
 pub use oid::{MaybeZeroOid, NonZeroOid};
