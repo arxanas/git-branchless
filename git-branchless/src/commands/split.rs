@@ -26,8 +26,8 @@ use lib::{
         },
     },
     git::{
-        make_empty_tree, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-        ResolvedReferenceInfo,
+        make_empty_tree, summarize_diff_for_temporary_commit, CherryPickFastOptions, GitRunInfo,
+        MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -135,12 +135,6 @@ pub fn split(
         }
     };
 
-    let mut message = match files_to_extract.as_slice() {
-        [] => unreachable!("Clap should have required at least 1 file"),
-        [_] => None,
-        other => Some(format!("{} files", other.len())),
-    };
-
     let cwd = std::env::current_dir()?;
     // tuple: (input_file, resolved_path)
     let resolved_paths_to_extract: eyre::Result<Vec<(String, PathBuf)>> = files_to_extract
@@ -187,7 +181,6 @@ pub fn split(
 
     for (file, path) in resolved_paths_to_extract.iter() {
         let path = path.as_path();
-        message = message.or(Some(path.to_string_lossy().to_string()));
 
         if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
             writeln!(
@@ -238,7 +231,17 @@ pub fn split(
             .find_tree(temp_tree_oid)?
             .expect("should have been found");
     }
-    let message = message.expect("at least 1 file should have been given");
+    let message = {
+        let (old_tree, new_tree) = (&remainder_tree, &target_tree);
+        let diff = repo.get_diff_between_trees(
+            effects,
+            Some(old_tree),
+            new_tree,
+            0, // we don't care about the context here
+        )?;
+
+        summarize_diff_for_temporary_commit(&diff)?
+    };
 
     let remainder_commit_oid =
         target_commit.amend_commit(None, None, None, None, Some(&remainder_tree))?;
