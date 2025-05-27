@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use eyre::Context;
+use eyre::{Context, OptionExt};
 use itertools::Itertools;
 use scm_record::helpers::make_binary_description;
 use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
@@ -15,12 +15,76 @@ pub struct Diff<'repo> {
     pub(super) inner: git2::Diff<'repo>,
 }
 
+impl Diff<'_> {
+    /// Summarize this diff into a single line "short" format.
+    pub fn short_stats(&self) -> eyre::Result<String> {
+        let stats = self.inner.stats()?;
+        let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
+        buf.as_str()
+            .ok_or_eyre("converting buf to str")
+            .map(|s| s.trim().to_string())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct GitHunk {
     old_start: usize,
     old_lines: usize,
     new_start: usize,
     new_lines: usize,
+}
+
+/// Summarize a diff for use as part of a temporary commit message.
+pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> {
+    // this returns something like `1 file changed, 1 deletion(-)`
+    // diff.short_stats()
+
+    // this returns something like `test2.txt (-1)` or `2 files (+1/-2)`
+    let stats = diff.inner.stats()?;
+    let prefix = if stats.files_changed() == 1 {
+        let mut prefix = None;
+        // returning false terminates iteration, but that also returns Err, so
+        // catch and ignore it
+        let _ = diff.inner.foreach(
+            &mut |delta: git2::DiffDelta, _| {
+                if let Some(path) = delta.old_file().path() {
+                    // prefix = Some(format!("{}", path.file_name().unwrap().to_string_lossy()));
+                    prefix = Some(format!("{}", path.display()));
+                } else if let Some(path) = delta.new_file().path() {
+                    prefix = Some(format!("{}", path.display()));
+                }
+
+                false
+            },
+            None,
+            None,
+            None,
+        );
+        prefix
+    } else {
+        Some(format!("{} files", stats.files_changed()))
+    };
+
+    let i = stats.insertions();
+    let d = stats.deletions();
+    Ok(format!(
+        "{prefix} ({i}{slash}{d})",
+        prefix = prefix.unwrap(),
+        i = if i > 0 {
+            format!("+{i}")
+        } else {
+            String::new()
+        },
+        slash = if i > 0 && d > 0 { "/" } else { "" },
+        d = if d > 0 {
+            format!("-{d}")
+        } else {
+            String::new()
+        }
+    ))
+    // stats.files_changed()
+    // stats.insertions()
+    // stats.deletions()
 }
 
 /// Calculate the diff between the index and the working copy.
