@@ -762,6 +762,7 @@ fn create_and_execute_plan(
         resolve_merge_conflicts: true,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
+            force_detach: false,
             reset: false,
             render_smartlog: false,
         },
