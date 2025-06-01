@@ -81,6 +81,9 @@ pub struct GitRunOptions {
 
     /// Additional environment variables to start the process with.
     pub env: HashMap<String, String>,
+
+    /// Subdirectory of repo to use as working directory.
+    pub subdir: Option<PathBuf>,
 }
 
 impl Git {
@@ -217,8 +220,14 @@ impl Git {
             expected_exit_code,
             input,
             env,
+            subdir,
         } = options;
 
+        let current_dir = subdir.as_ref().map_or(self.repo_path.clone(), |subdir| {
+            let mut p = self.repo_path.clone();
+            p.push(subdir);
+            p
+        });
         let env: BTreeMap<_, _> = self
             .get_base_env(*time)
             .into_iter()
@@ -229,7 +238,7 @@ impl Git {
             .collect();
         let mut command = Command::new(&self.path_to_git);
         command
-            .current_dir(&self.repo_path)
+            .current_dir(&current_dir)
             .args(args)
             .env_clear()
             .envs(&env);

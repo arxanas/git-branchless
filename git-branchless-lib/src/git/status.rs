@@ -88,6 +88,20 @@ impl From<git2::FileMode> for FileMode {
     }
 }
 
+impl From<FileMode> for git2::FileMode {
+    fn from(file_mode: FileMode) -> Self {
+        match file_mode {
+            FileMode::Blob => git2::FileMode::Blob,
+            FileMode::BlobExecutable => git2::FileMode::BlobExecutable,
+            FileMode::BlobGroupWritable => git2::FileMode::BlobGroupWritable,
+            FileMode::Commit => git2::FileMode::Commit,
+            FileMode::Link => git2::FileMode::Link,
+            FileMode::Tree => git2::FileMode::Tree,
+            FileMode::Unreadable => git2::FileMode::Unreadable,
+        }
+    }
+}
+
 impl From<i32> for FileMode {
     fn from(file_mode: i32) -> Self {
         if file_mode == i32::from(git2::FileMode::Blob) {
@@ -177,6 +191,17 @@ pub struct StatusEntry {
 }
 
 impl StatusEntry {
+    /// Create a status entry for a currently-untracked, to-be-added file.
+    pub fn new_untracked(filename: String) -> Self {
+        StatusEntry {
+            index_status: FileStatus::Untracked,
+            working_copy_status: FileStatus::Untracked,
+            working_copy_file_mode: FileMode::Blob,
+            path: PathBuf::from(filename),
+            orig_path: None,
+        }
+    }
+
     /// Returns the paths associated with the status entry.
     pub fn paths(&self) -> Vec<PathBuf> {
         let mut result = vec![self.path.clone()];
