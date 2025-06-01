@@ -26,7 +26,10 @@ use lib::core::rewrite::{
     execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::core::untracked_file_cache::prompt_about_untracked_files;
+use lib::git::{
+    AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo, StatusEntry,
+};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -131,8 +134,17 @@ pub fn amend(
                 .collect(),
         }
     } else {
+        let untracked_entries =
+            prompt_about_untracked_files(effects, git_run_info, &repo, event_tx_id)?
+                .into_iter()
+                .map(StatusEntry::new_untracked);
+
         AmendFastOptions::FromWorkingCopy {
-            status_entries: unstaged_entries.clone(),
+            status_entries: unstaged_entries
+                .iter()
+                .cloned()
+                .chain(untracked_entries)
+                .collect_vec(),
         }
     };
     if opts.is_empty() {

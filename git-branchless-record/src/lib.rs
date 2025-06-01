@@ -30,6 +30,7 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
     RepoResource,
 };
+use lib::core::untracked_file_cache::prompt_about_untracked_files;
 use lib::git::{
     process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
@@ -97,6 +98,7 @@ fn record(
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
         match working_copy_changes_type {
             WorkingCopyChangesType::None => {
+                // FIXME look for new untracked files
                 writeln!(
                     effects.get_output_stream(),
                     "There are no changes to tracked files in the working copy to commit."
@@ -158,6 +160,18 @@ fn record(
             )?);
         }
     } else {
+        let files_to_add = prompt_about_untracked_files(effects, git_run_info, &repo, event_tx_id)?;
+        if !files_to_add.is_empty() {
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            // FIXME
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
         let messages = if messages.is_empty() && stash {
             let diff_stats = {
                 let (old_tree, new_tree) = match working_copy_changes_type {
@@ -193,6 +207,7 @@ fn record(
         } else {
             messages
         };
+
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
