@@ -305,7 +305,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     let stderr = trim_lines(stderr);
     let stderr = console::strip_ansi_codes(&stderr);
     let stderr = location_trace_re.replace_all(&stderr, "some/file/path.rs:123");
-    insta::assert_snapshot!(stderr, @r###"
+    insta::assert_snapshot!(stderr, @r#"
     The application panicked (crashed).
     Message:  A fatal error occurred:
        0: Could not find repository main branch
@@ -317,9 +317,9 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
        0: branchless::core::eventlog::from_event_log_db with effects=<Output fancy=false> repo=<Git repository at: "<repo-path>/.git/"> event_log_db=<EventLogDb path=Some("<repo-path>/.git/branchless/db.sqlite3")>
           at some/file/path.rs:123
-       1: git_branchless_smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: None, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false }, reverse: false, exact: false }
+       1: git_branchless_smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: None, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false }, reverse: false, exact: false, show_signature: false }
           at some/file/path.rs:123
-       2: git_branchless_smartlog::command_main with ctx=CommandContext { effects: <Output fancy=false>, git_run_info: <GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> } args=SmartlogArgs { event_id: None, revset: None, reverse: false, exact: false, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
+       2: git_branchless_smartlog::command_main with ctx=CommandContext { effects: <Output fancy=false>, git_run_info: <GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> } args=SmartlogArgs { event_id: None, revset: None, reverse: false, exact: false, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false }, show_signature: false }
           at some/file/path.rs:123
 
     Suggestion:
@@ -339,7 +339,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
     Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
     Run with RUST_BACKTRACE=full to include source snippets.
-    "###);
+    "#);
     insta::assert_snapshot!(stdout, @"");
 
     Ok(())

@@ -74,7 +74,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: "1.80"
           override: true
 
       - name: Cache dependencies
@@ -89,6 +89,9 @@ jobs:
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
+          export TEST_GPG=$(which gpg)
+          export TEST_GPGSM=$(which gpgsm)
+          export TEST_SSH_KEYGEN=$(which ssh-keygen)
           cargo test --all-features --examples --tests --workspace --no-fail-fast
 
       # Note that `--doc` can't be combined with other tests.

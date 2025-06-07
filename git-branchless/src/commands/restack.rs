@@ -312,6 +312,7 @@ pub fn restack(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        ref sign_options,
     } = *move_options;
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits,
@@ -331,6 +332,7 @@ pub fn restack(
             reset: false,
             render_smartlog: false,
         },
+        sign_option: sign_options.to_owned().into(),
     };
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
