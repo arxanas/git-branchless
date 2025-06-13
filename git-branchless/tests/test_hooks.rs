@@ -411,5 +411,46 @@ fn test_symbolic_transaction_ref() -> eyre::Result<()> {
         branchless: processing checkout
         "###);
     }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_git_rebase_multiple_fixup_does_not_strand_commits() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+
+    git.write_file("test1.txt", "bleh")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "create test1.txt"])?;
+    git.write_file("test2.txt", "bleh")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "fixup! create test1.txt"])?;
+    git.write_file("test3.txt", "bleh")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "fixup! create test1.txt"])?;
+    git.write_file("test3.txt", "bleh")?;
+
+    git.run(&[
+        "-c",
+        "sequence.editor=:",
+        "rebase",
+        "-i",
+        "--autosquash",
+        "master",
+    ])?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 8777bab create test1.txt
+        "###);
+    }
+
     Ok(())
 }
