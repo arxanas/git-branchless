@@ -30,10 +30,11 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
     RepoResource,
 };
+use lib::core::untracked_file_cache::prompt_about_untracked_files;
 use lib::git::{
-    process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo,
-    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand,
-    WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
+    CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -97,6 +98,7 @@ fn record(
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
         match working_copy_changes_type {
             WorkingCopyChangesType::None => {
+                // FIXME look for new untracked files
                 writeln!(
                     effects.get_output_stream(),
                     "There are no changes to tracked files in the working copy to commit."
@@ -129,6 +131,7 @@ fn record(
             None,
             &CheckOutCommitOptions {
                 additional_args: vec![OsString::from("-b"), OsString::from(branch_name)],
+                force_detach: false,
                 reset: false,
                 render_smartlog: false,
             },
@@ -157,6 +160,54 @@ fn record(
             )?);
         }
     } else {
+        let files_to_add = prompt_about_untracked_files(effects, git_run_info, &repo, event_tx_id)?;
+        if !files_to_add.is_empty() {
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            // FIXME
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
+        let messages = if messages.is_empty() && stash {
+            let diff_stats = {
+                let (old_tree, new_tree) = match working_copy_changes_type {
+                    WorkingCopyChangesType::Unstaged => {
+                        let old_tree = snapshot.commit_stage0.get_tree()?;
+                        let new_tree = snapshot.commit_unstaged.get_tree()?;
+                        (Some(old_tree), new_tree)
+                    }
+                    WorkingCopyChangesType::Staged => {
+                        let old_tree = match snapshot.head_commit {
+                            None => None,
+                            Some(ref commit) => Some(commit.get_tree()?),
+                        };
+                        let new_tree = snapshot.commit_stage0.get_tree()?;
+                        (old_tree, new_tree)
+                    }
+                    WorkingCopyChangesType::None | WorkingCopyChangesType::Conflicts => {
+                        unreachable!("already handled via early exit")
+                    }
+                };
+
+                let diff = repo.get_diff_between_trees(
+                    effects,
+                    old_tree.as_ref(),
+                    &new_tree,
+                    0, // we don't care about the context here
+                )?;
+
+                summarize_diff_for_temporary_commit(&diff)?
+            };
+
+            vec![format!("stash: {diff_stats}")]
+        } else {
+            messages
+        };
+
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
@@ -227,6 +278,7 @@ fn record(
                 checkout_target,
                 &CheckOutCommitOptions {
                     additional_args: vec![],
+                    force_detach: false,
                     reset: false,
                     render_smartlog: false,
                 },
