@@ -103,7 +103,7 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 vt100 = "0.15.2"
 
 # dev-dependencies
-assert_cmd = "2.0.16"
+assert_cmd = "2.0.17"
 cc = "1.2.26"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 insta = "1.43.1"
