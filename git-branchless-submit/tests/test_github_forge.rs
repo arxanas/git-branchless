@@ -104,7 +104,8 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test1-txt
         Updating pull request (base branch, title, body) for commit 96d1c37 create test2.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test2-txt
-        Submitted 2 commits: mock-github-username/create-test1-txt, mock-github-username/create-test2-txt
+        Submitted 62fc20d create test1.txt (as mock-github-username/create-test1-txt)
+        Submitted 96d1c37 create test2.txt (as mock-github-username/create-test2-txt)
         "###);
     }
     {
@@ -175,7 +176,8 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test2-txt
         Updating pull request (commit, base branch, title, body) for commit 0770943 create test1.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test1-txt
-        Updated 2 commits: mock-github-username/create-test1-txt, mock-github-username/create-test2-txt
+        Updated fe65c1f create test2.txt (as mock-github-username/create-test2-txt)
+        Updated 0770943 create test1.txt (as mock-github-username/create-test1-txt)
         "###);
     }
     {
@@ -267,7 +269,8 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test1-txt
         Updating pull request (base branch, title, body) for commit 96d1c37 create test2.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test2-txt
-        Submitted 2 commits: mock-github-username/create-test1-txt, mock-github-username/create-test2-txt
+        Submitted 62fc20d create test1.txt (as mock-github-username/create-test1-txt)
+        Submitted 96d1c37 create test2.txt (as mock-github-username/create-test2-txt)
         "###);
     }
     {
@@ -359,7 +362,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Updating pull request (commit, base branch, title, body) for commit fa46633 create test2.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test2-txt
-        Updated 1 commit: mock-github-username/create-test2-txt
+        Updated fa46633 create test2.txt (as mock-github-username/create-test2-txt)
         "###);
     }
     {
@@ -458,7 +461,7 @@ fn test_github_forge_no_include_unsubmitted_commits_in_stack() -> eyre::Result<(
         branch 'mock-github-username/create-test1-txt' set up to track 'origin/mock-github-username/create-test1-txt'.
         Updating pull request (title, body) for commit 62fc20d create test1.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test1-txt
-        Submitted 1 commit: mock-github-username/create-test1-txt
+        Submitted 62fc20d create test1.txt (as mock-github-username/create-test1-txt)
         "###);
     }
     {
@@ -548,7 +551,7 @@ fn test_github_forge_multiple_commits_in_pull_request() -> eyre::Result<()> {
         branch 'mock-github-username/create-test3-txt' set up to track 'origin/mock-github-username/create-test3-txt'.
         Updating pull request (title, body) for commit 70deb1e create test3.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test3-txt
-        Submitted 1 commit: mock-github-username/create-test3-txt
+        Submitted 70deb1e create test3.txt (as mock-github-username/create-test3-txt)
         "###);
     }
     {
