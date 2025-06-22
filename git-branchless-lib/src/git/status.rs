@@ -88,6 +88,20 @@ impl From<git2::FileMode> for FileMode {
     }
 }
 
+impl From<FileMode> for git2::FileMode {
+    fn from(file_mode: FileMode) -> Self {
+        match file_mode {
+            FileMode::Blob => git2::FileMode::Blob,
+            FileMode::BlobExecutable => git2::FileMode::BlobExecutable,
+            FileMode::BlobGroupWritable => git2::FileMode::BlobGroupWritable,
+            FileMode::Commit => git2::FileMode::Commit,
+            FileMode::Link => git2::FileMode::Link,
+            FileMode::Tree => git2::FileMode::Tree,
+            FileMode::Unreadable => git2::FileMode::Unreadable,
+        }
+    }
+}
+
 impl From<i32> for FileMode {
     fn from(file_mode: i32) -> Self {
         if file_mode == i32::from(git2::FileMode::Blob) {
