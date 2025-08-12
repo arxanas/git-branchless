@@ -104,7 +104,7 @@ vt100 = "0.15.2"
 
 # dev-dependencies
 assert_cmd = "2.0.17"
-cc = "1.2.26"
+cc = "1.2.32"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 insta = "1.43.1"
 maplit = "1.0.2"
