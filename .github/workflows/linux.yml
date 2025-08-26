@@ -18,7 +18,7 @@ jobs:
       matrix:
         # Use a tag from https://github.com/git/git/tags
         # Make sure to update `git-version` in the `run-tests` step as well.
-        git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
+        git-version: ['v2.24.3', 'v2.29.2', 'v2.33.1', 'v2.37.3']
 
     steps:
       - uses: actions/checkout@v5
@@ -45,7 +45,7 @@ jobs:
       - name: Package Git
         run: tar -czf git.tar.gz git git-*
 
-      - name: "Upload artifact: git"
+      - name: 'Upload artifact: git'
         uses: actions/upload-artifact@v4
         with:
           name: git-${{ matrix.git-version }}
@@ -58,7 +58,7 @@ jobs:
 
     strategy:
       matrix:
-        git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
+        git-version: ['v2.24.3', 'v2.29.2', 'v2.33.1', 'v2.37.3']
 
     steps:
       - uses: actions/checkout@v5
@@ -67,14 +67,14 @@ jobs:
         with:
           name: git-${{ matrix.git-version }}
 
-      - name: "Unpack artifact: git"
+      - name: 'Unpack artifact: git'
         run: tar -xf git.tar.gz
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.85
           override: true
 
       - name: Cache dependencies

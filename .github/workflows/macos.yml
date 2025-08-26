@@ -3,7 +3,7 @@ name: macOS
 on:
   schedule:
     # Run once every day at 6:40AM UTC.
-    - cron: "40 6 * * *"
+    - cron: '40 6 * * *'
 
   push:
     branches:
@@ -27,7 +27,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.85
           override: true
 
       - name: Cache dependencies
