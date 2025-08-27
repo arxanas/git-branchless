@@ -7,7 +7,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 // These URLs are printed verbatim in help output, so we don't want to add extraneous Markdown
 // formatting.
 #![allow(rustdoc::bare_urls)]
@@ -650,6 +650,37 @@ pub enum Command {
         /// The subcommand to run.
         #[clap(subcommand)]
         subcommand: SnapshotSubcommand,
+    },
+
+    /// Split commits.
+    Split {
+        /// Commit to split. If a revset is given, it must resolve to a single commit.
+        #[clap(value_parser)]
+        revset: Revset,
+
+        /// Files to extract from the commit.
+        #[clap(value_parser, required = true)]
+        files: Vec<String>,
+
+        /// Insert the extracted commit before (as a parent of) the split commit.
+        #[clap(action, short = 'b', long)]
+        before: bool,
+
+        /// Restack any descendents onto the split commit, not the extracted commit.
+        #[clap(action, short = 'd', long)]
+        detach: bool,
+
+        /// After extracting the changes, don't recommit them.
+        #[clap(action, short = 'D', long = "discard", conflicts_with("detach"))]
+        discard: bool,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
     },
 
     /// Push commits to a remote.

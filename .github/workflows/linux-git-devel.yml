@@ -1,4 +1,4 @@
-name: "Linux (Git devel)"
+name: 'Linux (Git devel)'
 
 on:
   # TODO(#1416): re-enable once tests are passing on Git v2.46+
@@ -54,7 +54,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.85
           override: true
 
       - uses: actions/checkout@v5
