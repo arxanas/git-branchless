@@ -172,6 +172,129 @@ fn test_record_staged_changes() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_record_with_new_untracked_files() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+
+    git.write_file_txt("test1", "new test1 contents")?;
+    git.write_file_txt("test2", "test2 contents")?;
+
+    // index + add
+    // index + skip
+    // index + prompt
+    // working copy + add
+    // working copy + skip
+    // working copy + prompt
+
+    {
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Including 1 new untracked file: test2.txt
+        [master 0ec2280] foo
+         2 files changed, 2 insertions(+), 1 deletion(-)
+         create mode 100644 test2.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 2 +-
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+), 1 deletion(-)
+        ");
+    }
+
+    {
+        git.write_file_txt("test2", "updated contents")?;
+        git.write_file_txt("test3", "test3 contents")?;
+
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "skip"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 new untracked file: test3.txt
+        [master 3fb652e] foo
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            1 file changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    {
+        git.write_file_txt("test2", "more updated contents")?;
+        // test3.txt skipped because we've already seen it
+        git.write_file_txt("test4", "test4 contents")?;
+
+        run_in_pty(
+            &git,
+            "record",
+            &["-m", "foo", "--untracked", "prompt"],
+            &[PtyAction::WaitUntilContains("test4"), PtyAction::Write("y")],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            test4.txt | 1 +
+            2 files changed, 2 insertions(+), 1 deletion(-)
+        ");
+    }
+
+    {
+        // add test5 w/o any other changes
+
+        git.write_file_txt("test5", "test5 contents")?;
+
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 previously skipped file: test3.txt
+        Including 1 new untracked file: test5.txt
+        [master cd3e2aa] foo
+         1 file changed, 1 insertion(+)
+         create mode 100644 test5.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test5.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        // update test5 and add test6, then add test 6 to the index
+
+        git.write_file_txt("test5", "test5 updated contents")?;
+        git.write_file_txt("test6", "test6 contents")?;
+        git.run(&["add", "test6.txt"])?;
+
+        // TODO should we still report the "previously skipped" files if some
+        // changes are staged?
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master 3db03ce] foo
+         1 file changed, 1 insertion(+)
+         create mode 100644 test6.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test6.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_record_staged_changes_interactive() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -336,6 +459,42 @@ fn test_record_stash() -> eyre::Result<()> {
         @ 62fc20d (> master) create test1.txt
         |
         o 9b6164c foo
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_stash_default_message() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+
+    {
+        git.write_file_txt("test1", "new test1 contents\n")?;
+
+        let (stdout, _stderr) = git.branchless("record", &["--stash"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master fd2ffa4] stash: test1.txt (+1/-1)
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> branch -f master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: running command: <git-executable> checkout master
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+        |
+        o fd2ffa4 stash: test1.txt (+1/-1)
         "###);
     }
 

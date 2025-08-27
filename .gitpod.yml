@@ -2,10 +2,10 @@ image:
   file: .gitpod/Dockerfile
 tasks:
   - init: |
-      rustup default 1.74
+      rustup default 1.85
       cargo test --no-run
       cargo install cargo-insta
       cargo install git-branchless && git branchless init
 vscode:
   extensions:
-    - "matklad.rust-analyzer"
+    - 'matklad.rust-analyzer'
