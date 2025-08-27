@@ -314,7 +314,7 @@ pub(super) fn eval2(
     match args {
         [lhs, rhs] => {
             let lhs = eval_inner(ctx, lhs, &None)?;
-            let rhs = eval_inner(ctx, rhs, &None)?;
+            let rhs = eval_inner(ctx, rhs, &Some(&lhs))?;
             Ok((lhs, rhs))
         }
 

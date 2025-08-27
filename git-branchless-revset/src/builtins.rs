@@ -218,7 +218,7 @@ fn fn_branches(
         .branch_oid_to_names;
 
     let commitset_hint = match commitset_hint {
-        Some(_hint) => unreachable!(),
+        Some(hint) => hint.intersection(&ctx.dag.branch_commits),
         None => ctx.dag.branch_commits.clone(),
     };
     let branch_commits = make_pattern_matcher(
