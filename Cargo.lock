@@ -1563,6 +1563,7 @@ dependencies = [
  "cc",
  "chashmap",
  "chrono",
+ "clap 4.5.46",
  "color-eyre",
  "concolor",
  "console",
