@@ -116,16 +116,16 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
         repo,
         dag,
     };
-    let commits = eval_inner(&mut ctx, expr)?;
+    let commits = eval_inner(&mut ctx, expr, &None)?;
     Ok(commits)
 }
 
 #[instrument]
-fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
+fn eval_inner(ctx: &mut Context, expr: &Expr, commitset_hint: &Option<&CommitSet>) -> EvalResult {
     match expr {
         Expr::Name(name) => eval_name(ctx, name),
         Expr::FunctionCall(name, args) => {
-            let result = eval_fn(ctx, name, args)?;
+            let result = eval_fn(ctx, name, args, commitset_hint)?;
             let result = ctx
                 .dag
                 .filter_visible_commits(result)
@@ -176,9 +176,14 @@ pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
 }
 
 #[instrument]
-pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+pub(super) fn eval_fn(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commitset_hint: &Option<&CommitSet>,
+) -> EvalResult {
     if let Some(function) = FUNCTIONS.get(name) {
-        return function(ctx, name, args);
+        return function(ctx, name, args, commitset_hint);
     }
 
     let alias_key = format!("branchless.revsets.alias.{name}");
@@ -199,7 +204,7 @@ pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
             .map(|(i, arg)| (format!("${}", i + 1), arg.clone()))
             .collect();
         let alias_expr = alias_expr.replace_names(&arg_map);
-        let commits = eval_inner(ctx, &alias_expr)?;
+        let commits = eval_inner(ctx, &alias_expr, commitset_hint)?;
         return Ok(commits);
     }
 
@@ -235,7 +240,7 @@ pub(super) fn eval0_or_1(
     match args {
         [] => Ok(None),
         [expr] => {
-            let arg = eval_inner(ctx, expr)?;
+            let arg = eval_inner(ctx, expr, &None)?;
             Ok(Some(arg))
         }
         args => Err(EvalError::ArityMismatch {
@@ -250,7 +255,7 @@ pub(super) fn eval0_or_1(
 pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> EvalResult {
     match args {
         [arg] => {
-            let lhs = eval_inner(ctx, arg)?;
+            let lhs = eval_inner(ctx, arg, &None)?;
             Ok(lhs)
         }
 
@@ -308,8 +313,8 @@ pub(super) fn eval2(
 ) -> Result<(CommitSet, CommitSet), EvalError> {
     match args {
         [lhs, rhs] => {
-            let lhs = eval_inner(ctx, lhs)?;
-            let rhs = eval_inner(ctx, rhs)?;
+            let lhs = eval_inner(ctx, lhs, &None)?;
+            let rhs = eval_inner(ctx, rhs, &None)?;
             Ok((lhs, rhs))
         }
 
@@ -329,7 +334,7 @@ pub(super) fn eval_number_rhs(
 ) -> Result<(CommitSet, usize), EvalError> {
     match args {
         [lhs, Expr::Name(name)] => {
-            let lhs = eval_inner(ctx, lhs)?;
+            let lhs = eval_inner(ctx, lhs, &None)?;
             let number: usize = { name.parse()? };
             Ok((lhs, number))
         }
