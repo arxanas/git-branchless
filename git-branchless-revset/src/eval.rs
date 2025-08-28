@@ -310,11 +310,12 @@ pub(super) fn eval2(
     ctx: &mut Context,
     function_name: &str,
     args: &[Expr],
+    limit_rhs: bool,
 ) -> Result<(CommitSet, CommitSet), EvalError> {
     match args {
         [lhs, rhs] => {
             let lhs = eval_inner(ctx, lhs, &None)?;
-            let rhs = eval_inner(ctx, rhs, &None)?;
+            let rhs = eval_inner(ctx, rhs, &limit_rhs.then_some(&lhs))?;
             Ok((lhs, rhs))
         }
 
