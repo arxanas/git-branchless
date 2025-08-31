@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated from `esl01-dag` to `sapling-dag` for improved DAG implementation.
 - `scm-record` upgraded to [v0.5.0](https://github.com/arxanas/scm-record/releases/tag/v0.5.0).
 - (#1463): `git switch` now accepts a revset whose sole head will be checked out
 
