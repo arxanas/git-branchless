@@ -430,13 +430,16 @@ fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyr
 
     let man_dir = repo.get_man_dir()?;
     let man_dir_relative = {
-        let man_dir_relative = man_dir.strip_prefix(repo.get_path()).wrap_err_with(|| {
-            format!(
-                "Getting relative path for {:?} with respect to {:?}",
-                &man_dir,
-                repo.get_path()
-            )
-        })?;
+        let man_dir_relative =
+            man_dir
+                .strip_prefix(repo.get_shared_path())
+                .wrap_err_with(|| {
+                    format!(
+                        "Getting relative path for {:?} with respect to {:?}",
+                        &man_dir,
+                        repo.get_path()
+                    )
+                })?;
         &man_dir_relative.to_str().ok_or_else(|| {
             eyre::eyre!(
                 "Could not convert man dir to UTF-8 string: {:?}",
@@ -544,7 +547,7 @@ fn create_isolated_config(
 
     let config = Config::open(&config_path)?;
     let config_path_relative = config_path
-        .strip_prefix(repo.get_path())
+        .strip_prefix(repo.get_shared_path())
         .wrap_err("Getting relative config path")?;
     // Be careful when setting paths on Windows. Since the path would have a
     // backslash, naively using it produces
@@ -606,8 +609,7 @@ fn command_init(
     main_branch_name: Option<&str>,
 ) -> EyreExitOr<()> {
     let mut in_ = BufReader::new(stdin());
-    let repo = Repo::from_current_dir()?;
-    let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
+    let mut repo = Repo::from_current_dir()?;
 
     let default_config = Config::open_default()?;
     let readonly_config = repo.get_readonly_config()?;
