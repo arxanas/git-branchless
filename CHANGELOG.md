@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BREAKING (#1128) Arguments/revsets passed to `git sync` are now resolved to their respective stacks.
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
 - BREAKING (#1152) Previously, `git hide` would not delete branches pointing to the hidden commits unless `-D`/`--delete-branches` was passed. Now, deleting branches is the default behavior. Pass `--no-delete-branches` to restore the old behavior.
-- BREAKING (#1292): The minimum supported Rust version (MSRV) is now 1.74.
+- BREAKING (#1292): The minimum supported Rust version (MSRV) is now 1.82.
 - (#1204) The default instructions for `git reword` are now wrapped to 72 characters.
 - (#1230) The icon for omitted commits in the smartlog was changed from `⊘` to `◌`.
 
