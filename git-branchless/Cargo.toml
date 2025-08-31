@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 name = "git-branchless"
 readme = "../README.md"
 repository = "https://github.com/arxanas/git-branchless"
-rust-version = "1.74"
+rust-version = "1.82"
 version = "0.10.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

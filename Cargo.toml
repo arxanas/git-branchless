@@ -51,7 +51,7 @@ cursive = { version = "0.20.0", default-features = false, features = [
 ] }
 cursive_buffered_backend = "0.6.2"
 cursive_core = "0.3.7"
-eden_dag = { package = "esl01-dag", version = "0.3.0" }
+eden_dag = { package = "sapling-dag", version = "0.1.0" }
 eyre = "0.6.12"
 fslock = "0.2.1"
 futures = "0.3.30"

@@ -8,9 +8,8 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use eden_dag::namedag::MemNameDag;
-use eden_dag::nameset::hints::Hints;
 use eden_dag::ops::{DagPersistent, Parents};
+use eden_dag::set::hints::Hints;
 use eden_dag::{DagAlgorithm, Group, VertexListWithOptions, VertexOptions};
 use eyre::Context;
 use futures::{StreamExt, TryStreamExt};
@@ -24,26 +23,26 @@ use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo, Time};
 
 use super::repo_ext::RepoReferencesSnapshot;
 
-impl From<NonZeroOid> for eden_dag::VertexName {
+impl From<NonZeroOid> for eden_dag::Vertex {
     fn from(oid: NonZeroOid) -> Self {
-        eden_dag::VertexName::copy_from(oid.as_bytes())
+        eden_dag::Vertex::copy_from(oid.as_bytes())
     }
 }
 
-impl TryFrom<eden_dag::VertexName> for MaybeZeroOid {
+impl TryFrom<eden_dag::Vertex> for MaybeZeroOid {
     type Error = eyre::Error;
 
-    fn try_from(value: eden_dag::VertexName) -> Result<Self, Self::Error> {
+    fn try_from(value: eden_dag::Vertex) -> Result<Self, Self::Error> {
         let oid = git2::Oid::from_bytes(value.as_ref())?;
         let oid = MaybeZeroOid::from(oid);
         Ok(oid)
     }
 }
 
-impl TryFrom<eden_dag::VertexName> for NonZeroOid {
+impl TryFrom<eden_dag::Vertex> for NonZeroOid {
     type Error = eyre::Error;
 
-    fn try_from(value: eden_dag::VertexName) -> Result<Self, Self::Error> {
+    fn try_from(value: eden_dag::Vertex) -> Result<Self, Self::Error> {
         let oid = MaybeZeroOid::try_from(value)?;
         let oid = NonZeroOid::try_from(oid)?;
         Ok(oid)
@@ -51,10 +50,10 @@ impl TryFrom<eden_dag::VertexName> for NonZeroOid {
 }
 
 /// A compact set of commits, backed by the Eden DAG.
-pub type CommitSet = eden_dag::NameSet;
+pub type CommitSet = eden_dag::Set;
 
 /// A vertex referring to a single commit in the Eden DAG.
-pub type CommitVertex = eden_dag::VertexName;
+pub type CommitVertex = eden_dag::Vertex;
 
 impl From<NonZeroOid> for CommitSet {
     fn from(oid: NonZeroOid) -> Self {
@@ -123,8 +122,8 @@ impl Parents for GitParentsBlocking {
     async fn hint_subdag_for_insertion(
         &self,
         _heads: &[CommitVertex],
-    ) -> Result<MemNameDag, eden_dag::Error> {
-        Ok(MemNameDag::new())
+    ) -> Result<eden_dag::MemDag, eden_dag::Error> {
+        Ok(eden_dag::MemDag::new())
     }
 }
 
@@ -290,7 +289,7 @@ impl Dag {
 
         let master_group_options = {
             let mut options = VertexOptions::default();
-            options.highest_group = Group::MASTER;
+            options.desired_group = Group::MASTER;
             options
         };
         let master_heads = self
@@ -449,7 +448,7 @@ impl Dag {
     #[instrument]
     pub fn set_count(&self, commit_set: &CommitSet) -> eden_dag::Result<usize> {
         let result = self.run_blocking(commit_set.count())?;
-        Ok(result)
+        Ok(result.try_into().unwrap())
     }
 
     /// Wrapper around NameSet method.
