@@ -1,4 +1,4 @@
 [toolchain]
 # Current minimum-supported Rust version
-channel = "1.74"
+channel = "1.82"
 profile = "default"

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::VertexName;
+use eden_dag::Vertex;
 use lib::core::repo_ext::RepoExt;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -40,7 +40,7 @@ use lib::git::{GitRunInfo, NonZeroOid, Repo};
 #[instrument]
 fn resolve_base_commit(
     dag: &Dag,
-    merge_base_oid: Option<VertexName>,
+    merge_base_oid: Option<Vertex>,
     oid: NonZeroOid,
 ) -> eyre::Result<NonZeroOid> {
     let bases = match merge_base_oid {

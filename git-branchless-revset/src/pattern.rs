@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Local};
 use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
 use chronoutil::RelativeDuration;
-use eden_dag::nameset::hints::{Flags, Hints};
+use eden_dag::set::hints::{Flags, Hints};
 use futures::StreamExt;
 use lib::core::dag::{CommitSet, CommitVertex};
 use lib::core::effects::{Effects, OperationType};
@@ -153,7 +153,7 @@ pub(super) fn make_pattern_matcher_set(
             let _effects = effects;
 
             let len = self.commits_to_match.count().await?;
-            progress.notify_progress(0, len);
+            progress.notify_progress(0, len.try_into().unwrap());
 
             let stream = self.commits_to_match.iter().await?;
             let commit_oids = stream.collect::<Vec<_>>().await;

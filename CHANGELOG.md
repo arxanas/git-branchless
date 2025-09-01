@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- BREAKING (#1593): The minimum supported Rust version (MSRV) is now 1.82.
 - `scm-record` upgraded to [v0.5.0](https://github.com/arxanas/scm-record/releases/tag/v0.5.0).
 - (#1463): `git switch` now accepts a revset whose sole head will be checked out
 
@@ -53,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BREAKING (#1128) Arguments/revsets passed to `git sync` are now resolved to their respective stacks.
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
 - BREAKING (#1152) Previously, `git hide` would not delete branches pointing to the hidden commits unless `-D`/`--delete-branches` was passed. Now, deleting branches is the default behavior. Pass `--no-delete-branches` to restore the old behavior.
-- BREAKING (#1292): The minimum supported Rust version (MSRV) is now 1.74.
+- BREAKING (#1292): The minimum supported Rust version (MSRV) is now 1.82.
 - (#1204) The default instructions for `git reword` are now wrapped to 72 characters.
 - (#1230) The icon for omitted commits in the smartlog was changed from `⊘` to `◌`.
 
@@ -346,6 +347,7 @@ This is safe to ignore. We are waiting for an upstream dependency to be updated 
 ### Changed
 
 - (#63) The UI for `git undo` has been changed in various ways. Thanks to @chapati23 for their feedback. You can leave your own feedback here: https://github.com/arxanas/git-branchless/discussions
+@NOCOMMIT: update comment/link
 - Merge-base calculation is now performed using [EdenSCM](https://github.com/facebookexperimental/eden)'s directed acyclic graph crate ([`esl01-dag`](https://crates.io/crates/esl01-dag)), which significantly improves performance on large repositories.
 - Subprocess command output is now dimmed and printed above a progress meter, to make it easier to visually filter out important `git-branchless` status messages from unimportant `git` machinery output.
 - `git move` tries to avoid issuing a superfluous `git checkout` operation if you're already at the target commit/branch.
