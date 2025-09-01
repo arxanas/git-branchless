@@ -597,7 +597,7 @@ impl Effects {
     /// value, rather than from zero. The practical implication is that you can
     /// see the aggregate time it took to carry out sibling operations, i.e. the
     /// same operation called multiple times in a loop.
-    pub fn start_operation(&self, operation_type: OperationType) -> (Effects, ProgressHandle) {
+    pub fn start_operation(&self, operation_type: OperationType) -> (Effects, ProgressHandle<'_>) {
         let operation_key = {
             let mut result = self.operation_key.clone();
             result.push(operation_type);

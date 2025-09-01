@@ -50,7 +50,7 @@ mod skim {
     }
 
     impl SkimItem for CommitSkimItem {
-        fn text(&self) -> Cow<str> {
+        fn text(&self) -> Cow<'_, str> {
             AnsiString::parse(&self.styled_summary).into_inner()
         }
 

@@ -117,7 +117,7 @@ impl<R: Resource> ResourcePool<R> {
     /// If there are any resources available in the pool, return an arbitrary
     /// one. Otherwise, invoke the constructor function of the associated
     /// [`Resource`] and return a [`ResourceHandle`] for it.
-    pub fn try_create(&self) -> Result<ResourceHandle<R>, R::Error> {
+    pub fn try_create(&self) -> Result<ResourceHandle<'_, R>, R::Error> {
         let resource = {
             let mut resources = self
                 .resources
