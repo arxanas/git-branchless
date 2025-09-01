@@ -3,6 +3,17 @@
 version = 3
 
 [[package]]
+name = "abomonation_derive"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e50e2a046af56a864c62d97b7153fda72c596e646be1b0c7963736821f6e1efa"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "synstructure",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -131,6 +142,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
+name = "arbitrary"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -251,6 +268,9 @@ name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block-buffer"
@@ -1089,126 +1109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "esl01-atomicfile"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73020f11f072c66f335e7273c3509220c6c06db8e2f27e55f487d484c03c3ae2"
-dependencies = [
- "tempfile",
- "tracing",
-]
-
-[[package]]
-name = "esl01-dag"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cf33c6d93aebed1408b6e6379d3083ea0dc48b3256eba858e24ff1ad0910c5c"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitflags 1.3.2",
- "byteorder",
- "esl01-dag-types",
- "esl01-drawdag",
- "esl01-indexedlog",
- "esl01-mincode",
- "esl01-minibytes",
- "esl01-nonblocking",
- "esl01-renderdag",
- "esl01-vlqencoding",
- "fail",
- "fs2",
- "futures",
- "indexmap 1.9.3",
- "rand 0.8.5",
- "serde",
- "tempfile",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "esl01-dag-types"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd764f3e0441aa076242c5591e8c70e9250ece9a0298b9a118a636c97121608f"
-dependencies = [
- "esl01-minibytes",
- "serde",
-]
-
-[[package]]
-name = "esl01-drawdag"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58614a84fe70f0dcf8e4126950606bbe9339bf931002791e34bae0fab0a8c9a7"
-
-[[package]]
-name = "esl01-indexedlog"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca189b77364e351675e0ac8274a8df0be0c88d3e66103d81f9bd265371f49389"
-dependencies = [
- "byteorder",
- "esl01-atomicfile",
- "esl01-minibytes",
- "esl01-vlqencoding",
- "fs2",
- "hex",
- "libc",
- "memmap",
- "once_cell",
- "rand 0.8.5",
- "tempfile",
- "tracing",
- "twox-hash",
-]
-
-[[package]]
-name = "esl01-mincode"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "238b140f1ced88489a0b3770b3a7613237d73919d6e4c9b8d295c44142264482"
-dependencies = [
- "byteorder",
- "esl01-vlqencoding",
- "serde",
-]
-
-[[package]]
-name = "esl01-minibytes"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0068579525ef038377d270f31c6cf5062da1ac99f34c7bc83b31bc61aa701ad1"
-dependencies = [
- "bytes",
- "memmap",
- "serde",
-]
-
-[[package]]
-name = "esl01-nonblocking"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a2c37087d9d14a9d6bdf80e61dc7757763839cb528f6b866256b1773dd378ba"
-
-[[package]]
-name = "esl01-renderdag"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1840969ab8be31e186bb6d2f672d586dcd203dd4019a80dc1277a14686eca9"
-dependencies = [
- "bitflags 1.3.2",
- "itertools 0.10.5",
-]
-
-[[package]]
-name = "esl01-vlqencoding"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad8aca6f16078736d5e7762a45125eaa685dfe47155f4a72ec301f13a5f0749"
-
-[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1313,6 +1213,12 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "futures"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
+
+[[package]]
+name = "futures"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
@@ -1388,6 +1294,7 @@ version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
 dependencies = [
+ "futures 0.1.31",
  "futures-channel",
  "futures-core",
  "futures-io",
@@ -1468,7 +1375,6 @@ dependencies = [
  "color-eyre",
  "console",
  "cursive_core",
- "esl01-dag",
  "eyre",
  "fslock",
  "git-branchless-hook",
@@ -1496,6 +1402,7 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "sapling-dag",
  "scm-diff-editor",
  "thiserror 2.0.12",
  "tracing",
@@ -1568,9 +1475,8 @@ dependencies = [
  "console",
  "criterion",
  "cursive",
- "esl01-dag",
  "eyre",
- "futures",
+ "futures 0.3.31",
  "git2",
  "indicatif",
  "insta",
@@ -1581,6 +1487,7 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "sapling-dag",
  "scm-record 0.5.0",
  "serde",
  "shell-words",
@@ -1598,13 +1505,13 @@ dependencies = [
 name = "git-branchless-move"
 version = "0.10.0"
 dependencies = [
- "esl01-dag",
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
  "insta",
  "rayon",
+ "sapling-dag",
  "tracing",
 ]
 
@@ -1613,13 +1520,13 @@ name = "git-branchless-navigation"
 version = "0.10.0"
 dependencies = [
  "cursive",
- "esl01-dag",
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
  "git-branchless-smartlog",
  "itertools 0.14.0",
+ "sapling-dag",
  "skim",
  "tracing",
 ]
@@ -1639,7 +1546,6 @@ dependencies = [
 name = "git-branchless-query"
 version = "0.10.0"
 dependencies = [
- "esl01-dag",
  "eyre",
  "git-branchless-invoke",
  "git-branchless-lib",
@@ -1647,6 +1553,7 @@ dependencies = [
  "git-branchless-revset",
  "insta",
  "itertools 0.14.0",
+ "sapling-dag",
  "tracing",
 ]
 
@@ -1656,7 +1563,6 @@ version = "0.10.0"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
- "esl01-dag",
  "eyre",
  "git-branchless-invoke",
  "git-branchless-lib",
@@ -1665,6 +1571,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "rayon",
+ "sapling-dag",
  "scm-record 0.5.0",
  "tracing",
 ]
@@ -1677,9 +1584,8 @@ dependencies = [
  "chrono",
  "chrono-english",
  "chronoutil",
- "esl01-dag",
  "eyre",
- "futures",
+ "futures 0.3.31",
  "git-branchless-lib",
  "git-branchless-opts",
  "glob",
@@ -1690,6 +1596,7 @@ dependencies = [
  "lazy_static",
  "rayon",
  "regex",
+ "sapling-dag",
  "serde_json",
  "thiserror 2.0.12",
  "tracing",
@@ -1701,13 +1608,13 @@ version = "0.10.0"
 dependencies = [
  "bstr",
  "chrono",
- "esl01-dag",
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
  "insta",
  "rayon",
+ "sapling-dag",
  "shell-words",
  "tempfile",
  "tracing",
@@ -1718,13 +1625,13 @@ name = "git-branchless-smartlog"
 version = "0.10.0"
 dependencies = [
  "cursive_core",
- "esl01-dag",
  "eyre",
  "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
  "insta",
+ "sapling-dag",
  "tracing",
 ]
 
@@ -1734,7 +1641,6 @@ version = "0.10.0"
 dependencies = [
  "clap 4.5.46",
  "cursive_core",
- "esl01-dag",
  "eyre",
  "git-branchless-invoke",
  "git-branchless-lib",
@@ -1747,6 +1653,7 @@ dependencies = [
  "lazy_static",
  "rayon",
  "regex",
+ "sapling-dag",
  "serde",
  "serde_json",
  "tempfile",
@@ -1763,7 +1670,6 @@ dependencies = [
  "clap 4.5.46",
  "crossbeam",
  "cursive",
- "esl01-dag",
  "eyre",
  "fslock",
  "git-branchless-invoke",
@@ -1777,6 +1683,7 @@ dependencies = [
  "maplit",
  "num_cpus",
  "rayon",
+ "sapling-dag",
  "scm-bisect",
  "serde",
  "serde_json",
@@ -1985,8 +1892,11 @@ version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2481980430f9f78649238835720ddccc57e52df14ffce1c6f37391d61b563e9"
 dependencies = [
+ "arbitrary",
  "equivalent",
  "hashbrown 0.15.0",
+ "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -2278,13 +2188,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
-name = "memmap"
-version = "0.7.0"
+name = "memmap2"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
 dependencies = [
  "libc",
- "winapi",
 ]
 
 [[package]]
@@ -3132,6 +3041,127 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapling-atomicfile"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d91162bc6659937f86b9c85f0e8c31b605063ac8923b21cac7c482cbfda4407"
+dependencies = [
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "sapling-dag"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c90cc3ba9ec3cfa19cd9125d5b9df37750b3bb3e0e70462c0183ec7747a1702f"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitflags 2.9.1",
+ "byteorder",
+ "fail",
+ "fs2",
+ "futures 0.3.31",
+ "indexmap 2.11.0",
+ "rand 0.8.5",
+ "sapling-dag-types",
+ "sapling-drawdag",
+ "sapling-indexedlog",
+ "sapling-mincode",
+ "sapling-minibytes",
+ "sapling-nonblocking",
+ "sapling-renderdag",
+ "sapling-vlqencoding",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "sapling-dag-types"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ec65200f1f90d5719296a011e45ba61a29942b60fae7c3c5f90ca87656ff68d"
+dependencies = [
+ "abomonation_derive",
+ "sapling-minibytes",
+ "serde",
+]
+
+[[package]]
+name = "sapling-drawdag"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "761cba3dfbbbec1ddf1132711df226dd969c8e3620b8849dc3a8bb7be4a2032c"
+
+[[package]]
+name = "sapling-indexedlog"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e5f65ae962b8d889abb3db5cc8bf81bde40282055ece4617dac5e74eac0b790"
+dependencies = [
+ "byteorder",
+ "fs2",
+ "hex",
+ "libc",
+ "memmap2",
+ "once_cell",
+ "rand 0.8.5",
+ "sapling-atomicfile",
+ "sapling-minibytes",
+ "sapling-vlqencoding",
+ "tempfile",
+ "tracing",
+ "twox-hash",
+ "winapi",
+]
+
+[[package]]
+name = "sapling-mincode"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "172868196a99be4fa7118ad15cedc5c1d0e4a73f29e48b5efdcd5939a683c973"
+dependencies = [
+ "byteorder",
+ "sapling-vlqencoding",
+ "serde",
+]
+
+[[package]]
+name = "sapling-minibytes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51437efe022fb6d20f0873e99da2d0f856b7be819359988ddb86bc0db3cf5c2e"
+dependencies = [
+ "bytes",
+ "memmap2",
+ "serde",
+]
+
+[[package]]
+name = "sapling-nonblocking"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5190595f39a20f732f54e969974aac6840731b20ab85fcac010728f0e1735c69"
+
+[[package]]
+name = "sapling-renderdag"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edffb89cab87bd0901c5749d576f5d37a1f34e05160e936f463f4e94cc447b61"
+dependencies = [
+ "bitflags 2.9.1",
+]
+
+[[package]]
+name = "sapling-vlqencoding"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0971439fe0def46ccd69141e5f8c23c2b8d6e88606ddda6ea0670b5691686c4d"
+
+[[package]]
 name = "scanlex"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3518,6 +3548,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synstructure"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -4106,7 +4148,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

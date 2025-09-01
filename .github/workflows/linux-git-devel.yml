@@ -54,7 +54,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.82
           override: true
 
       - uses: actions/checkout@v5

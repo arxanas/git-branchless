@@ -1,5 +1,5 @@
 use bstr::ByteSlice;
-use eden_dag::nameset::hints::Hints;
+use eden_dag::set::hints::Hints;
 
 use lib::core::dag::CommitSet;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
