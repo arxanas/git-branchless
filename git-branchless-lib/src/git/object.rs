@@ -117,7 +117,7 @@ impl<'repo> Commit<'repo> {
 
     /// Get the author of this commit.
     #[instrument]
-    pub fn get_author(&self) -> Signature {
+    pub fn get_author(&self) -> Signature<'_> {
         Signature {
             inner: self.inner.author(),
         }
@@ -125,7 +125,7 @@ impl<'repo> Commit<'repo> {
 
     /// Get the committer of this commit.
     #[instrument]
-    pub fn get_committer(&self) -> Signature {
+    pub fn get_committer(&self) -> Signature<'_> {
         Signature {
             inner: self.inner.committer(),
         }
@@ -139,7 +139,7 @@ impl<'repo> Commit<'repo> {
 
     /// Get the `Tree` object associated with this commit.
     #[instrument]
-    pub fn get_tree(&self) -> Result<Tree> {
+    pub fn get_tree(&self) -> Result<Tree<'_>> {
         let tree = self.inner.tree().map_err(|err| Error::FindTree {
             source: err,
             oid: self.inner.tree_id().into(),
