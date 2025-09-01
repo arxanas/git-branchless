@@ -96,7 +96,7 @@ impl Tree<'_> {
     ///
     /// Note that the path isn't just restricted to entries of the current tree,
     /// i.e. you can use slashes in the provided path.
-    pub fn get_path(&self, path: &Path) -> Result<Option<TreeEntry>> {
+    pub fn get_path(&self, path: &Path) -> Result<Option<TreeEntry<'_>>> {
         match self.inner.get_path(path) {
             Ok(entry) => Ok(Some(TreeEntry { inner: entry })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -456,7 +456,7 @@ pub fn hydrate_tree(
     Ok(make_non_zero_oid(tree_oid))
 }
 
-pub fn make_empty_tree(repo: &Repo) -> Result<Tree> {
+pub fn make_empty_tree(repo: &Repo) -> Result<Tree<'_>> {
     let tree_oid = hydrate_tree(repo, None, Default::default())?;
     repo.find_tree_or_fail(tree_oid)
         .map_err(Box::new)

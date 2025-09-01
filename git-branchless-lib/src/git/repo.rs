@@ -630,7 +630,7 @@ impl Repo {
     /// Get the directory where the DAG for the repository is stored.
     #[instrument]
     pub fn get_dag_dir(&self) -> Result<PathBuf> {
-        // Updated from `dag` to `dag2` for `esl01-dag==0.3.0`, since it may
+        // Updated from `dag` to `dag2` for `sapling-dag==0.1.0`, since it may
         // not be backwards-compatible.
         Ok(self.get_branchless_dir()?.join("dag2"))
     }
@@ -803,7 +803,11 @@ impl Repo {
     ///
     /// If the commit has more than one parent, returns `None`.
     #[instrument]
-    pub fn get_patch_for_commit(&self, effects: &Effects, commit: &Commit) -> Result<Option<Diff>> {
+    pub fn get_patch_for_commit(
+        &self,
+        effects: &Effects,
+        commit: &Commit,
+    ) -> Result<Option<Diff<'_>>> {
         let changed_paths = self.get_paths_touched_by_commit(commit)?;
         let dehydrated_commit = self.dehydrate_commit(
             commit,
@@ -836,7 +840,7 @@ impl Repo {
         old_tree: Option<&Tree>,
         new_tree: &Tree,
         num_context_lines: usize,
-    ) -> Result<Diff> {
+    ) -> Result<Diff<'_>> {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let _effects = effects;
 
@@ -931,7 +935,7 @@ impl Repo {
     }
 
     /// Attempt to parse the user-provided object descriptor.
-    pub fn revparse_single_commit(&self, spec: &str) -> Result<Option<Commit>> {
+    pub fn revparse_single_commit(&self, spec: &str) -> Result<Option<Commit<'_>>> {
         if spec.ends_with('@') && spec.len() > 1 {
             // Weird bug in `libgit2`; it seems that it treats a name like
             // `foo-@` the same as `@`, and ignores the leading `foo`.
@@ -953,7 +957,7 @@ impl Repo {
 
     /// Find all references in the repository.
     #[instrument]
-    pub fn get_all_references(&self) -> Result<Vec<Reference>> {
+    pub fn get_all_references(&self) -> Result<Vec<Reference<'_>>> {
         let mut all_references = Vec::new();
         for reference in self.inner.references().map_err(Error::GetReferences)? {
             let reference = reference.map_err(Error::ReadReference)?;
@@ -988,7 +992,7 @@ impl Repo {
         index: &Index,
         head_info: &ResolvedReferenceInfo,
         event_tx_id: Option<EventTransactionId>,
-    ) -> Result<(WorkingCopySnapshot, Vec<StatusEntry>)> {
+    ) -> Result<(WorkingCopySnapshot<'_>, Vec<StatusEntry>)> {
         let (effects, _progress) = effects.start_operation(OperationType::QueryWorkingCopy);
         let _effects = effects;
 
@@ -1055,7 +1059,12 @@ impl Repo {
     /// be a branch name and not a reference name, i.e. it should not start with
     /// `refs/heads/`.
     #[instrument]
-    pub fn create_branch(&self, branch_name: &str, commit: &Commit, force: bool) -> Result<Branch> {
+    pub fn create_branch(
+        &self,
+        branch_name: &str,
+        commit: &Commit,
+        force: bool,
+    ) -> Result<Branch<'_>> {
         if branch_name.starts_with("refs/heads/") {
             warn!(
                 ?branch_name,
@@ -1084,7 +1093,7 @@ impl Repo {
         oid: NonZeroOid,
         force: bool,
         log_message: &str,
-    ) -> Result<Reference> {
+    ) -> Result<Reference<'_>> {
         let reference = self
             .inner
             .reference(name.as_str(), oid.inner, force, log_message)
@@ -1112,7 +1121,7 @@ impl Repo {
 
     /// Look up a reference with the given name. Returns `None` if not found.
     #[instrument]
-    pub fn find_reference(&self, name: &ReferenceName) -> Result<Option<Reference>> {
+    pub fn find_reference(&self, name: &ReferenceName) -> Result<Option<Reference<'_>>> {
         match self.inner.find_reference(name.as_str()) {
             Ok(reference) => Ok(Some(Reference { inner: reference })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -1125,7 +1134,7 @@ impl Repo {
 
     /// Get all local branches in the repository.
     #[instrument]
-    pub fn get_all_local_branches(&self) -> Result<Vec<Branch>> {
+    pub fn get_all_local_branches(&self) -> Result<Vec<Branch<'_>>> {
         let mut all_branches = Vec::new();
         for branch in self
             .inner
@@ -1143,7 +1152,7 @@ impl Repo {
 
     /// Look up the branch with the given name. Returns `None` if not found.
     #[instrument]
-    pub fn find_branch(&self, name: &str, branch_type: BranchType) -> Result<Option<Branch>> {
+    pub fn find_branch(&self, name: &str, branch_type: BranchType) -> Result<Option<Branch<'_>>> {
         match self.inner.find_branch(name, branch_type) {
             Ok(branch) => Ok(Some(Branch {
                 repo: self,
@@ -1159,7 +1168,7 @@ impl Repo {
 
     /// Look up a commit with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_commit(&self, oid: NonZeroOid) -> Result<Option<Commit>> {
+    pub fn find_commit(&self, oid: NonZeroOid) -> Result<Option<Commit<'_>>> {
         match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -1170,7 +1179,7 @@ impl Repo {
     /// Like `find_commit`, but raises a generic error if the commit could not
     /// be found.
     #[instrument]
-    pub fn find_commit_or_fail(&self, oid: NonZeroOid) -> Result<Commit> {
+    pub fn find_commit_or_fail(&self, oid: NonZeroOid) -> Result<Commit<'_>> {
         match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Commit { inner: commit }),
             Err(err) => Err(Error::FindCommit { source: err, oid }),
@@ -1179,7 +1188,7 @@ impl Repo {
 
     /// Look up a blob with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_blob(&self, oid: NonZeroOid) -> Result<Option<Blob>> {
+    pub fn find_blob(&self, oid: NonZeroOid) -> Result<Option<Blob<'_>>> {
         match self.inner.find_blob(oid.inner) {
             Ok(blob) => Ok(Some(Blob { inner: blob })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -1190,7 +1199,7 @@ impl Repo {
     /// Like `find_blob`, but raises a generic error if the blob could not be
     /// found.
     #[instrument]
-    pub fn find_blob_or_fail(&self, oid: NonZeroOid) -> Result<Blob> {
+    pub fn find_blob_or_fail(&self, oid: NonZeroOid) -> Result<Blob<'_>> {
         match self.inner.find_blob(oid.inner) {
             Ok(blob) => Ok(Blob { inner: blob }),
             Err(err) => Err(Error::FindBlob { source: err, oid }),
@@ -1438,7 +1447,7 @@ impl Repo {
         commit: &Commit,
         changed_paths: &[&Path],
         base_on_parent: bool,
-    ) -> Result<Commit> {
+    ) -> Result<Commit<'_>> {
         let tree = commit.get_tree()?;
         let dehydrated_tree_oid =
             dehydrate_tree(self, &tree, changed_paths).map_err(Error::DehydrateTree)?;
@@ -1477,7 +1486,7 @@ impl Repo {
 
     /// Look up the tree with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_tree(&self, oid: NonZeroOid) -> Result<Option<Tree>> {
+    pub fn find_tree(&self, oid: NonZeroOid) -> Result<Option<Tree<'_>>> {
         match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Some(Tree { inner: tree })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -1491,7 +1500,7 @@ impl Repo {
     /// Like `find_tree`, but raises a generic error if the commit could not
     /// be found.
     #[instrument]
-    pub fn find_tree_or_fail(&self, oid: NonZeroOid) -> Result<Tree> {
+    pub fn find_tree_or_fail(&self, oid: NonZeroOid) -> Result<Tree<'_>> {
         match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Tree { inner: tree }),
             Err(err) => Err(Error::FindTree {
@@ -1524,7 +1533,7 @@ impl Repo {
         &self,
         parent_commit: &Commit,
         opts: &AmendFastOptions,
-    ) -> std::result::Result<Tree, CreateCommitFastError> {
+    ) -> std::result::Result<Tree<'_>, CreateCommitFastError> {
         let changed_paths: Vec<PathBuf> = {
             let mut result = self.get_paths_touched_by_commit(parent_commit)?;
             match opts {

@@ -1,0 +1,42 @@
+{
+    "name": "git-branchless",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+
+    // Features to add to the dev container. More info: https://containers.dev/features.
+    "features": {
+        "ghcr.io/devcontainers/features/rust:1": {
+            "version": "1.81",
+            "profile": "default"
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+            "ppa": true,
+            "version": "2.37.3"
+        },
+        "ghcr.io/devcontainers/features/nix:1": {
+            "multiUser": false,
+            "version": "2.24"
+        }
+    },
+
+    // Configure tool-specific properties.
+    "customizations": {
+        // Configure properties specific to VS Code.
+        "vscode": {
+            // Add the IDs of extensions you want installed when the container is created.
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "tamasfe.even-better-toml",
+                "ms-vscode.vscode-json",
+                "ms-vscode.vscode-markdown"
+            ],
+            "settings": {
+                "terminal.integrated.shellIntegration.enabled": true
+            }
+        }
+    },
+
+    // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+    "remoteUser": "vscode"
+}

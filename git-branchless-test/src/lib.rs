@@ -9,7 +9,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 mod worker;
 
@@ -592,7 +592,7 @@ fn subcommand_run(
         effects,
         &repo,
         &mut dag,
-        &[revset.clone()],
+        std::slice::from_ref(&revset),
         resolve_revset_options,
     ) {
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),

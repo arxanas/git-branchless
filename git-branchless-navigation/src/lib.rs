@@ -7,7 +7,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 pub mod prompt;
 
@@ -564,7 +564,7 @@ pub fn switch(
                 effects,
                 &repo,
                 &mut dag,
-                &[target.clone()],
+                std::slice::from_ref(&target),
                 &ResolveRevsetOptions::default(),
             )?;
 

@@ -28,7 +28,7 @@ pub struct RepoReferencesSnapshot {
 /// Helper functions on [`Repo`].
 pub trait RepoExt {
     /// Get the `Branch` for the main branch for the repository.
-    fn get_main_branch(&self) -> eyre::Result<Branch>;
+    fn get_main_branch(&self) -> eyre::Result<Branch<'_>>;
 
     /// Get the OID corresponding to the main branch.
     fn get_main_branch_oid(&self) -> eyre::Result<NonZeroOid>;
@@ -47,7 +47,7 @@ pub trait RepoExt {
 }
 
 impl RepoExt for Repo {
-    fn get_main_branch(&self) -> eyre::Result<Branch> {
+    fn get_main_branch(&self) -> eyre::Result<Branch<'_>> {
         let main_branch_name = get_main_branch_name(self)?;
         match self.find_branch(&main_branch_name, BranchType::Local)? {
             Some(branch) => Ok(branch),
