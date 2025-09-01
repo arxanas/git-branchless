@@ -650,6 +650,26 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn test_error_without_panic_on_missing_repo() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    {
+        let (_stdout, stderr) = git.branchless_with_options(
+            "smartlog",
+            &[],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"could not open repository: could not find repository from '<repo-path>'; class=Repository (6); code=NotFound (-3)");
+    }
+
+    Ok(())
+}
+
 #[test]
 fn test_smartlog_hidden() -> eyre::Result<()> {
     let git = make_git()?;
