@@ -94,7 +94,7 @@ fn fn_none(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>)
 
 #[instrument]
 fn fn_union(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(lhs.union(&rhs))
 }
 
@@ -105,7 +105,7 @@ fn fn_intersection(
     args: &[Expr],
     _: &Option<&CommitSet>,
 ) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+    let (lhs, rhs) = eval2(ctx, name, args, true)?;
     Ok(lhs.intersection(&rhs))
 }
 
@@ -116,19 +116,19 @@ fn fn_difference(
     args: &[Expr],
     _: &Option<&CommitSet>,
 ) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+    let (lhs, rhs) = eval2(ctx, name, args, true)?;
     Ok(lhs.difference(&rhs))
 }
 
 #[instrument]
 fn fn_only(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(ctx.dag.query_only(lhs, rhs)?)
 }
 
 #[instrument]
 fn fn_range(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(ctx.dag.query_range(lhs, rhs)?)
 }
 

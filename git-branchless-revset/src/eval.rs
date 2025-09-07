@@ -310,11 +310,12 @@ pub(super) fn eval2(
     ctx: &mut Context,
     function_name: &str,
     args: &[Expr],
+    limit_rhs: bool,
 ) -> Result<(CommitSet, CommitSet), EvalError> {
     match args {
         [lhs, rhs] => {
             let lhs = eval_inner(ctx, lhs, &None)?;
-            let rhs = eval_inner(ctx, rhs, &None)?;
+            let rhs = eval_inner(ctx, rhs, &limit_rhs.then_some(&lhs))?;
             Ok((lhs, rhs))
         }
 
@@ -503,6 +504,76 @@ mod tests {
                         },
                     },
                 ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("intersection"),
+                vec![
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                    Expr::Name(Cow::Owned(test2_oid.to_string())),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [],
+            )
+            "###);
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("intersection"),
+                vec![
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("difference"),
+                vec![
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                    Expr::Name(Cow::Owned(test2_oid.to_string())),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("difference"),
+                vec![
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [],
             )
             "###);
         }
