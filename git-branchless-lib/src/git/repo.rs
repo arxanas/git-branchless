@@ -49,9 +49,6 @@ pub enum Error {
     #[error("could not open repository: {0}")]
     OpenRepo(#[source] git2::Error),
 
-    #[error("could not find repository to open for worktree {path:?}")]
-    OpenParentWorktreeRepository { path: PathBuf },
-
     #[error("could not open repository: {0}")]
     UnsupportedExtensionWorktreeConfig(#[source] git2::Error),
 
@@ -505,9 +502,20 @@ impl Repo {
         Ok(Repo { inner: repo })
     }
 
-    /// Get the path to the `.git` directory for the repository.
+    /// Get the path to the local `.git` directory for the repository.
+    ///
+    /// If this repository is a non-root worktree, this will return the path to
+    /// the worktree's local directory, i.e. `.git/worktrees/<name>`
     pub fn get_path(&self) -> &Path {
         self.inner.path()
+    }
+
+    /// Get the path to the shared common `.git` directory for the repository.
+    ///
+    /// This always gets the shared common `.git` directory instead of the
+    /// per-worktree directory (`.git/worktrees/...`).
+    pub fn get_shared_path(&self) -> &Path {
+        self.inner.commondir()
     }
 
     /// Get the path to the `packed-refs` file for the repository.
@@ -569,32 +577,6 @@ impl Repo {
         Ok(Index { inner: index })
     }
 
-    /// If this repository is a worktree for another "parent" repository, return a [`Repo`] object
-    /// corresponding to that repository.
-    #[instrument]
-    pub fn open_worktree_parent_repo(&self) -> Result<Option<Self>> {
-        if !self.inner.is_worktree() {
-            return Ok(None);
-        }
-
-        // `git2` doesn't seem to support a way to directly look up the parent repository for the
-        // worktree.
-        let worktree_info_dir = self.get_path();
-        let parent_repo_path = match worktree_info_dir
-            .parent() // remove `.git`
-            .and_then(|path| path.parent()) // remove worktree name
-            .and_then(|path| path.parent()) // remove `worktrees`
-        {
-            Some(path) => path,
-            None => {
-                return Err(Error::OpenParentWorktreeRepository {
-                    path: worktree_info_dir.to_owned()});
-            },
-        };
-        let parent_repo = Self::from_dir(parent_repo_path)?;
-        Ok(Some(parent_repo))
-    }
-
     /// Get the configuration object for the repository.
     ///
     /// **Warning**: This object should only be used for read operations. Write
@@ -608,12 +590,7 @@ impl Repo {
 
     /// Get the directory where all repo-specific git-branchless state is stored.
     pub fn get_branchless_dir(&self) -> Result<PathBuf> {
-        let maybe_worktree_parent_repo = self.open_worktree_parent_repo()?;
-        let repo = match maybe_worktree_parent_repo.as_ref() {
-            Some(repo) => repo,
-            None => self,
-        };
-        let dir = repo.get_path().join("branchless");
+        let dir = self.get_shared_path().join("branchless");
         std::fs::create_dir_all(&dir).map_err(|err| Error::CreateBranchlessDir {
             source: err,
             path: dir.clone(),
