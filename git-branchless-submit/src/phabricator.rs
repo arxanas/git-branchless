@@ -354,6 +354,7 @@ impl Forge for PhabricatorForge<'_> {
             preserve_timestamps: true,
             force_in_memory: true,
             force_on_disk: false,
+            dry_run: false,
             resolve_merge_conflicts: false,
             check_out_commit_options: CheckOutCommitOptions {
                 render_smartlog: false,
@@ -485,7 +486,8 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             } => rewritten_oids,
             ExecuteRebasePlanResult::Succeeded {
                 rewritten_oids: None,
-            } => {
+            }
+            | ExecuteRebasePlanResult::WouldSucceed => {
                 warn!("No rewritten commit OIDs were produced by rebase plan execution");
                 Default::default()
             }
@@ -602,6 +604,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             preserve_timestamps: true,
             force_in_memory: true,
             force_on_disk: false,
+            dry_run: false,
             resolve_merge_conflicts: false,
             check_out_commit_options: CheckOutCommitOptions {
                 render_smartlog: false,

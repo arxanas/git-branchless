@@ -555,6 +555,7 @@ pub fn split(
                 preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
                 force_in_memory,
                 force_on_disk,
+                dry_run: false,
                 resolve_merge_conflicts,
                 check_out_commit_options: CheckOutCommitOptions {
                     additional_args: Default::default(),
@@ -579,7 +580,9 @@ pub fn split(
     };
 
     match result {
-        None | Some(ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }) => {
+        None
+        | Some(ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ })
+        | Some(ExecuteRebasePlanResult::WouldSucceed) => {
             try_exit_code!(git_run_info
                 .run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?);
             Ok(Ok(()))
