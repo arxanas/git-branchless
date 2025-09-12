@@ -411,6 +411,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                 preserve_timestamps: get_restack_preserve_timestamps(repo)?,
                 force_in_memory,
                 force_on_disk: *force_on_disk,
+                dry_run: false,
                 resolve_merge_conflicts: *resolve_merge_conflicts,
                 check_out_commit_options: CheckOutCommitOptions {
                     render_smartlog: false,
@@ -726,6 +727,7 @@ fn set_abort_trap(
             preserve_timestamps: true,
             force_in_memory: false,
             force_on_disk: true,
+            dry_run: false,
             resolve_merge_conflicts: false,
             check_out_commit_options: CheckOutCommitOptions {
                 render_smartlog: false,
@@ -733,7 +735,8 @@ fn set_abort_trap(
             },
         },
     )? {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }
+        | ExecuteRebasePlanResult::WouldSucceed => {
             // Do nothing.
         }
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
@@ -2091,6 +2094,7 @@ fn apply_fixes(
             execute_options,
         )? {
             ExecuteRebasePlanResult::Succeeded { rewritten_oids } => rewritten_oids,
+            ExecuteRebasePlanResult::WouldSucceed => return Ok(Ok(())),
             ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
                 writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
                 return Ok(Err(ExitCode(1)));
