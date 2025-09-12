@@ -550,6 +550,10 @@ pub enum Command {
         /// Only supported if the moved subtree has a single head.
         #[clap(action, short = 'I', long = "insert")]
         insert: bool,
+
+        /// Test whether an in-memory rebase would succeed.
+        #[clap(action, long = "dry-run", conflicts_with = "force_on_disk")]
+        dry_run: bool,
     },
 
     /// Move to a later commit in the current stack.

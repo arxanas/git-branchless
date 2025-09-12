@@ -91,6 +91,7 @@ pub fn sync(
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
         force_in_memory,
         force_on_disk,
+        dry_run: false,
         resolve_merge_conflicts,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
@@ -427,6 +428,9 @@ fn execute_plans(
             match result {
                 ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
                     success_commits.push(root_commit);
+                }
+                ExecuteRebasePlanResult::WouldSucceed => {
+                    // Do nothing.
                 }
                 ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
                     failed_merge_commits.push((root_commit, failed_merge_info));

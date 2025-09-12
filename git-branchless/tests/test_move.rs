@@ -2833,6 +2833,105 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_force_in_memory_dry_run() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        git.run(&["checkout", "HEAD~"])?;
+        git.commit_file("test3", 3)?;
+
+        let starting_smartlog = git.smartlog()?;
+        insta::assert_snapshot!(starting_smartlog, @r###"
+            :
+            O 62fc20d create test1.txt
+            |\
+            | @ 4838e49 create test3.txt
+            |
+            O 96d1c37 (master) create test2.txt
+            "###
+        );
+
+        let (stdout, _stderr) =
+            git.branchless("move", &["-d", "master", "--in-memory", "--dry-run"])?;
+        insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: 70deb1e create test3.txt
+            In-memory rebase would succeed.
+            (This was a dry-run; no commits were moved. Re-run without --dry-run to actually move commits.)
+        "###);
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d create test1.txt
+            |\
+            | @ 4838e49 create test3.txt
+            |
+            O 96d1c37 (master) create test2.txt
+            "###
+        );
+        assert_eq!(stdout, starting_smartlog);
+    }
+
+    {
+        git.run(&["checkout", "HEAD~"])?;
+        git.write_file_txt("test2", "conflicting contents")?;
+        git.run(&["add", "."])?;
+        git.run(&["commit", "-m", "conflicting test2"])?;
+
+        let starting_smartlog = git.smartlog()?;
+        insta::assert_snapshot!(starting_smartlog, @r###"
+            :
+            O 62fc20d create test1.txt
+            |\
+            | @ 081b474 conflicting test2
+            |\
+            | o 4838e49 create test3.txt
+            |
+            O 96d1c37 (master) create test2.txt
+            "###
+        );
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
+            &["-d", "master", "--in-memory", "--dry-run"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            This operation would cause a merge conflict:
+            - (1 conflicting file) 081b474 conflicting test2
+            To resolve merge conflicts, retry this operation with the --merge option.
+            "###
+        );
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d create test1.txt
+            |\
+            | @ 081b474 conflicting test2
+            |\
+            | o 4838e49 create test3.txt
+            |
+            O 96d1c37 (master) create test2.txt
+            "###
+        );
+        assert_eq!(stdout, starting_smartlog);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
     let git = make_git()?;
 

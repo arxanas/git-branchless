@@ -554,6 +554,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
         force_in_memory: true,
         force_on_disk: false,
+        dry_run: false,
         resolve_merge_conflicts: false,
         check_out_commit_options: Default::default(),
     };
@@ -566,7 +567,8 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         &execute_options,
     )?;
     match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }
+        | ExecuteRebasePlanResult::WouldSucceed => Ok(Ok(())),
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Insert)?;
             Ok(Ok(()))
