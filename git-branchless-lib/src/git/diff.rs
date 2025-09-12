@@ -39,52 +39,41 @@ pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> 
     // this returns something like `1 file changed, 1 deletion(-)`
     // diff.short_stats()
 
-    // this returns something like `test2.txt (-1)` or `2 files (+1/-2)`
+    // this builds something like `test2.txt (-1)` or `2 files (+1/-2)`
     let stats = diff.inner.stats()?;
-    let prefix = if stats.files_changed() == 1 {
-        let mut prefix = None;
-        // returning false terminates iteration, but that also returns Err, so
-        // catch and ignore it
+    let filename_or_count = if stats.files_changed() == 1 {
+        let mut filename = None;
+
+        // returning false in the closure terminates iteration, but that also
+        // returns an Err, so catch and ignore it
         let _ = diff.inner.foreach(
             &mut |delta: git2::DiffDelta, _| {
-                if let Some(path) = delta.old_file().path() {
-                    // prefix = Some(format!("{}", path.file_name().unwrap().to_string_lossy()));
-                    prefix = Some(format!("{}", path.display()));
-                } else if let Some(path) = delta.new_file().path() {
-                    prefix = Some(format!("{}", path.display()));
-                }
-
+                let relevant_path = delta
+                    .old_file()
+                    .path()
+                    .or(delta.new_file().path())
+                    .unwrap_or_else(|| unreachable!("diff should have contained at least 1 file"));
+                filename = Some(format!("{}", relevant_path.display()));
                 false
             },
             None,
             None,
             None,
         );
-        prefix
+
+        filename.unwrap_or_else(|| unreachable!("file name should have been initialized"))
     } else {
-        Some(format!("{} files", stats.files_changed()))
+        format!("{} files", stats.files_changed())
     };
 
-    let i = stats.insertions();
-    let d = stats.deletions();
-    Ok(format!(
-        "{prefix} ({i}{slash}{d})",
-        prefix = prefix.unwrap(),
-        i = if i > 0 {
-            format!("+{i}")
-        } else {
-            String::new()
-        },
-        slash = if i > 0 && d > 0 { "/" } else { "" },
-        d = if d > 0 {
-            format!("-{d}")
-        } else {
-            String::new()
-        }
-    ))
-    // stats.files_changed()
-    // stats.insertions()
-    // stats.deletions()
+    let ins_del = match (stats.insertions(), stats.deletions()) {
+        (0, 0) => unreachable!("empty diff"),
+        (i, 0) => format!("+{i}"),
+        (0, d) => format!("-{d}"),
+        (i, d) => format!("+{i}/-{d}"),
+    };
+
+    Ok(format!("{filename_or_count} ({ins_del})"))
 }
 
 /// Calculate the diff between the index and the working copy.
