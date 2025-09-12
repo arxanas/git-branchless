@@ -74,6 +74,7 @@ pub fn r#move(
     move_options: &MoveOptions,
     fixup: bool,
     insert: bool,
+    dry_run: bool,
 ) -> EyreExitOr<()> {
     let sources_provided = !sources.is_empty();
     let bases_provided = !bases.is_empty();
@@ -484,6 +485,7 @@ pub fn r#move(
                 preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
                 force_in_memory,
                 force_on_disk,
+                dry_run,
                 resolve_merge_conflicts,
                 check_out_commit_options: Default::default(),
             };
@@ -504,6 +506,15 @@ pub fn r#move(
 
     match result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
+
+        ExecuteRebasePlanResult::WouldSucceed if dry_run => {
+            writeln!(effects.get_output_stream(), "(This was a dry-run; no commits were moved. Re-run without --dry-run to actually move commits.)")?;
+            Ok(Ok(()))
+        }
+
+        ExecuteRebasePlanResult::WouldSucceed => {
+            unreachable!("WouldSucceed should only apply to dry runs")
+        }
 
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Retry)?;

@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
+use lib::core::untracked_file_cache::UntrackedFileStrategy;
 use lib::git::NonZeroOid;
 
 /// A revset expression. Can be a commit hash, branch name, or one of the
@@ -329,6 +330,10 @@ pub struct RecordArgs {
     /// After making the new commit, switch back to the previous commit.
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
+
+    /// How should newly encountered, untracked files be handled?
+    #[clap(value_parser, long = "untracked", conflicts_with_all(&["interactive"]))]
+    pub untracked_file_strategy: Option<UntrackedFileStrategy>,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
@@ -448,6 +453,10 @@ pub enum Command {
         /// formatting or refactoring changes.
         #[clap(long)]
         reparent: bool,
+
+        /// How should newly encountered, untracked files be handled?
+        #[clap(action, long = "untracked")]
+        untracked_file_strategy: Option<UntrackedFileStrategy>,
     },
 
     /// Gather information about recent operations to upload as part of a bug
@@ -550,6 +559,10 @@ pub enum Command {
         /// Only supported if the moved subtree has a single head.
         #[clap(action, short = 'I', long = "insert")]
         insert: bool,
+
+        /// Test whether an in-memory rebase would succeed.
+        #[clap(action, long = "dry-run", conflicts_with = "force_on_disk")]
+        dry_run: bool,
     },
 
     /// Move to a later commit in the current stack.

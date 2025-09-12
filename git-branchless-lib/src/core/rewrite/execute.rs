@@ -498,6 +498,7 @@ mod in_memory {
             preserve_timestamps,
             force_in_memory: _,
             force_on_disk: _,
+            dry_run: _,
             resolve_merge_conflicts: _, // May be needed once we can resolve merge conflicts in memory.
             check_out_commit_options: _, // Caller is responsible for checking out to new HEAD.
         } = options;
@@ -909,6 +910,7 @@ mod in_memory {
             preserve_timestamps: _,
             force_in_memory: _,
             force_on_disk: _,
+            dry_run: _,
             resolve_merge_conflicts: _,
             check_out_commit_options,
         } = options;
@@ -994,6 +996,7 @@ mod on_disk {
             preserve_timestamps,
             force_in_memory: _,
             force_on_disk: _,
+            dry_run: _,
             resolve_merge_conflicts: _,
             check_out_commit_options: _, // Checkout happens after rebase has concluded.
         } = options;
@@ -1170,6 +1173,7 @@ mod on_disk {
             preserve_timestamps: _,
             force_in_memory: _,
             force_on_disk: _,
+            dry_run: _,
             resolve_merge_conflicts: _,
             check_out_commit_options: _, // Checkout happens after rebase has concluded.
         } = options;
@@ -1210,6 +1214,10 @@ pub struct ExecuteRebasePlanOptions {
     /// Force an on-disk rebase (as opposed to an in-memory rebase).
     pub force_on_disk: bool,
 
+    /// When attempting an in-memory rebase, only report success or failure,
+    /// discarding the resulting changes.
+    pub dry_run: bool,
+
     /// Whether or not an attempt should be made to resolve merge conflicts,
     /// rather than failing-fast.
     pub resolve_merge_conflicts: bool,
@@ -1228,7 +1236,10 @@ pub enum ExecuteRebasePlanResult {
         rewritten_oids: Option<HashMap<NonZeroOid, MaybeZeroOid>>,
     },
 
-    /// The rebase operation encounter a failure to merge, and it was not
+    /// The rebase operation is viable, but was not executed to completion.
+    WouldSucceed,
+
+    /// The rebase operation encountered a failure to merge, and it was not
     /// requested to try to resolve it.
     DeclinedToMerge {
         /// Information about the merge failure that occurred.
@@ -1259,6 +1270,7 @@ pub fn execute_rebase_plan(
         preserve_timestamps: _,
         force_in_memory,
         force_on_disk,
+        dry_run,
         resolve_merge_conflicts,
         check_out_commit_options: _,
     } = options;
@@ -1277,6 +1289,14 @@ pub fn execute_rebase_plan(
                 rewritten_oids,
                 new_head_oid,
             } => {
+                if *dry_run {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "In-memory rebase would succeed."
+                    )?;
+                    return Ok(ExecuteRebasePlanResult::WouldSucceed);
+                }
+
                 // Ignore the return code, as it probably indicates that the
                 // checkout failed (which might happen if the user has changes
                 // which don't merge cleanly). The user can resolve that

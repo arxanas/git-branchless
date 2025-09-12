@@ -30,6 +30,7 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
     RepoResource,
 };
+use lib::core::untracked_file_cache::{process_untracked_files, UntrackedFileStrategy};
 use lib::git::{
     process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
@@ -58,6 +59,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     } = args;
     record(
         &effects,
@@ -68,6 +70,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     )
 }
 
@@ -81,6 +84,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -88,22 +92,50 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    let (snapshot, working_copy_changes_type) = {
+    let (snapshot, working_copy_changes_type, files_to_add) = {
         let head_info = repo.get_head_info()?;
         let index = repo.get_index()?;
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
-        match working_copy_changes_type {
+        let files_to_add = match working_copy_changes_type {
             WorkingCopyChangesType::None => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "There are no changes to tracked files in the working copy to commit."
-                )?;
-                return Ok(Ok(()));
+                let files_to_add = if interactive {
+                    Vec::new()
+                } else {
+                    try_exit_code!(process_untracked_files(
+                        effects,
+                        git_run_info,
+                        &repo,
+                        event_tx_id,
+                        untracked_file_strategy,
+                    )?)
+                };
+
+                if files_to_add.is_empty() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "There are no changes to tracked files in the working copy to commit."
+                    )?;
+                    return Ok(Ok(()));
+                } else {
+                    files_to_add
+                }
             }
-            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
+                Vec::new()
+            }
+            WorkingCopyChangesType::Staged => Vec::new(),
+            WorkingCopyChangesType::Unstaged => {
+                try_exit_code!(process_untracked_files(
+                    effects,
+                    git_run_info,
+                    &repo,
+                    event_tx_id,
+                    untracked_file_strategy,
+                )?)
+            }
             WorkingCopyChangesType::Conflicts => {
                 writeln!(
                     effects.get_output_stream(),
@@ -115,8 +147,9 @@ fn record(
                 )?;
                 return Ok(Err(ExitCode(1)));
             }
-        }
-        (snapshot, working_copy_changes_type)
+        };
+
+        (snapshot, working_copy_changes_type, files_to_add)
     };
 
     if let Some(branch_name) = branch_name {
@@ -158,12 +191,24 @@ fn record(
             )?);
         }
     } else {
+        if !files_to_add.is_empty() {
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            // FIXME
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
         let messages = if messages.is_empty() && stash {
             get_default_stash_message(&repo, effects, &snapshot, &working_copy_changes_type)
                 .map(|message| vec![message])?
         } else {
             messages
         };
+
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
@@ -554,6 +599,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
         force_in_memory: true,
         force_on_disk: false,
+        dry_run: false,
         resolve_merge_conflicts: false,
         check_out_commit_options: Default::default(),
     };
@@ -566,7 +612,8 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         &execute_options,
     )?;
     match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }
+        | ExecuteRebasePlanResult::WouldSucceed => Ok(Ok(())),
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Insert)?;
             Ok(Ok(()))
