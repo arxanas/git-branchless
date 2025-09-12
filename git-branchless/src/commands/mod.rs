@@ -96,6 +96,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             move_options,
             fixup,
             insert,
+            dry_run,
         } => git_branchless_move::r#move(
             &effects,
             &git_run_info,
@@ -107,6 +108,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             &move_options,
             fixup,
             insert,
+            dry_run,
         )?,
 
         Command::Next {
