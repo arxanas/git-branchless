@@ -183,6 +183,8 @@ fn restack_commits(
             Ok(Ok(()))
         }
 
+        ExecuteRebasePlanResult::WouldSucceed => Ok(Ok(())),
+
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, merge_conflict_remediation)?;
             Ok(Err(ExitCode(1)))
@@ -325,6 +327,7 @@ pub fn restack(
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
         force_in_memory,
         force_on_disk,
+        dry_run: false,
         resolve_merge_conflicts,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
