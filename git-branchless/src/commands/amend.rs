@@ -26,7 +26,10 @@ use lib::core::rewrite::{
     execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::core::untracked_file_cache::{process_untracked_files, UntrackedFileStrategy};
+use lib::git::{
+    AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo, StatusEntry,
+};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -40,6 +43,7 @@ pub fn amend(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     reparent: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -131,8 +135,22 @@ pub fn amend(
                 .collect(),
         }
     } else {
+        let untracked_entries = try_exit_code!(process_untracked_files(
+            effects,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            untracked_file_strategy,
+        )?)
+        .into_iter()
+        .map(StatusEntry::new_untracked);
+
         AmendFastOptions::FromWorkingCopy {
-            status_entries: unstaged_entries.clone(),
+            status_entries: unstaged_entries
+                .iter()
+                .cloned()
+                .chain(untracked_entries)
+                .collect_vec(),
         }
     };
     if opts.is_empty() {
@@ -294,6 +312,7 @@ pub fn amend(
             event_tx_id,
             force_in_memory: move_options.force_in_memory,
             force_on_disk: move_options.force_on_disk,
+            dry_run: false,
             preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
             resolve_merge_conflicts: move_options.resolve_merge_conflicts,
             check_out_commit_options: CheckOutCommitOptions {
@@ -313,7 +332,8 @@ pub fn amend(
         )? {
             ExecuteRebasePlanResult::Succeeded {
                 rewritten_oids: None,
-            } => {}
+            }
+            | ExecuteRebasePlanResult::WouldSucceed => {}
 
             ExecuteRebasePlanResult::Succeeded {
                 rewritten_oids: Some(rewritten_oids),

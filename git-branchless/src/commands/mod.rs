@@ -35,12 +35,14 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         Command::Amend {
             move_options,
             reparent,
+            untracked_file_strategy,
         } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
             reparent,
+            untracked_file_strategy,
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
@@ -96,6 +98,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             move_options,
             fixup,
             insert,
+            dry_run,
         } => git_branchless_move::r#move(
             &effects,
             &git_run_info,
@@ -107,6 +110,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             &move_options,
             fixup,
             insert,
+            dry_run,
         )?,
 
         Command::Next {
