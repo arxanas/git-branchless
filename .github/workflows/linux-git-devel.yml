@@ -26,13 +26,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-master
           repository: git/git
           ref: master
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-next
           repository: git/git
@@ -54,10 +54,10 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.82
           override: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-branchless
 

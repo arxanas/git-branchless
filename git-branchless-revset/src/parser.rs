@@ -16,7 +16,7 @@ pub enum ParseError {
 ///
 /// To update the grammar, modify `grammar.lalrpop`.
 #[instrument]
-pub fn parse(s: &str) -> Result<Expr, ParseError> {
+pub fn parse(s: &str) -> Result<Expr<'_>, ParseError> {
     ExprParser::new().parse(s).map_err(|err| {
         let message = err.to_string();
 

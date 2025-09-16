@@ -21,7 +21,7 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: git/git
           ref: ${{ matrix.git-version }}
@@ -61,9 +61,9 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: "Download artifact: git"
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: git-${{ matrix.git-version }}
 
@@ -74,11 +74,11 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.74
+          toolchain: 1.82
           override: true
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0
 
       - name: Compile (all features)
         run: cargo build --all-features --all-targets --workspace

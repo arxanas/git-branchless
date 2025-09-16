@@ -7,7 +7,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 use std::fmt::Write;
 use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
@@ -95,6 +95,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("restack", "restack"),
     ("reword", "reword"),
     ("sl", "smartlog"),
+    ("split", "split"),
     ("smartlog", "smartlog"),
     ("submit", "submit"),
     ("sw", "switch"),

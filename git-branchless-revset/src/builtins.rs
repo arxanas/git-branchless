@@ -1,5 +1,5 @@
 use bstr::ByteSlice;
-use eden_dag::nameset::hints::Hints;
+use eden_dag::set::hints::Hints;
 
 use lib::core::dag::CommitSet;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -25,7 +25,8 @@ use crate::pattern::{make_pattern_matcher_set, Pattern};
 use crate::pattern::{PatternError, PatternMatcher};
 use crate::Expr;
 
-type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync);
+type FnType =
+    &'static (dyn Fn(&mut Context, &str, &[Expr], &Option<&CommitSet>) -> EvalResult + Sync);
 lazy_static! {
     pub(super) static ref FUNCTIONS: HashMap<&'static str, FnType> = {
         let functions: &[(&'static str, FnType)] = &[
@@ -71,7 +72,7 @@ lazy_static! {
 }
 
 #[instrument]
-fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_all(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     let visible_heads = ctx
         .dag
@@ -86,43 +87,53 @@ fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_none(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_none(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(CommitSet::empty())
 }
 
 #[instrument]
-fn fn_union(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+fn fn_union(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(lhs.union(&rhs))
 }
 
 #[instrument]
-fn fn_intersection(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+fn fn_intersection(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
+    let (lhs, rhs) = eval2(ctx, name, args, true)?;
     Ok(lhs.intersection(&rhs))
 }
 
 #[instrument]
-fn fn_difference(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+fn fn_difference(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
+    let (lhs, rhs) = eval2(ctx, name, args, true)?;
     Ok(lhs.difference(&rhs))
 }
 
 #[instrument]
-fn fn_only(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+fn fn_only(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(ctx.dag.query_only(lhs, rhs)?)
 }
 
 #[instrument]
-fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let (lhs, rhs) = eval2(ctx, name, args)?;
+fn fn_range(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
+    let (lhs, rhs) = eval2(ctx, name, args, false)?;
     Ok(ctx.dag.query_range(lhs, rhs)?)
 }
 
 #[instrument]
-fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_not(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     let visible_heads = ctx
         .dag
@@ -133,31 +144,41 @@ fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_ancestors(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_ancestors(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_ancestors(expr)?)
 }
 
 #[instrument]
-fn fn_descendants(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_descendants(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_descendants(expr)?)
 }
 
 #[instrument]
-fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_parents(expr)?)
 }
 
 #[instrument]
-fn fn_children(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_children(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_children(expr)?)
 }
 
 #[instrument]
-fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     let parents = ctx.dag.query_parents(expr.clone())?;
     let children = ctx.dag.query_children(parents)?;
@@ -166,19 +187,19 @@ fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_roots(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_roots(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_roots(expr)?)
 }
 
 #[instrument]
-fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query_heads(expr)?)
 }
 
 #[instrument]
-fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let pattern = match eval0_or_1_pattern(ctx, name, args)? {
         Some(pattern) => pattern,
         None => return Ok(ctx.dag.branch_commits.clone()),
@@ -191,7 +212,7 @@ fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .map_err(EvalError::OtherError)?
         .branch_oid_to_names;
 
-    let branch_commits = make_pattern_matcher_for_set(
+    let branch_commits = make_pattern_matcher(
         ctx,
         name,
         args,
@@ -217,14 +238,19 @@ fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
             Ok(result)
         }),
-        Some(ctx.dag.branch_commits.clone()),
+        &Some(&ctx.dag.branch_commits.clone()),
     )?;
 
     Ok(branch_commits)
 }
 
 #[instrument]
-fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_parents_nth(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
     let commit_oids = ctx
         .dag
@@ -243,7 +269,12 @@ fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_nthancestor(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
     let commit_oids = ctx
         .dag
@@ -261,13 +292,13 @@ fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_main(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_main(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(ctx.dag.main_branch_commit.clone())
 }
 
 #[instrument]
-fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_public(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     let public_commits = ctx
         .dag
@@ -277,7 +308,7 @@ fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     let draft_commits = ctx
         .dag
@@ -287,7 +318,7 @@ fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let arg = eval0_or_1(ctx, name, args)?.unwrap_or_else(|| ctx.dag.head_commit.clone());
     ctx.dag
         .query_stack_commits(arg)
@@ -296,24 +327,14 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 type MatcherFn = dyn Fn(&Repo, &Commit) -> Result<bool, PatternError> + Sync + Send;
 
-/// Make a pattern matcher that operates on all visible commits.
+/// Make a pattern matcher that operates on a specific set of commits, or all
+/// visible commits if none is provided.
 fn make_pattern_matcher(
     ctx: &mut Context,
     name: &str,
     args: &[Expr],
     f: Box<MatcherFn>,
-) -> Result<CommitSet, EvalError> {
-    make_pattern_matcher_for_set(ctx, name, args, f, None)
-}
-
-/// Make a pattern matcher that operates only on the given set of commits.
-#[instrument(skip(f))]
-fn make_pattern_matcher_for_set(
-    ctx: &mut Context,
-    name: &str,
-    args: &[Expr],
-    f: Box<MatcherFn>,
-    commits_to_match: Option<CommitSet>,
+    commits_to_match: &Option<&CommitSet>,
 ) -> Result<CommitSet, EvalError> {
     struct Matcher {
         expr: String,
@@ -334,12 +355,18 @@ fn make_pattern_matcher_for_set(
         expr: Expr::FunctionCall(Cow::Borrowed(name), args.to_vec()).to_string(),
         f,
     };
-    let matcher = make_pattern_matcher_set(ctx, ctx.repo, Box::new(matcher), commits_to_match)?;
+    let matcher =
+        make_pattern_matcher_set(ctx, ctx.repo, Box::new(matcher), commits_to_match.cloned())?;
     Ok(matcher)
 }
 
 #[instrument]
-fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_message(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -361,11 +388,17 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
             };
             Ok(pattern.matches_text(message))
         }),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_path_changed(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -391,11 +424,17 @@ fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
             });
             Ok(result)
         }),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_author_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_author_name(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -407,11 +446,17 @@ fn fn_author_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 None => Ok(false),
             },
         ),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_author_email(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -423,11 +468,17 @@ fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 None => Ok(false),
             },
         ),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_author_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_author_date(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -437,11 +488,17 @@ fn fn_author_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
             let time = commit.get_author().get_time();
             Ok(pattern.matches_date(&time))
         }),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_committer_name(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -453,11 +510,17 @@ fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
                 None => Ok(false),
             },
         ),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_committer_email(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -469,11 +532,17 @@ fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
                 None => Ok(false),
             },
         ),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_committer_date(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    commits_to_match: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -483,11 +552,12 @@ fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
             let time = commit.get_committer().get_time();
             Ok(pattern.matches_date(&time))
         }),
+        commits_to_match,
     )
 }
 
 #[instrument]
-fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let (lhs, expected_len) = eval_number_rhs(ctx, name, args)?;
     let actual_len: usize = ctx.dag.set_count(&lhs)?;
 
@@ -503,7 +573,7 @@ fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_current(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     let mut dag = ctx
         .dag
         .clear_obsolete_commits(ctx.repo)
@@ -548,7 +618,7 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 #[instrument]
-fn fn_merges(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_merges(ctx: &mut Context, name: &str, args: &[Expr], _: &Option<&CommitSet>) -> EvalResult {
     eval0(ctx, name, args)?;
     // Use a "pattern matcher" that – instead of testing for a pattern –
     // examines the parent count of each commit to find merges.
@@ -557,6 +627,7 @@ fn fn_merges(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         name,
         args,
         Box::new(move |_repo, commit| Ok(commit.get_parent_count() > 1)),
+        &None,
     )
 }
 
@@ -597,7 +668,12 @@ fn eval_test_command_pattern(
 }
 
 #[instrument]
-fn fn_tests_passed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_tests_passed(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval_test_command_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -620,11 +696,17 @@ fn fn_tests_passed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 });
             Ok(result)
         }),
+        &None,
     )
 }
 
 #[instrument]
-fn fn_tests_failed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_tests_failed(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval_test_command_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -649,11 +731,17 @@ fn fn_tests_failed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 });
             Ok(result)
         }),
+        &None,
     )
 }
 
 #[instrument]
-fn fn_tests_fixable(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_tests_fixable(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    _: &Option<&CommitSet>,
+) -> EvalResult {
     let pattern = eval_test_command_pattern(ctx, name, args)?;
     make_pattern_matcher(
         ctx,
@@ -683,5 +771,6 @@ fn fn_tests_fixable(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult 
                 });
             Ok(result)
         }),
+        &None,
     )
 }

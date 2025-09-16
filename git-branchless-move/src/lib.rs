@@ -10,13 +10,13 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::VertexName;
+use eden_dag::Vertex;
 use lib::core::repo_ext::RepoExt;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -40,7 +40,7 @@ use lib::git::{GitRunInfo, NonZeroOid, Repo};
 #[instrument]
 fn resolve_base_commit(
     dag: &Dag,
-    merge_base_oid: Option<VertexName>,
+    merge_base_oid: Option<Vertex>,
     oid: NonZeroOid,
 ) -> eyre::Result<NonZeroOid> {
     let bases = match merge_base_oid {
@@ -178,7 +178,7 @@ pub fn r#move(
         effects,
         &repo,
         &mut dag,
-        &[dest.clone()],
+        std::slice::from_ref(&dest),
         resolve_revset_options,
     ) {
         Ok(commit_sets) => match dag.commit_set_to_vec(&commit_sets[0])?.as_slice() {

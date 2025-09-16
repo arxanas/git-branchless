@@ -94,6 +94,7 @@ pub fn sync(
         resolve_merge_conflicts,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
+            force_detach: false,
             reset: false,
             render_smartlog: false,
         },

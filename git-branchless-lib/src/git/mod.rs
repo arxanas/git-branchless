@@ -14,7 +14,7 @@ mod test;
 mod tree;
 
 pub use config::{Config, ConfigRead, ConfigValue, ConfigWrite};
-pub use diff::{process_diff_for_record, Diff};
+pub use diff::{process_diff_for_record, summarize_diff_for_temporary_commit, Diff};
 pub use index::{update_index, Index, IndexEntry, Stage, UpdateIndexCommand};
 pub use object::Commit;
 pub use oid::{MaybeZeroOid, NonZeroOid};
@@ -34,4 +34,6 @@ pub use test::{
     make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TestCommand,
     TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
-pub use tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
+pub use tree::{
+    dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, make_empty_tree, Tree,
+};

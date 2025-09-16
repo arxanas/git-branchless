@@ -10,7 +10,7 @@
     clippy::clone_on_ref_ptr,
     clippy::dbg_macro
 )]
-#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 pub mod tui;
 
@@ -743,6 +743,7 @@ fn extract_checkout_target(
                     target: CheckoutTarget::Oid(*new_oid),
                     options: CheckOutCommitOptions {
                         additional_args: vec!["--detach".into()],
+                        force_detach: false,
                         reset: false,
                         render_smartlog: true,
                     },
@@ -766,6 +767,7 @@ fn extract_checkout_target(
                             }
                             None => Default::default(),
                         },
+                        force_detach: false,
                         reset: false,
                         render_smartlog: true,
                     },
@@ -1077,6 +1079,7 @@ mod tests {
                         additional_args: [
                             "--detach",
                         ],
+                        force_detach: false,
                         reset: false,
                         render_smartlog: true,
                     },

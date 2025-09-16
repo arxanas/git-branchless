@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use bstr::ByteVec;
+use git2::build::TreeUpdateBuilder;
 use itertools::Itertools;
 use thiserror::Error;
 use tracing::{instrument, warn};
@@ -96,7 +97,7 @@ impl Tree<'_> {
     ///
     /// Note that the path isn't just restricted to entries of the current tree,
     /// i.e. you can use slashes in the provided path.
-    pub fn get_path(&self, path: &Path) -> Result<Option<TreeEntry>> {
+    pub fn get_path(&self, path: &Path) -> Result<Option<TreeEntry<'_>>> {
         match self.inner.get_path(path) {
             Ok(entry) => Ok(Some(TreeEntry { inner: entry })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -114,6 +115,31 @@ impl Tree<'_> {
     pub fn get_oid_for_path(&self, path: &Path) -> Result<Option<MaybeZeroOid>> {
         self.get_path(path)
             .map(|maybe_entry| maybe_entry.map(|entry| entry.inner.id().into()))
+    }
+
+    /// Remove the given path from the Tree, creating a new Tree in the given repo.
+    pub fn remove(&self, repo: &Repo, path: &Path) -> Result<NonZeroOid> {
+        let mut builder = TreeUpdateBuilder::new();
+        let tree_oid = builder
+            .remove(path)
+            .create_updated(&repo.inner, &self.inner)
+            .map_err(Error::BuildTree)?;
+        Ok(make_non_zero_oid(tree_oid))
+    }
+
+    /// Add or replace the given path/entry from the Tree, creating a new Tree in the given repo.
+    pub fn add_or_replace(
+        &self,
+        repo: &Repo,
+        path: &Path,
+        entry: &TreeEntry,
+    ) -> Result<NonZeroOid> {
+        let mut builder = TreeUpdateBuilder::new();
+        let tree_oid = builder
+            .upsert(path, entry.get_oid().into(), entry.get_filemode().into())
+            .create_updated(&repo.inner, &self.inner)
+            .map_err(Error::BuildTree)?;
+        Ok(make_non_zero_oid(tree_oid))
     }
 
     /// Get the (top-level) list of paths in this tree, for testing.
@@ -456,7 +482,8 @@ pub fn hydrate_tree(
     Ok(make_non_zero_oid(tree_oid))
 }
 
-pub fn make_empty_tree(repo: &Repo) -> Result<Tree> {
+/// Create a new, empty Tree in the given Repo.
+pub fn make_empty_tree(repo: &Repo) -> Result<Tree<'_>> {
     let tree_oid = hydrate_tree(repo, None, Default::default())?;
     repo.find_tree_or_fail(tree_oid)
         .map_err(Box::new)

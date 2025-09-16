@@ -6,6 +6,7 @@ mod hide;
 mod repair;
 mod restack;
 mod snapshot;
+mod split;
 mod sync;
 mod wrap;
 
@@ -178,6 +179,39 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
                 snapshot::restore(&effects, &git_run_info, snapshot_oid)?
             }
         },
+
+        Command::Split {
+            before,
+            detach,
+            discard,
+            files,
+            resolve_revset_options,
+            revset,
+            move_options,
+        } => {
+            let split_mode = match (before, detach, discard) {
+                (false, true, false) => split::SplitMode::DetachAfter,
+                (false, false, true) => split::SplitMode::Discard,
+                (false, false, false) => split::SplitMode::InsertAfter,
+                (true, false, false) => split::SplitMode::InsertBefore,
+                (true, true, false)
+                | (true, false, true)
+                | (false, true, true)
+                | (true, true, true) => {
+                    unreachable!("clap should prevent this")
+                }
+            };
+
+            split::split(
+                &effects,
+                revset,
+                &resolve_revset_options,
+                files,
+                split_mode,
+                &move_options,
+                &git_run_info,
+            )?
+        }
 
         Command::Submit(args) => git_branchless_submit::command_main(ctx, args)?,
 

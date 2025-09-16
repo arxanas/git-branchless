@@ -6,7 +6,7 @@ keywords = ["git"]
 license = "MIT OR Apache-2.0"
 name = "git-branchless-lib"
 repository = "https://github.com/arxanas/git-branchless"
-rust-version = "1.64.0"
+rust-version = "1.82"
 version = "0.10.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

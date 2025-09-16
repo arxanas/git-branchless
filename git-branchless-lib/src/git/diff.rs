@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use eyre::Context;
+use eyre::{Context, OptionExt};
 use itertools::Itertools;
 use scm_record::helpers::make_binary_description;
 use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
@@ -15,12 +15,65 @@ pub struct Diff<'repo> {
     pub(super) inner: git2::Diff<'repo>,
 }
 
+impl Diff<'_> {
+    /// Summarize this diff into a single line "short" format.
+    pub fn short_stats(&self) -> eyre::Result<String> {
+        let stats = self.inner.stats()?;
+        let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
+        buf.as_str()
+            .ok_or_eyre("converting buf to str")
+            .map(|s| s.trim().to_string())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct GitHunk {
     old_start: usize,
     old_lines: usize,
     new_start: usize,
     new_lines: usize,
+}
+
+/// Summarize a diff for use as part of a temporary commit message.
+pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> {
+    // this returns something like `1 file changed, 1 deletion(-)`
+    // diff.short_stats()
+
+    // this builds something like `test2.txt (-1)` or `2 files (+1/-2)`
+    let stats = diff.inner.stats()?;
+    let filename_or_count = if stats.files_changed() == 1 {
+        let mut filename = None;
+
+        // returning false in the closure terminates iteration, but that also
+        // returns an Err, so catch and ignore it
+        let _ = diff.inner.foreach(
+            &mut |delta: git2::DiffDelta, _| {
+                let relevant_path = delta
+                    .old_file()
+                    .path()
+                    .or(delta.new_file().path())
+                    .unwrap_or_else(|| unreachable!("diff should have contained at least 1 file"));
+                filename = Some(format!("{}", relevant_path.display()));
+                false
+            },
+            None,
+            None,
+            None,
+        );
+
+        filename.unwrap_or_else(|| unreachable!("file name should have been initialized"))
+    } else {
+        format!("{} files", stats.files_changed())
+    };
+
+    let ins_del = match (stats.insertions(), stats.deletions()) {
+        (0, 0) => unreachable!("empty diff"),
+        (i, 0) => format!("+{i}"),
+        (0, d) => format!("-{d}"),
+        (i, d) => format!("+{i}/-{d}"),
+    };
+
+    Ok(format!("{filename_or_count} ({ins_del})"))
 }
 
 /// Calculate the diff between the index and the working copy.
