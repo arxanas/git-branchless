@@ -60,6 +60,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         insert,
         stash,
         untracked_file_strategy,
+        allow_empty,
     } = args;
     record(
         &effects,
@@ -71,6 +72,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         insert,
         stash,
         untracked_file_strategy,
+        allow_empty,
     )
 }
 
@@ -85,6 +87,7 @@ fn record(
     insert: bool,
     stash: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
+    allow_empty: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -113,7 +116,7 @@ fn record(
                     )?)
                 };
 
-                if files_to_add.is_empty() {
+                if files_to_add.is_empty() && !allow_empty {
                     writeln!(
                         effects.get_output_stream(),
                         "There are no changes to tracked files in the working copy to commit."
@@ -221,6 +224,9 @@ fn record(
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
                 args.push("--all");
+            }
+            if allow_empty {
+                args.push("--allow-empty");
             }
             args
         };

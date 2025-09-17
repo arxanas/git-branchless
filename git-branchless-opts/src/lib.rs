@@ -334,6 +334,10 @@ pub struct RecordArgs {
     /// How should newly encountered, untracked files be handled?
     #[clap(value_parser, long = "untracked", conflicts_with_all(&["interactive"]))]
     pub untracked_file_strategy: Option<UntrackedFileStrategy>,
+
+    /// Allow creating an empty commit.
+    #[clap(action, long = "allow-empty")]
+    pub allow_empty: bool,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
