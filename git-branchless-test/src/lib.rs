@@ -1189,13 +1189,19 @@ impl BasicSourceControlGraph for SearchGraph<'_> {
 #[derive(Debug)]
 pub struct TestResults {
     /// If a search strategy was provided, the calculated bounds on the input
-    /// commit set.
+    /// commit set. If no strategy was provided, then the bounds will be empty.
     pub search_bounds: search::Bounds<NonZeroOid>,
 
     /// The test output for each commit.
+    ///
+    /// Note that not every input commit may have corresponding test output in
+    /// this map if testing exited early. For example, if
+    /// [`TestSearchStrategy::Linear`] was provided and testing exited early,
+    /// then commits after the first failing commit won't appear in this map.
     pub test_outputs: IndexMap<NonZeroOid, TestOutput>,
 
-    /// If testing was aborted, the corresponding error.
+    /// If testing was aborted, the corresponding error. This happens when a
+    /// test returns the special abort exit code [`TEST_ABORT_EXIT_CODE`].
     pub testing_aborted_error: Option<TestingAbortedError>,
 }
 

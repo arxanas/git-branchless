@@ -33,6 +33,7 @@ use tracing::warn;
 
 use crate::branch_forge::BranchForge;
 use crate::SubmitStatus;
+use crate::UpdateStatus;
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions};
 
 /// Testing environment variable. When this is set, the executable will use the
@@ -298,7 +299,7 @@ impl Forge for GithubForge<'_> {
             .copied()
             .map(|(commit_oid, commit_status)| {
                 let commit_status = match created_branches.get(&commit_oid) {
-                    Some(CreateStatus {
+                    Some(CreateStatus::Created {
                         final_commit_oid: _,
                         local_commit_name,
                     }) => CommitStatus {
@@ -309,7 +310,9 @@ impl Forge for GithubForge<'_> {
                         // Expecting this to be the same as the local branch name (for now):
                         remote_commit_name: Some(local_commit_name.clone()),
                     },
-                    None => commit_status.clone(),
+                    Some(CreateStatus::Skipped { .. } | CreateStatus::Err { .. }) | None => {
+                        commit_status.clone()
+                    }
                 };
                 (commit_oid, commit_status)
             })
@@ -368,7 +371,7 @@ impl Forge for GithubForge<'_> {
         &mut self,
         commit_statuses: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> EyreExitOr<()> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, UpdateStatus>> {
         let effects = self.effects;
         let SubmitOptions {
             create: _,
@@ -392,6 +395,7 @@ impl Forge for GithubForge<'_> {
 
         let commit_set: CommitSet = commit_statuses.keys().copied().collect();
         let commit_oids = self.dag.sort(&commit_set)?;
+        let mut result = HashMap::new();
         {
             let (effects, progress) = effects.start_operation(OperationType::UpdateCommits);
             progress.notify_progress(0, commit_oids.len());
@@ -472,7 +476,7 @@ impl Forge for GithubForge<'_> {
                     branch_forge.update(singleton(&commit_statuses, commit_oid, |x| x), options)?
                 );
 
-                // Update metdata:
+                // Update metadata:
                 try_exit_code!(self.client.update_pull_request(
                     &effects,
                     pull_request_info.number,
@@ -485,10 +489,21 @@ impl Forge for GithubForge<'_> {
                     options
                 )?);
                 progress.notify_progress_inc(1);
+
+                // FIXME: report push/update errors
+                result.insert(
+                    commit_oid,
+                    UpdateStatus::Updated {
+                        local_commit_name: commit_status
+                            .local_commit_name
+                            .clone()
+                            .unwrap_or_else(|| commit_oid.to_string()),
+                    },
+                );
             }
         }
 
-        Ok(Ok(()))
+        Ok(Ok(result))
     }
 }
 

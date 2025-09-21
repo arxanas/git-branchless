@@ -15,7 +15,7 @@ use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use tracing::{instrument, warn};
 
-use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
+use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, UpdateStatus};
 
 #[derive(Debug)]
 pub struct BranchForge<'a> {
@@ -253,7 +253,7 @@ These remotes are available: {}",
                     commit_status.local_commit_name.map(|local_commit_name| {
                         (
                             commit_oid,
-                            CreateStatus {
+                            CreateStatus::Created {
                                 final_commit_oid: commit_oid,
                                 local_commit_name,
                             },
@@ -269,20 +269,20 @@ These remotes are available: {}",
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> EyreExitOr<()> {
-        let branches_by_remote: BTreeMap<String, BTreeSet<String>> = commits
-            .into_values()
-            .flat_map(|commit_status| match commit_status {
+    ) -> EyreExitOr<HashMap<NonZeroOid, UpdateStatus>> {
+        let branches_by_remote: BTreeMap<String, BTreeSet<(String, NonZeroOid)>> = commits
+            .into_iter()
+            .flat_map(|(commit_oid, commit_status)| match commit_status {
                 CommitStatus {
                     submit_status: _,
                     remote_name: Some(remote_name),
                     local_commit_name: Some(local_commit_name),
                     remote_commit_name: _,
-                } => Some((remote_name, local_commit_name)),
+                } => Some((remote_name, (local_commit_name, commit_oid))),
                 commit_status => {
                     warn!(
                         ?commit_status,
-                        "Commit was requested to be updated, but it did not have the requisite information (remote name, local branch name)."
+                        "Commit was requested to be updated, but it did not have an associated remote and a local commit name"
                     );
                     None
                 }
@@ -299,24 +299,42 @@ These remotes are available: {}",
             .values()
             .map(|branch_names| branch_names.len())
             .sum();
+        let mut result = HashMap::new();
         progress.notify_progress(0, total_num_branches);
         for (remote_name, branch_names) in branches_by_remote {
             let mut args = vec!["push", "--force-with-lease", &remote_name];
-            args.extend(branch_names.iter().map(|s| s.as_str()));
+            args.extend(
+                branch_names
+                    .iter()
+                    .map(|(branch, _commit_oid)| branch.as_str()),
+            );
             match self.git_run_info.run(&effects, Some(event_tx_id), &args)? {
                 Ok(()) => {}
                 Err(exit_code) => {
                     writeln!(
                         effects.get_output_stream(),
                         "Failed to push branches: {}",
-                        branch_names.into_iter().join(", ")
+                        branch_names
+                            .iter()
+                            .map(|(branch, _commit_oid)| branch)
+                            .join(", ")
                     )?;
                     return Ok(Err(exit_code));
                 }
             }
             progress.notify_progress_inc(branch_names.len());
+
+            // FIXME: report push errors
+            result.extend(branch_names.iter().map(|(branch, commit_oid)| {
+                (
+                    *commit_oid,
+                    UpdateStatus::Updated {
+                        local_commit_name: branch.to_owned(),
+                    },
+                )
+            }));
         }
 
-        Ok(Ok(()))
+        Ok(Ok(result))
     }
 }
