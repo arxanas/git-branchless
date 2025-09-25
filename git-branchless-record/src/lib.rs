@@ -221,9 +221,19 @@ fn record(
             ResolvedReferenceInfo {
                 oid: Some(oid),
                 reference_name: _,
-            } => Some(CheckoutTarget::Oid(oid)),
+            } => {
+                let head_commit = repo.find_commit_or_fail(oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => None,
+                    [parent_commit] => Some(CheckoutTarget::Oid(parent_commit.get_oid())),
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
+                    }
+                }
+            }
             _ => None,
         };
+
         if stash && checkout_target.is_some() {
             try_exit_code!(check_out_commit(
                 effects,
