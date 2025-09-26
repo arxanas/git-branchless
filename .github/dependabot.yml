@@ -1,16 +1,43 @@
 version: 2
 
+# Reference and docs for this file:
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+
 updates:
+  # group cargo deps into a single monthly PR
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     commit-message:
       prefix: "build:"
+    groups:
+      deps:
+        patterns: 
+          - "*"
+    ignore:
+      - dependency-name: git2
+      - dependency-name: clap_mangen
+          
+  # flakey or problematic deps are still submitted individually
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "build:"
+    allow:
+      - dependency-name: git2
+      - dependency-name: clap_mangen
 
+  # group GH actions deps into a single monthly PR
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     commit-message:
       prefix: "build:"
+    groups:
+      actions-deps:
+        patterns: 
+          - "*"
