@@ -58,6 +58,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        allow_empty,
     } = args;
     record(
         &effects,
@@ -68,6 +69,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        allow_empty,
     )
 }
 
@@ -81,6 +83,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    allow_empty: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -96,6 +99,7 @@ fn record(
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
         match working_copy_changes_type {
+            WorkingCopyChangesType::None if allow_empty => {}
             WorkingCopyChangesType::None => {
                 writeln!(
                     effects.get_output_stream(),
@@ -170,6 +174,9 @@ fn record(
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
                 args.push("--all");
             }
+            if allow_empty {
+                args.push("--allow-empty");
+            }
             args
         };
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
@@ -177,54 +184,77 @@ fn record(
 
     if detach || stash {
         let head_info = repo.get_head_info()?;
-        if let ResolvedReferenceInfo {
-            oid: Some(oid),
-            reference_name: Some(reference_name),
-        } = &head_info
-        {
-            let head_commit = repo.find_commit_or_fail(*oid)?;
-            match head_commit.get_parents().as_slice() {
-                [] => try_exit_code!(git_run_info.run(
-                    effects,
-                    Some(event_tx_id),
-                    &[
-                        "update-ref",
-                        "-d",
-                        reference_name.as_str(),
-                        &oid.to_string(),
-                    ],
-                )?),
-                [parent_commit] => {
-                    let branch_name = CategorizedReferenceName::new(reference_name).render_suffix();
-                    repo.detach_head(&head_info)?;
-                    try_exit_code!(git_run_info.run(
+        let checkout_target = match &head_info {
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: Some(reference_name),
+            } => {
+                // FIXME: unborn HEAD, what to do?
+                stash.then(|| CheckoutTarget::Reference(reference_name.clone()))
+            }
+
+            ResolvedReferenceInfo {
+                oid: Some(oid),
+                reference_name: Some(reference_name),
+            } => {
+                let head_commit = repo.find_commit_or_fail(*oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => try_exit_code!(git_run_info.run(
                         effects,
                         Some(event_tx_id),
                         &[
-                            "branch",
-                            "-f",
-                            &branch_name,
-                            &parent_commit.get_oid().to_string(),
+                            "update-ref",
+                            "-d",
+                            reference_name.as_str(),
+                            &oid.to_string(),
                         ],
-                    )?);
+                    )?),
+                    [parent_commit] => {
+                        let branch_name =
+                            CategorizedReferenceName::new(reference_name).render_suffix();
+                        repo.detach_head(&head_info)?;
+                        try_exit_code!(git_run_info.run(
+                            effects,
+                            Some(event_tx_id),
+                            &[
+                                "branch",
+                                "-f",
+                                &branch_name,
+                                &parent_commit.get_oid().to_string(),
+                            ],
+                        )?);
+                    }
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                    }
                 }
-                parent_commits => {
-                    eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
-                }
+
+                stash.then(|| CheckoutTarget::Reference(reference_name.clone()))
             }
-        }
-        let checkout_target = match head_info {
-            ResolvedReferenceInfo {
-                oid: _,
-                reference_name: Some(reference_name),
-            } => Some(CheckoutTarget::Reference(reference_name.clone())),
+
             ResolvedReferenceInfo {
                 oid: Some(oid),
-                reference_name: _,
-            } => Some(CheckoutTarget::Oid(oid)),
-            _ => None,
+                reference_name: None,
+            } => {
+                let head_commit = repo.find_commit_or_fail(*oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => {
+                        eyre::bail!("git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible.");
+                    }
+                    [parent_commit] => stash.then(|| CheckoutTarget::Oid(parent_commit.get_oid())),
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
+                    }
+                }
+            }
+
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: None,
+            } => None,
         };
-        if stash && checkout_target.is_some() {
+
+        if checkout_target.is_some() {
             try_exit_code!(check_out_commit(
                 effects,
                 git_run_info,
