@@ -30,6 +30,7 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
     RepoResource,
 };
+use lib::core::untracked_file_cache::{process_untracked_files, UntrackedFileStrategy};
 use lib::git::{
     process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
@@ -58,6 +59,8 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
+        allow_empty,
     } = args;
     record(
         &effects,
@@ -68,6 +71,8 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
+        allow_empty,
     )
 }
 
@@ -81,6 +86,8 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
+    allow_empty: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -88,22 +95,50 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    let (snapshot, working_copy_changes_type) = {
+    let (snapshot, working_copy_changes_type, files_to_add) = {
         let head_info = repo.get_head_info()?;
         let index = repo.get_index()?;
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
-        match working_copy_changes_type {
+        let files_to_add = match working_copy_changes_type {
             WorkingCopyChangesType::None => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "There are no changes to tracked files in the working copy to commit."
-                )?;
-                return Ok(Ok(()));
+                let files_to_add = if interactive {
+                    Vec::new()
+                } else {
+                    try_exit_code!(process_untracked_files(
+                        effects,
+                        git_run_info,
+                        &repo,
+                        event_tx_id,
+                        untracked_file_strategy,
+                    )?)
+                };
+
+                if files_to_add.is_empty() && !allow_empty {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "There are no changes to tracked files in the working copy to commit."
+                    )?;
+                    return Ok(Ok(()));
+                } else {
+                    files_to_add
+                }
             }
-            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
+                Vec::new()
+            }
+            WorkingCopyChangesType::Staged => Vec::new(),
+            WorkingCopyChangesType::Unstaged => {
+                try_exit_code!(process_untracked_files(
+                    effects,
+                    git_run_info,
+                    &repo,
+                    event_tx_id,
+                    untracked_file_strategy,
+                )?)
+            }
             WorkingCopyChangesType::Conflicts => {
                 writeln!(
                     effects.get_output_stream(),
@@ -115,8 +150,9 @@ fn record(
                 )?;
                 return Ok(Err(ExitCode(1)));
             }
-        }
-        (snapshot, working_copy_changes_type)
+        };
+
+        (snapshot, working_copy_changes_type, files_to_add)
     };
 
     if let Some(branch_name) = branch_name {
@@ -158,17 +194,39 @@ fn record(
             )?);
         }
     } else {
+        if !files_to_add.is_empty() {
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            // call `git add` for the untracked files to be commited
+            // TODO look into instead specifying these are arguments via the following call to `git commit`
+            // note that the docs state: "listing files as arguments to the
+            // commit command ..., in which case the commit will ignore changes
+            // staged in the index, and instead record the current content of
+            // the listed files (which must already be known to Git);"
+            // So, how would "ignore changes in the index" affect us, and also
+            // "which must already be known to Git"??
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
         let messages = if messages.is_empty() && stash {
             get_default_stash_message(&repo, effects, &snapshot, &working_copy_changes_type)
                 .map(|message| vec![message])?
         } else {
             messages
         };
+
         let args = {
             let mut args = vec!["commit"];
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
                 args.push("--all");
+            }
+            if allow_empty {
+                args.push("--allow-empty");
             }
             args
         };
@@ -177,54 +235,77 @@ fn record(
 
     if detach || stash {
         let head_info = repo.get_head_info()?;
-        if let ResolvedReferenceInfo {
-            oid: Some(oid),
-            reference_name: Some(reference_name),
-        } = &head_info
-        {
-            let head_commit = repo.find_commit_or_fail(*oid)?;
-            match head_commit.get_parents().as_slice() {
-                [] => try_exit_code!(git_run_info.run(
-                    effects,
-                    Some(event_tx_id),
-                    &[
-                        "update-ref",
-                        "-d",
-                        reference_name.as_str(),
-                        &oid.to_string(),
-                    ],
-                )?),
-                [parent_commit] => {
-                    let branch_name = CategorizedReferenceName::new(reference_name).render_suffix();
-                    repo.detach_head(&head_info)?;
-                    try_exit_code!(git_run_info.run(
+        let checkout_target = match &head_info {
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: Some(reference_name),
+            } => {
+                // FIXME: unborn HEAD, what to do?
+                stash.then(|| CheckoutTarget::Reference(reference_name.clone()))
+            }
+
+            ResolvedReferenceInfo {
+                oid: Some(oid),
+                reference_name: Some(reference_name),
+            } => {
+                let head_commit = repo.find_commit_or_fail(*oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => try_exit_code!(git_run_info.run(
                         effects,
                         Some(event_tx_id),
                         &[
-                            "branch",
-                            "-f",
-                            &branch_name,
-                            &parent_commit.get_oid().to_string(),
+                            "update-ref",
+                            "-d",
+                            reference_name.as_str(),
+                            &oid.to_string(),
                         ],
-                    )?);
+                    )?),
+                    [parent_commit] => {
+                        let branch_name =
+                            CategorizedReferenceName::new(reference_name).render_suffix();
+                        repo.detach_head(&head_info)?;
+                        try_exit_code!(git_run_info.run(
+                            effects,
+                            Some(event_tx_id),
+                            &[
+                                "branch",
+                                "-f",
+                                &branch_name,
+                                &parent_commit.get_oid().to_string(),
+                            ],
+                        )?);
+                    }
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                    }
                 }
-                parent_commits => {
-                    eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
-                }
+
+                stash.then(|| CheckoutTarget::Reference(reference_name.clone()))
             }
-        }
-        let checkout_target = match head_info {
-            ResolvedReferenceInfo {
-                oid: _,
-                reference_name: Some(reference_name),
-            } => Some(CheckoutTarget::Reference(reference_name.clone())),
+
             ResolvedReferenceInfo {
                 oid: Some(oid),
-                reference_name: _,
-            } => Some(CheckoutTarget::Oid(oid)),
-            _ => None,
+                reference_name: None,
+            } => {
+                let head_commit = repo.find_commit_or_fail(*oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => {
+                        eyre::bail!("git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible.");
+                    }
+                    [parent_commit] => stash.then(|| CheckoutTarget::Oid(parent_commit.get_oid())),
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
+                    }
+                }
+            }
+
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: None,
+            } => None,
         };
-        if stash && checkout_target.is_some() {
+
+        if checkout_target.is_some() {
             try_exit_code!(check_out_commit(
                 effects,
                 git_run_info,
