@@ -329,6 +329,10 @@ pub struct RecordArgs {
     /// After making the new commit, switch back to the previous commit.
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
+
+    /// Allow creating an empty commit.
+    #[clap(action, long = "allow-empty")]
+    pub allow_empty: bool,
 }
 
 /// Display a nice graph of the commits you've recently worked on.

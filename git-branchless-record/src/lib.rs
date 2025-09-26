@@ -58,6 +58,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        allow_empty,
     } = args;
     record(
         &effects,
@@ -68,6 +69,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        allow_empty,
     )
 }
 
@@ -81,6 +83,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    allow_empty: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -96,6 +99,7 @@ fn record(
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
         match working_copy_changes_type {
+            WorkingCopyChangesType::None if allow_empty => {}
             WorkingCopyChangesType::None => {
                 writeln!(
                     effects.get_output_stream(),
@@ -169,6 +173,9 @@ fn record(
             args.extend(messages.iter().flat_map(|message| ["--message", message]));
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
                 args.push("--all");
+            }
+            if allow_empty {
+                args.push("--allow-empty");
             }
             args
         };
