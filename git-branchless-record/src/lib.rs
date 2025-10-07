@@ -177,61 +177,74 @@ fn record(
 
     if detach || stash {
         let head_info = repo.get_head_info()?;
-        if let ResolvedReferenceInfo {
-            oid: Some(oid),
-            reference_name: Some(reference_name),
-        } = &head_info
-        {
-            let head_commit = repo.find_commit_or_fail(*oid)?;
-            match head_commit.get_parents().as_slice() {
-                [] => try_exit_code!(git_run_info.run(
-                    effects,
-                    Some(event_tx_id),
-                    &[
-                        "update-ref",
-                        "-d",
-                        reference_name.as_str(),
-                        &oid.to_string(),
-                    ],
-                )?),
-                [parent_commit] => {
-                    let branch_name = CategorizedReferenceName::new(reference_name).render_suffix();
-                    repo.detach_head(&head_info)?;
-                    try_exit_code!(git_run_info.run(
+        let checkout_target = match &head_info {
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: Some(reference_name),
+            } => {
+                // FIXME: unborn HEAD, what to do?
+                Some(CheckoutTarget::Reference(reference_name.clone()))
+            }
+
+            ResolvedReferenceInfo {
+                oid: Some(oid),
+                reference_name: Some(reference_name),
+            } => {
+                let head_commit = repo.find_commit_or_fail(*oid)?;
+                match head_commit.get_parents().as_slice() {
+                    [] => try_exit_code!(git_run_info.run(
                         effects,
                         Some(event_tx_id),
                         &[
-                            "branch",
-                            "-f",
-                            &branch_name,
-                            &parent_commit.get_oid().to_string(),
+                            "update-ref",
+                            "-d",
+                            reference_name.as_str(),
+                            &oid.to_string(),
                         ],
-                    )?);
+                    )?),
+                    [parent_commit] => {
+                        let branch_name =
+                            CategorizedReferenceName::new(reference_name).render_suffix();
+                        repo.detach_head(&head_info)?;
+                        try_exit_code!(git_run_info.run(
+                            effects,
+                            Some(event_tx_id),
+                            &[
+                                "branch",
+                                "-f",
+                                &branch_name,
+                                &parent_commit.get_oid().to_string(),
+                            ],
+                        )?);
+                    }
+                    parent_commits => {
+                        eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                    }
                 }
-                parent_commits => {
-                    eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
-                }
+
+                Some(CheckoutTarget::Reference(reference_name.clone()))
             }
-        }
-        let checkout_target = match head_info {
-            ResolvedReferenceInfo {
-                oid: _,
-                reference_name: Some(reference_name),
-            } => Some(CheckoutTarget::Reference(reference_name.clone())),
+
             ResolvedReferenceInfo {
                 oid: Some(oid),
-                reference_name: _,
+                reference_name: None,
             } => {
-                let head_commit = repo.find_commit_or_fail(oid)?;
+                let head_commit = repo.find_commit_or_fail(*oid)?;
                 match head_commit.get_parents().as_slice() {
-                    [] => None,
+                    [] => {
+                        eyre::bail!("git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible.");
+                    }
                     [parent_commit] => Some(CheckoutTarget::Oid(parent_commit.get_oid())),
                     parent_commits => {
                         eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
                     }
                 }
             }
-            _ => None,
+
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: None,
+            } => None,
         };
 
         if stash && checkout_target.is_some() {
