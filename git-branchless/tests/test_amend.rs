@@ -1,4 +1,8 @@
-use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
+use lib::testing::{
+    make_git,
+    pty::{run_in_pty, PtyAction},
+    remove_rebase_lines, trim_lines, GitRunOptions,
+};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {
@@ -387,8 +391,10 @@ fn test_amend_head() -> eyre::Result<()> {
     git.write_file_txt("newfile", "some new file")?;
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
-        insta::assert_snapshot!(stdout, @"There are no uncommitted or staged changes. Nothing to amend.
-");
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 new untracked file: newfile.txt
+        There are no uncommitted or staged changes. Nothing to amend.
+        "###);
     }
 
     git.run(&["add", "."])?;
@@ -440,6 +446,126 @@ fn test_amend_head_with_file_with_space() -> eyre::Result<()> {
         |
         @ 5ccdda3 create test file with space.txt
         "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_with_new_untracked_files() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        // initial state: only test1
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    // index + add => do nothing
+    // index + skip => do nothing
+    // index + prompt => do nothing
+    // working copy + add
+    // working copy + skip
+    // working copy + prompt
+
+    {
+        // update test1, add test2 w/ "add"
+
+        git.write_file_txt("test1", "updated contents")?;
+        git.write_file_txt("test2", "test2 contents")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Including 1 new untracked file: test2.txt
+        branchless: running command: <git-executable> reset aa6c59fcac3c4969f5df0a29cc68227a63365d77
+        Amended with 2 uncommitted changes.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        // update test2, add test3 w/ "skip"
+
+        git.write_file_txt("test2", "updated contents")?;
+        git.write_file_txt("test3", "test3 contents")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "skip"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 new untracked file: test3.txt
+        branchless: running command: <git-executable> reset d6dcb58abcbc9c12f90ee2c851e396298c5a0398
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        // update test2, add test4 w/ "prompt" (and still skip test3)
+
+        git.write_file_txt("test2", "more updated contents")?;
+        // test3.txt skipped because we've already seen it
+        git.write_file_txt("test4", "test4 contents")?;
+
+        run_in_pty(
+            &git,
+            "amend",
+            &["--untracked", "prompt"],
+            &[PtyAction::WaitUntilContains("test4"), PtyAction::Write("y")],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    {
+        // add test5 w/o any other changes
+
+        git.write_file_txt("test5", "test5 contents")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 previously skipped file: test3.txt
+        Including 1 new untracked file: test5.txt
+        branchless: running command: <git-executable> reset 5b8428fe65cafd33dd518e91b5025316e82f7302
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            test5.txt | 1 +
+            4 files changed, 4 insertions(+)
+        ");
     }
 
     Ok(())
