@@ -299,7 +299,7 @@ fn test_record_stash() -> eyre::Result<()> {
          1 file changed, 1 insertion(+)
          create mode 100644 test1.txt
         branchless: running command: <git-executable> branch -f master f777ecc9b0db5ed372b2615695191a8a17f79f24
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         "###);
     }
 
@@ -322,7 +322,7 @@ fn test_record_stash() -> eyre::Result<()> {
         [master 9b6164c] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> branch -f master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         "###);
     }
 
@@ -371,7 +371,7 @@ fn test_record_stash_detached_head() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         [detached HEAD 9b6164c] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         "###);
     }
 
@@ -408,7 +408,7 @@ fn test_record_stash_default_message() -> eyre::Result<()> {
         [master fd2ffa4] stash: test1.txt (+1/-1)
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> branch -f master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         "###);
     }
 
@@ -435,7 +435,7 @@ fn test_record_create_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("record", &["-c", "foo", "-m", "Update"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout master -b foo
+        branchless: running command: <git-executable> checkout master -b foo --
         M	test1.txt
         [foo 836023f] Update
          1 file changed, 1 insertion(+), 1 deletion(-)

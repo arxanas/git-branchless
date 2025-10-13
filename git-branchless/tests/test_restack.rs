@@ -361,7 +361,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
         branchless: creating working copy snapshot
-        branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
+        branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7 --
         Previous HEAD position was 944f78d create test3.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
@@ -488,7 +488,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         [1/1] Committed as: 59e7581 create test2.txt
         branchless: processing 2 updates: branch foo, branch master
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout foo
+        branchless: running command: <git-executable> checkout foo --
         In-memory rebase succeeded.
         Finished restacking commits.
         No abandoned branches to restack.
@@ -521,7 +521,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         [1/1] Committed as: 59e7581 create test2.txt
         branchless: processing 2 updates: branch foo, branch master
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout foo
+        branchless: running command: <git-executable> checkout foo --
         In-memory rebase succeeded.
         Finished restacking commits.
         No abandoned branches to restack.

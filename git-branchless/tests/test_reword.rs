@@ -561,7 +561,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         Attempting rebase in-memory...
         [1/1] Committed as: 2fc54bd new message
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout 2fc54bd59c79078e6d9012df241bcc90f0199596
+        branchless: running command: <git-executable> checkout 2fc54bd59c79078e6d9012df241bcc90f0199596 --
         In-memory rebase succeeded.
         Reworded commit a4dd9b0 as 2fc54bd new message
         "###);
@@ -612,7 +612,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         [2/3] Committed as: 800dd6c new message 2
         [3/3] Committed as: 930244c new message 2
         branchless: processing 3 rewritten commits
-        branchless: running command: <git-executable> checkout 930244cad08ebb6278b3b606c45a6848dcc5cc74
+        branchless: running command: <git-executable> checkout 930244cad08ebb6278b3b606c45a6848dcc5cc74 --
         In-memory rebase succeeded.
         Reworded commit 96d1c37 as 800dd6c new message 2
         Reworded commit 4838e49 as 11f31c5 new message 2

@@ -867,7 +867,7 @@ done
         [2/3] Committed as: 2ee3aea create test2.txt
         [3/3] Committed as: 6f48e0a create test3.txt
         branchless: processing 3 rewritten commits
-        branchless: running command: <git-executable> checkout 6f48e0a628753731739619f27107c57f5d0cc1e0
+        branchless: running command: <git-executable> checkout 6f48e0a628753731739619f27107c57f5d0cc1e0 --
         In-memory rebase succeeded.
         Fixed 3 commits with bash test.sh:
         62fc20d -> 300cb54 create test1.txt
@@ -1130,7 +1130,7 @@ done
         [1/2] Committed as: 300cb54 create test1.txt
         [2/2] Committed as: f15b423 descendant commit
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout f15b423404bbebfe4b09e305e074b525d008f44a
+        branchless: running command: <git-executable> checkout f15b423404bbebfe4b09e305e074b525d008f44a --
         In-memory rebase succeeded.
         Fixed 2 commits with bash test.sh:
         62fc20d -> 300cb54 create test1.txt

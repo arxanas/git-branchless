@@ -92,10 +92,10 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 96d1c37 create test2.txt
-        branchless: running command: <git-executable> checkout f7ec40d081d7fa358f5e283ebf42f06a1508084c
-        branchless: running command: <git-executable> reset 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout f7ec40d081d7fa358f5e283ebf42f06a1508084c --
+        branchless: running command: <git-executable> reset 96d1c37a3d4363611c49f7e52186e189a04c531f --
         Unstaged changes after reset:
         M	test1.txt
         M	test2.txt
@@ -202,10 +202,10 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 96d1c37 create test2.txt
-        branchless: running command: <git-executable> checkout 1935fedb3b0232849e52e44225b2e5bbe9de0ff7
-        branchless: running command: <git-executable> reset 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout 1935fedb3b0232849e52e44225b2e5bbe9de0ff7 --
+        branchless: running command: <git-executable> reset 96d1c37a3d4363611c49f7e52186e189a04c531f --
         Unstaged changes after reset:
         D	test1.txt
         D	test2.txt
@@ -275,10 +275,10 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 62fc20d create test1.txt
-        branchless: running command: <git-executable> checkout eb8b9eecf747c1aa08bb9dd0cbda15b9a90082af
-        branchless: running command: <git-executable> reset 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: running command: <git-executable> checkout eb8b9eecf747c1aa08bb9dd0cbda15b9a90082af --
+        branchless: running command: <git-executable> reset 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         Unstaged changes after reset:
         D	test1.txt
         branchless: running command: <git-executable> update-ref refs/heads/master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
@@ -344,9 +344,9 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
         Aborting
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at f777ecc create initial.txt
-        branchless: running command: <git-executable> checkout cd8605eef8b78e22427fa3846f1a23f95e88aa7e
+        branchless: running command: <git-executable> checkout cd8605eef8b78e22427fa3846f1a23f95e88aa7e --
         "###);
     }
 
@@ -419,10 +419,10 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
         let (stdout, _stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 588fac3 delete test2.txt
-        branchless: running command: <git-executable> checkout 1ea5d7118ef363f3e4ed0ed6c250dd01b91bff2a
-        branchless: running command: <git-executable> reset 588fac31cba846f7278a95e1361c45118be90c6c
+        branchless: running command: <git-executable> checkout 1ea5d7118ef363f3e4ed0ed6c250dd01b91bff2a --
+        branchless: running command: <git-executable> reset 588fac31cba846f7278a95e1361c45118be90c6c --
         branchless: running command: <git-executable> update-ref refs/heads/change 588fac31cba846f7278a95e1361c45118be90c6c
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/change
         "###);
@@ -489,9 +489,9 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
         let (stdout, _stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 6118a39 create test1.txt
-        branchless: running command: <git-executable> checkout 20939f1f30f51ffaa6569d218cd7a50f24c956cf
+        branchless: running command: <git-executable> checkout 20939f1f30f51ffaa6569d218cd7a50f24c956cf --
         branchless: running command: <git-executable> update-ref refs/heads/master 0000000000000000000000000000000000000000
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
         "###);
