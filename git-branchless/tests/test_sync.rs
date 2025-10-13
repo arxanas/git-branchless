@@ -57,12 +57,12 @@ fn test_sync_basic() -> eyre::Result<()> {
         [1/2] Committed as: 87c7a36 create test1.txt
         [2/2] Committed as: 8ee4f26 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Attempting rebase in-memory...
         [1/1] Committed as: d7e7e6c create test4.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Synced 62fc20d create test1.txt
         Synced 2b633ed create test4.txt
@@ -163,7 +163,7 @@ fn test_sync_pull() -> eyre::Result<()> {
         Attempting rebase in-memory...
         [1/1] Committed as: 2831fb5 create test6.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout 2831fb5864ee099dc3e448a38dcb3c8527149510
+        branchless: running command: <git-executable> checkout 2831fb5864ee099dc3e448a38dcb3c8527149510 --
         In-memory rebase succeeded.
         Synced 6ac5566 create test6.txt
         "###);
@@ -235,7 +235,7 @@ fn test_sync_stack_from_commit() -> eyre::Result<()> {
         [2/2] Committed as: 11bfd99 create test3-1.txt
         branchless: processing 1 update: branch foo
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Synced 70deb1e create test3.txt
         "###);
@@ -303,7 +303,7 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
         [1/1] Committed as: f81d55c create test5.txt
         branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         Your branch is ahead of 'origin/master' by 1 commit.
           (use "git push" to publish your local commits)
         In-memory rebase succeeded.
@@ -364,7 +364,7 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         branchless: processing 1 rewritten commit
         branchless: processing 2 updates: branch master, branch should-be-deleted
         branchless: creating working copy snapshot
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         branchless: processing checkout
         :
         @ 96d1c37 (> master) create test2.txt
