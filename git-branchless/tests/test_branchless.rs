@@ -41,7 +41,7 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("prev", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         :
         @ 3df4b93 (> master) create test.txt
         |
@@ -52,7 +52,7 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("next", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 73b746ca864a21fc0c3dedbc937eaa9e279b73eb
+        branchless: running command: <git-executable> checkout 73b746ca864a21fc0c3dedbc937eaa9e279b73eb --
         :
         O 3df4b93 (master) create test.txt
         |
@@ -158,7 +158,7 @@ fn test_index_version_4() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("switch", &["HEAD"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD
+        branchless: running command: <git-executable> checkout HEAD --
         @ f777ecc (> master) create initial.txt
         "###);
     }

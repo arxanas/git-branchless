@@ -147,7 +147,11 @@ pub fn check_out_commit(
 
     if *reset {
         if let Some(target) = &target {
-            try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["reset", target])?);
+            try_exit_code!(git_run_info.run(
+                effects,
+                Some(event_tx_id),
+                &["reset", target, "--"]
+            )?);
         }
     } else {
         let checkout_args = {
@@ -156,6 +160,7 @@ pub fn check_out_commit(
                 args.push(OsStr::new(target.as_str()));
             }
             args.extend(additional_args.iter().map(OsStr::new));
+            args.push(OsStr::new("--"));
             args
         };
         match git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())? {
@@ -258,7 +263,11 @@ pub fn restore_snapshot(
     // Discard any working copy changes. The caller is responsible for having
     // snapshotted them if necessary.
     try_exit_code!(git_run_info
-        .run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])
+        .run(
+            effects,
+            Some(event_tx_id),
+            &["reset", "--hard", "HEAD", "--"]
+        )
         .wrap_err("Discarding working copy changes")?);
 
     // Check out the unstaged changes. Note that we don't call `git reset --hard
@@ -271,7 +280,11 @@ pub fn restore_snapshot(
         .run(
             effects,
             Some(event_tx_id),
-            &["checkout", &snapshot.commit_unstaged.get_oid().to_string()],
+            &[
+                "checkout",
+                &snapshot.commit_unstaged.get_oid().to_string(),
+                "--"
+            ],
         )
         .wrap_err("Checking out unstaged changes (fail if conflict)")?);
 
@@ -283,7 +296,7 @@ pub fn restore_snapshot(
                 .run(
                     effects,
                     Some(event_tx_id),
-                    &["reset", &head_commit.get_oid().to_string()],
+                    &["reset", &head_commit.get_oid().to_string(), "--"],
                 )
                 .wrap_err("Update HEAD for unstaged changes")?);
         }

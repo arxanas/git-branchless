@@ -330,7 +330,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
         Attempting rebase in-memory...
         [1/2] Skipped commit (was already applied upstream): 62fc20d create test1.txt
         [2/2] Committed as: fa46633 create test2.txt
-        branchless: running command: <git-executable> checkout mock-github-username/create-test2-txt
+        branchless: running command: <git-executable> checkout mock-github-username/create-test2-txt --
         Your branch and 'origin/mock-github-username/create-test2-txt' have diverged,
         and have 2 and 2 different commits each, respectively.
         In-memory rebase succeeded.

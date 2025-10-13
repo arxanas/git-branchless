@@ -66,7 +66,7 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         [1/2] Committed as: 55af3db create test1.txt
         [2/2] Committed as: ccb7fd5 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
+        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3 --
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
@@ -144,7 +144,7 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         [1/2] Committed as: 55af3db create test1.txt
         [2/2] Committed as: ccb7fd5 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
+        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3 --
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
@@ -195,7 +195,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         [1/2] Committed as: 55af3db create test1.txt
         [2/2] Committed as: ccb7fd5 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
+        branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3 --
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
