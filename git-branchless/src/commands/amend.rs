@@ -9,8 +9,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bstr::ByteSlice;
-
 use eyre::Context;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
 use itertools::Itertools;
@@ -250,30 +248,8 @@ pub fn amend(
                 .collect();
             builder.move_subtree(descendant_oid, parent_oids.clone())?;
 
-            // To keep the contents of all descendant commits the same, forcibly
-            // replace the children commits, and then rely on normal patch
-            // application to apply the rest.
             if reparent {
-                let parents: Vec<_> = parent_oids
-                    .into_iter()
-                    .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
-                    .try_collect()?;
-                let descendant_message = descendant_commit.get_message_raw();
-                let descendant_message = descendant_message.to_str().with_context(|| {
-                    eyre::eyre!(
-                        "Could not decode commit message for descendant commit: {:?}",
-                        descendant_commit
-                    )
-                })?;
-                let reparented_descendant_oid = repo.create_commit(
-                    None,
-                    &descendant_commit.get_author(),
-                    &descendant_commit.get_committer(),
-                    descendant_message,
-                    &descendant_commit.get_tree()?,
-                    parents.iter().collect(),
-                )?;
-                builder.replace_commit(descendant_oid, reparented_descendant_oid)?;
+                builder.reparent_subtree(descendant_oid, parent_oids, &repo)?;
             }
         }
 

@@ -4,6 +4,7 @@ use std::ops::Sub;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use bstr::ByteSlice;
 use chashmap::CHashMap;
 use eyre::Context;
 use itertools::Itertools;
@@ -1074,6 +1075,45 @@ impl<'a> RebasePlanBuilder<'a> {
             commit_to_fixup_oid: dest_oid,
             fixup_commit_oid: source_oid,
         });
+        Ok(())
+    }
+
+    /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
+    /// to be "reparented" by `dest_oids`, namely, keeping all contents
+    /// of descendant commits exactly the same.
+    pub fn reparent_subtree(
+        &mut self,
+        source_oid: NonZeroOid,
+        parent_oids: Vec<NonZeroOid>,
+        repo: &Repo,
+    ) -> eyre::Result<()> {
+        assert!(!parent_oids.is_empty());
+
+        // To keep the contents of all descendant commits the same, forcibly
+        // replace the children commits, and then rely on normal patch
+        // application to apply the rest.
+        let parents: Vec<_> = parent_oids
+            .into_iter()
+            .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
+            .try_collect()?;
+        let descendant_commit = repo.find_commit_or_fail(source_oid)?;
+        let descendant_message = descendant_commit.get_message_raw();
+        let descendant_message = descendant_message.to_str().with_context(|| {
+            eyre::eyre!(
+                "Could not decode commit message for descendant commit: {:?}",
+                descendant_commit
+            )
+        })?;
+        let reparented_descendant_oid = repo.create_commit(
+            None,
+            &descendant_commit.get_author(),
+            &descendant_commit.get_committer(),
+            descendant_message,
+            &descendant_commit.get_tree()?,
+            parents.iter().collect(),
+        )?;
+        self.replace_commit(source_oid, reparented_descendant_oid)?;
+
         Ok(())
     }
 
