@@ -4,6 +4,7 @@ use std::ops::Sub;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use bstr::ByteSlice;
 use chashmap::CHashMap;
 use eyre::Context;
 use itertools::Itertools;
@@ -1076,6 +1077,49 @@ impl<'a> RebasePlanBuilder<'a> {
             commit_to_fixup_oid: dest_oid,
             fixup_commit_oid: source_oid,
         });
+        Ok(())
+    }
+
+    /// Instruct the rebase planner to "reparent" the commit at `source_oid`
+    /// onto `parent_oids`, keeping all contents of `source_oid` exactly the same.
+    ///
+    /// Note that in the end the descendant commits of `source_oid` will be
+    /// automatically rebased on top of `source_oid` following normal patch
+    /// application logic, hence the whole subtree of `source_oid` will be
+    /// effectively reparented on top of `parent_oids`.
+    pub fn reparent_commit(
+        &mut self,
+        source_oid: NonZeroOid,
+        parent_oids: Vec<NonZeroOid>,
+        repo: &Repo,
+    ) -> eyre::Result<()> {
+        assert!(!parent_oids.is_empty());
+
+        // To keep the contents of all descendant commits the same, forcibly
+        // replace the child commit, and then rely on normal patch
+        // application for its descendants.
+        let parents: Vec<_> = parent_oids
+            .into_iter()
+            .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
+            .try_collect()?;
+        let source_commit = repo.find_commit_or_fail(source_oid)?;
+        let source_message = source_commit.get_message_raw();
+        let source_message = source_message.to_str().with_context(|| {
+            eyre::eyre!(
+                "Could not decode commit message for source commit: {:?}",
+                source_commit
+            )
+        })?;
+        let reparented_source_oid = repo.create_commit(
+            None,
+            &source_commit.get_author(),
+            &source_commit.get_committer(),
+            source_message,
+            &source_commit.get_tree()?,
+            parents.iter().collect(),
+        )?;
+        self.replace_commit(source_oid, reparented_source_oid)?;
+
         Ok(())
     }
 
