@@ -6330,6 +6330,165 @@ fn test_move_fixup_added_files() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_reparent() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_branch = "test1-branch";
+    let test2_branch = "test2-branch";
+    let test3_branch = "test3-branch";
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", test1_branch])?;
+    git.commit_file("test2_will_also_contain_test1_when_reparented", 2)?;
+    git.run(&["branch", test2_branch])?;
+    git.commit_file("test3_will_also_contain_test2_when_reparented", 3)?;
+    git.run(&["branch", test3_branch])?;
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d (test1-branch) create test1.txt
+        |
+        o 06309ac (test2-branch) create test2_will_also_contain_test1_when_reparented.txt
+        |
+        @ f41e0bb (test3-branch) create test3_will_also_contain_test2_when_reparented.txt
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "move",
+            &["--source", test2_branch, "--dest", "master", "--reparent"],
+        )?;
+        insta::assert_snapshot!(stdout, @r"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 40ca381 create test2_will_also_contain_test1_when_reparented.txt
+        [2/2] Committed as: e4eeed5 create test3_will_also_contain_test2_when_reparented.txt
+        branchless: processing 2 updates: branch test2-branch, branch test3-branch
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout test3-branch --
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d (test1-branch) create test1.txt
+        |
+        o 40ca381 (test2-branch) create test2_will_also_contain_test1_when_reparented.txt
+        |
+        @ e4eeed5 (> test3-branch) create test3_will_also_contain_test2_when_reparented.txt
+        In-memory rebase succeeded.
+        ");
+    }
+
+    git.branchless("prev", &[])?;
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @r"
+        test1.txt                                         | 1 +
+        test2_will_also_contain_test1_when_reparented.txt | 1 +
+        2 files changed, 2 insertions(+)
+        ");
+    }
+
+    // test --reparent with --insert
+    {
+        let (stdout, _stderr) = git.branchless(
+            "move",
+            &[
+                "--source",
+                test3_branch,
+                "--dest",
+                "master",
+                "--reparent",
+                "--insert",
+            ],
+        )?;
+        insta::assert_snapshot!(stdout, @r"
+        Attempting rebase in-memory...
+        [1/3] Committed as: 3f0558d create test3_will_also_contain_test2_when_reparented.txt
+        [2/3] Committed as: e1e0b99 create test2_will_also_contain_test1_when_reparented.txt
+        [3/3] Committed as: fee6ba0 create test1.txt
+        branchless: processing 3 updates: branch test1-branch, branch test2-branch, branch test3-branch
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout test2-branch --
+        O f777ecc (master) create initial.txt
+        |
+        o 3f0558d (test3-branch) create test3_will_also_contain_test2_when_reparented.txt
+        |\
+        | o fee6ba0 (test1-branch) create test1.txt
+        |
+        @ e1e0b99 (> test2-branch) create test2_will_also_contain_test1_when_reparented.txt
+        In-memory rebase succeeded.
+        ");
+    }
+
+    // the reparented test3 contains everything, including test1 and test2
+    git.branchless("prev", &[])?;
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @r"
+        test1.txt                                         | 1 +
+        test2_will_also_contain_test1_when_reparented.txt | 1 +
+        test3_will_also_contain_test2_when_reparented.txt | 1 +
+        3 files changed, 3 insertions(+)
+        ");
+    }
+
+    // the descendant test2 should come without test3 like before
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", test2_branch])?;
+        insta::assert_snapshot!(stdout, @r"
+        test3_will_also_contain_test2_when_reparented.txt | 1 -
+        1 file changed, 1 deletion(-)
+        ");
+    }
+
+    // similarly the descendant test1 should come without test1 and test2
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", test1_branch])?;
+        insta::assert_snapshot!(stdout, @r"
+        test2_will_also_contain_test1_when_reparented.txt | 1 -
+        test3_will_also_contain_test2_when_reparented.txt | 1 -
+        2 files changed, 2 deletions(-)
+        ");
+    }
+
+    // test --reparent with --exact
+    {
+        let (stdout, _stderr) = git.branchless(
+            "move",
+            &["--exact", test2_branch, "--dest", "master", "--reparent"],
+        )?;
+        insta::assert_snapshot!(stdout, @r"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 40ca381 create test2_will_also_contain_test1_when_reparented.txt
+        branchless: processing 1 update: branch test2-branch
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test3-branch --
+        O f777ecc (master) create initial.txt
+        |\
+        | o 40ca381 (test2-branch) create test2_will_also_contain_test1_when_reparented.txt
+        |
+        @ 3f0558d (> test3-branch) create test3_will_also_contain_test2_when_reparented.txt
+        |
+        o fee6ba0 (test1-branch) create test1.txt
+        In-memory rebase succeeded.
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", test2_branch])?;
+        insta::assert_snapshot!(stdout, @r"
+        test1.txt                                         | 1 +
+        test2_will_also_contain_test1_when_reparented.txt | 1 +
+        2 files changed, 2 insertions(+)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_worktree_rebase_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
