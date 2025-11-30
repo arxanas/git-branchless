@@ -40,7 +40,6 @@ pub fn amend(
     git_run_info: &GitRunInfo,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
-    reparent: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
@@ -266,8 +265,8 @@ pub fn amend(
                 .collect();
             builder.move_subtree(descendant_oid, parent_oids.clone())?;
 
-            if reparent {
-                builder.reparent_subtree(descendant_oid, parent_oids, &repo)?;
+            if move_options.reparent {
+                builder.reparent_commit(descendant_oid, parent_oids, &repo)?;
             }
         }
 
