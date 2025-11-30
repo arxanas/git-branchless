@@ -80,6 +80,7 @@ pub fn split(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        reparent: _, // not yet implemented
     } = *move_options;
 
     let target_oid: NonZeroOid = match resolve_commits(

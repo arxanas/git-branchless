@@ -262,6 +262,7 @@ pub fn r#move(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        reparent,
     } = *move_options;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;

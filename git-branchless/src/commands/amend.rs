@@ -37,7 +37,6 @@ pub fn amend(
     git_run_info: &GitRunInfo,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
-    reparent: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -248,7 +247,7 @@ pub fn amend(
                 .collect();
             builder.move_subtree(descendant_oid, parent_oids.clone())?;
 
-            if reparent {
+            if move_options.reparent {
                 builder.reparent_subtree(descendant_oid, parent_oids, &repo)?;
             }
         }

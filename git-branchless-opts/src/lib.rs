@@ -85,6 +85,13 @@ pub struct MoveOptions {
     #[clap(action, name = "merge", short = 'm', long = "merge")]
     pub resolve_merge_conflicts: bool,
 
+    /// Keep all contents of descendant commits exactly the same (i.e. "reparent" them).
+    /// This can be useful when applying formatting or refactoring changes.
+    /// Use with care if the descendants are moved from a far-away branch, as it may
+    /// carry along a lot of unintended changes onto the destination.
+    #[clap(long, conflicts_with = "merge")]
+    pub reparent: bool,
+
     /// Debugging option. Print the constraints used to create the rebase
     /// plan before executing it.
     #[clap(action, long = "debug-dump-rebase-constraints")]
@@ -442,12 +449,6 @@ pub enum Command {
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
-
-        /// Modify the contents of the current HEAD commit, but keep all contents of descendant
-        /// commits exactly the same (i.e. "reparent" them). This can be useful when applying
-        /// formatting or refactoring changes.
-        #[clap(long)]
-        reparent: bool,
     },
 
     /// Gather information about recent operations to upload as part of a bug
@@ -941,7 +942,10 @@ pub enum TestSubcommand {
         verbosity: u8,
     },
 
-    /// Run a given command on a set of commits and present the successes and failures.
+    /// Rewrites a set of commits one by one, by running a given command on each commit
+    ///
+    /// The descendants are "reparented" onto the rewritten commits without changing their
+    /// contents. This avoids the possibility of merge conflicts in descendants.
     Fix {
         /// An ad-hoc command to execute on each commit.
         #[clap(value_parser, short = 'x', long = "exec")]

@@ -388,6 +388,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                 resolve_merge_conflicts,
                 dump_rebase_constraints,
                 dump_rebase_plan,
+                reparent: _, // always implied
             } = move_options;
 
             let force_in_memory = true;
