@@ -1023,7 +1023,9 @@ impl<'a> RebasePlanBuilder<'a> {
         source_oid: NonZeroOid,
         dest_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<()> {
-        assert!(!dest_oids.is_empty());
+        if dest_oids.is_empty() {
+            eyre::bail!("Destination OIDs must not be empty for move_subtree");
+        }
         self.initial_constraints.push(Constraint::MoveSubtree {
             parent_oids: dest_oids,
             child_oid: source_oid,
@@ -1087,7 +1089,9 @@ impl<'a> RebasePlanBuilder<'a> {
         parent_oids: Vec<NonZeroOid>,
         repo: &Repo,
     ) -> eyre::Result<()> {
-        assert!(!parent_oids.is_empty());
+        if parent_oids.is_empty() {
+            eyre::bail!("Parent OIDs must not be empty for reparent_subtree");
+        }
 
         // To keep the contents of all descendant commits the same, forcibly
         // replace the children commits, and then rely on normal patch
