@@ -58,6 +58,89 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_restack_reparent() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    git.write_file_txt("test1", "test1 amended")?;
+    git.run(&["commit", ".", "--amend", "-m", "amend test1.txt"])?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r"
+        O f777ecc (master) create initial.txt
+        |\
+        | @ 10d9b3e amend test1.txt
+        |
+        x 62fc20d (rewritten as 10d9b3ee) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 70deb1e create test3.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("restack", &["--reparent"])?;
+        let stdout = remove_rebase_lines(stdout);
+        insta::assert_snapshot!(stdout, @r"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 5acd93e create test2.txt
+        [2/2] Committed as: 7a9000d create test3.txt
+        branchless: processing 2 rewritten commits
+        In-memory rebase succeeded.
+        Finished restacking commits.
+        No abandoned branches to restack.
+        O f777ecc (master) create initial.txt
+        |
+        @ 10d9b3e amend test1.txt
+        |
+        o 5acd93e create test2.txt
+        |
+        o 7a9000d create test3.txt
+        ");
+    }
+
+    // test2 should be identical as before, undoing the test1 amendment
+    // this behavior is similar to `amend --reparent`
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "5acd93e"])?;
+        insta::assert_snapshot!(stdout, @r"
+        diff --git a/test1.txt b/test1.txt
+        index 68589b4..7432a8f 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 amended
+        \ No newline at end of file
+        +test1 contents
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..4e512d2
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +test2 contents
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
     let git = make_git()?;
 

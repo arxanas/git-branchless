@@ -91,6 +91,7 @@ fn restack_commits(
     event_cursor: EventCursor,
     git_run_info: &GitRunInfo,
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
+    reparent: bool,
     build_options: BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     merge_conflict_remediation: MergeConflictRemediation,
@@ -151,6 +152,9 @@ fn restack_commits(
         {
             for child_oid in abandoned_child_oids {
                 builder.move_subtree(child_oid, vec![dest_oid])?;
+                if reparent {
+                    builder.reparent_subtree(child_oid, vec![dest_oid], &repo)?;
+                }
             }
         }
         match builder.build(effects, thread_pool, repo_pool)? {
@@ -314,7 +318,7 @@ pub fn restack(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
-        reparent: _, // not yet implemented
+        reparent,
     } = *move_options;
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits,
@@ -350,6 +354,7 @@ pub fn restack(
         event_cursor,
         git_run_info,
         commits,
+        reparent,
         build_options,
         &execute_options,
         merge_conflict_remediation,
