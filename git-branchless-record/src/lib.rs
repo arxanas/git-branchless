@@ -15,7 +15,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
-use git_branchless_opts::RecordArgs;
+use git_branchless_opts::{MessageArgs, RecordArgs};
 use git_branchless_reword::edit_message;
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
@@ -52,7 +52,11 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         git_run_info,
     } = ctx;
     let RecordArgs {
-        messages,
+        message_args:
+            MessageArgs {
+                messages,
+                commit_to_fixup: _, // not yet implemented
+            },
         interactive,
         create,
         detach,

@@ -299,13 +299,28 @@ pub struct QueryArgs {
     pub raw: bool,
 }
 
-/// Create a commit by interactively selecting which changes to include.
+/// Specify commit messages
 #[derive(Debug, Parser)]
-pub struct RecordArgs {
-    /// The commit message to use. If not provided, will be prompted to provide a commit message
+pub struct MessageArgs {
+    /// The commit message to use. Multiple messages will be combined
+    /// as separate paragraphs, similar to `git commit`.
+    /// If not provided, you will be prompted to provide a commit message
     /// interactively.
     #[clap(value_parser, short = 'm', long = "message")]
     pub messages: Vec<String>,
+
+    /// A commit to "fix up". The message will be prefixed with `fixup!`
+    /// following the supplied commit, suitable for use with `git rebase --autosquash`.
+    #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages"]))]
+    pub commit_to_fixup: Option<Revset>,
+}
+
+/// Create a commit by interactively selecting which changes to include.
+#[derive(Debug, Parser)]
+pub struct RecordArgs {
+    /// Options for supplying commit messages.
+    #[clap(flatten)]
+    pub message_args: MessageArgs,
 
     /// Select changes to include interactively, rather than using the
     /// current staged/unstaged changes.
@@ -627,22 +642,16 @@ pub enum Command {
         #[clap(action, short = 'f', long = "force-rewrite", visible_alias = "fr")]
         force_rewrite_public_commits: bool,
 
-        /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
-        /// similar to `git commit`.
-        #[clap(value_parser, short = 'm', long = "message")]
-        messages: Vec<String>,
+        /// Options for supplying commit messages.
+        #[clap(flatten)]
+        message_args: MessageArgs,
 
         /// Throw away the original commit messages.
         ///
         /// If `commit.template` is set, then the editor is pre-populated with
         /// that; otherwise, the editor starts empty.
-        #[clap(action, short = 'd', long = "discard", conflicts_with("messages"))]
+        #[clap(action, short = 'd', long = "discard", conflicts_with_all(&["messages", "commit_to_fixup"]))]
         discard: bool,
-
-        /// A commit to "fix up". The reworded commits will become `fixup!` commits (suitable for
-        /// use with `git rebase --autosquash`) targeting the supplied commit.
-        #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages", "discard"]))]
-        commit_to_fixup: Option<Revset>,
     },
 
     /// `smartlog` command.
