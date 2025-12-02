@@ -17,7 +17,8 @@ use lib::util::ExitCode;
 use lib::{core::gc, util::EyreExitOr};
 
 use git_branchless_opts::{
-    rewrite_args, Command, Opts, ResolveRevsetOptions, SnapshotSubcommand, WrappedCommand,
+    rewrite_args, Command, MessageArgs, Opts, ResolveRevsetOptions, SnapshotSubcommand,
+    WrappedCommand,
 };
 use lib::git::GitRunInfo;
 
@@ -150,11 +151,14 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
 
         Command::Reword {
             revsets,
+            message_args:
+                MessageArgs {
+                    messages,
+                    commit_to_fixup,
+                },
             resolve_revset_options,
-            messages,
             force_rewrite_public_commits,
             discard,
-            commit_to_fixup,
         } => {
             let messages = if discard {
                 git_branchless_reword::InitialCommitMessages::Discard

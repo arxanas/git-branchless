@@ -13,6 +13,7 @@ pub mod dialoguer_edit;
 
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
+use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
@@ -136,39 +137,14 @@ pub fn reword(
     let messages = match messages {
         InitialCommitMessages::Discard | InitialCommitMessages::Messages(_) => messages,
         InitialCommitMessages::FixUp(revset) => {
-            let commits_to_fixup = resolve_commits_from_hashes(
+            let commit_to_fixup = try_exit_code!(resolve_commit_to_fixup(
                 &repo,
                 &mut dag,
                 effects,
-                vec![revset.clone()],
+                &revset,
                 resolve_revset_options,
-            )?
-            .unwrap_or_default();
-            let commit_to_fixup = match commits_to_fixup.as_slice() {
-                [commit_to_fixup] => {
-                    let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
-                    if !dag.set_contains(
-                        &dag.query_common_ancestors(commits)?,
-                        commit_to_fixup.get_oid(),
-                    )? {
-                        writeln!(
-                            effects.get_error_stream(),
-                            "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
-                        )?;
-                        return Ok(Err(ExitCode(1)));
-                    }
-                    commit_to_fixup
-                }
-                commits => {
-                    writeln!(
-                        effects.get_error_stream(),
-                        "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
-                        revset,
-                        commits.len()
-                    )?;
-                    return Ok(Err(ExitCode(1)));
-                }
-            };
+                Some(&commits)
+            )?);
             let message = commit_to_fixup.get_summary()?.to_vec();
             let message = format!("fixup! {}", message.into_string_lossy());
             InitialCommitMessages::Messages(vec![message])
@@ -328,6 +304,53 @@ pub fn reword(
             Ok(Err(ExitCode(1)))
         }
         ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
+    }
+}
+
+/// Generate a commit message with the fixup! prefix.
+pub fn resolve_commit_to_fixup<'repo>(
+    repo: &'repo Repo,
+    dag: &mut Dag,
+    effects: &Effects,
+    revset_to_fixup: &Revset, // revset as the fixup! target
+    resolve_revset_options: &ResolveRevsetOptions,
+    reworded_commits: Option<&[Commit<'_>]>, // whose messages are being reworded
+) -> EyreExitOr<Commit<'repo>> {
+    let commits_to_fixup = resolve_commits_from_hashes(
+        repo,
+        dag,
+        effects,
+        vec![revset_to_fixup.clone()],
+        resolve_revset_options,
+    )?
+    .unwrap_or_default();
+    match commits_to_fixup.as_slice() {
+        [commit_to_fixup] => {
+            if let Some(commits) = reworded_commits {
+                // check if commit_to_fixup is an ancestor of all edited commits
+                let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
+                if !dag.set_contains(
+                    &dag.query_common_ancestors(commits)?,
+                    commit_to_fixup.get_oid(),
+                )? {
+                    writeln!(
+                    effects.get_error_stream(),
+                    "The commit supplied to --fixup must be an ancestor of all commits whose messages are being edited.\nAborting.",
+                )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+            }
+            Ok(Ok(commit_to_fixup.clone()))
+        }
+        commits => {
+            writeln!(
+                effects.get_error_stream(),
+                "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
+                revset_to_fixup,
+                commits.len()
+            )?;
+            Ok(Err(ExitCode(1)))
+        }
     }
 }
 
