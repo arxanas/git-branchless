@@ -76,7 +76,7 @@ pub fn sync(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
-        reparent: _, // not yet implemented
+        reparent,
     } = *move_options;
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits,
@@ -111,6 +111,7 @@ pub fn sync(
             git_run_info,
             &repo,
             &event_log_db,
+            reparent,
             &build_options,
             &execute_options,
             &thread_pool,
@@ -126,6 +127,7 @@ pub fn sync(
         git_run_info,
         &repo,
         &event_log_db,
+        reparent,
         build_options,
         &execute_options,
         &thread_pool,
@@ -140,6 +142,7 @@ fn execute_main_branch_sync_plan(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    reparent: bool,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
@@ -275,6 +278,9 @@ fn execute_main_branch_sync_plan(
         Err(_) => return Ok(Ok(())),
     };
     builder.move_subtree(root_commit_oid, vec![upstream_main_branch_oid])?;
+    if reparent {
+        builder.reparent_subtree(root_commit_oid, vec![upstream_main_branch_oid], repo)?;
+    }
     let rebase_plan = match builder.build(effects, thread_pool, repo_pool)? {
         Ok(rebase_plan) => rebase_plan,
         Err(err) => {
@@ -302,6 +308,7 @@ fn execute_sync_plans(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
+    reparent: bool,
     build_options: BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
@@ -365,6 +372,13 @@ fn execute_sync_plans(
                     }
 
                     builder.move_subtree(root_commit.get_oid(), vec![main_branch_oid])?;
+                    if reparent {
+                        builder.reparent_subtree(
+                            root_commit.get_oid(),
+                            vec![main_branch_oid],
+                            &repo,
+                        )?;
+                    }
                     let rebase_plan = builder.build(effects, thread_pool, repo_pool)?;
                     Ok(rebase_plan.map(|rebase_plan| (root_commit_oid, rebase_plan)))
                 },

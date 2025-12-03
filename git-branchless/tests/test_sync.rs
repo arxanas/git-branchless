@@ -193,6 +193,108 @@ fn test_sync_pull() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_sync_reparent() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test3", 3)?;
+
+    git.detach_head()?;
+    git.commit_file("test4", 4)?;
+
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test5", 5)?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        | |
+        | o 96d1c37 create test2.txt
+        |
+        O 98b9119 create test3.txt
+        |\
+        | o 2b633ed create test4.txt
+        |
+        @ 117e086 (> master) create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.branchless("sync", &["--reparent"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
+        Switched to branch 'master'
+        branchless: processing checkout
+        branchless: creating working copy snapshot
+        Switched to branch 'master'
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 9343a7d create test1.txt
+        [2/2] Committed as: e14bee9 create test2.txt
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout master
+        In-memory rebase succeeded.
+        Attempting rebase in-memory...
+        [1/1] Committed as: e8f8c47 create test4.txt
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout master
+        In-memory rebase succeeded.
+        Synced 62fc20d create test1.txt
+        Synced 2b633ed create test4.txt
+        ");
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r"
+        :
+        @ 117e086 (> master) create test5.txt
+        |\
+        | o 9343a7d create test1.txt
+        | |
+        | o e14bee9 create test2.txt
+        |
+        o e8f8c47 create test4.txt
+        ");
+    }
+
+    {
+        // the reparented test1 will effectively undo test3 & test5
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "9343a7d"])?;
+        insta::assert_snapshot!(&stdout, @r"
+        test1.txt | 1 +
+        test3.txt | 1 -
+        test5.txt | 1 -
+        3 files changed, 1 insertion(+), 2 deletions(-)
+        ");
+
+        // similar the reparented test4 will effectively undo test5
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "e8f8c47"])?;
+        insta::assert_snapshot!(&stdout, @r"
+        test4.txt | 1 +
+        test5.txt | 1 -
+        2 files changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_sync_stack_from_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
