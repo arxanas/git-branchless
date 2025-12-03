@@ -15,8 +15,8 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
-use git_branchless_opts::{MessageArgs, RecordArgs};
-use git_branchless_reword::edit_message;
+use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
+use git_branchless_reword::{edit_message, resolve_commit_to_fixup, ResolveFixupCommitError};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
@@ -52,11 +52,10 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         git_run_info,
     } = ctx;
     let RecordArgs {
-        message_args:
-            MessageArgs {
-                messages,
-                commit_to_fixup: _, // not yet implemented
-            },
+        message_args: MessageArgs {
+            messages,
+            commit_to_fixup,
+        },
         interactive,
         create,
         detach,
@@ -67,6 +66,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         &effects,
         &git_run_info,
         messages,
+        commit_to_fixup,
         interactive,
         create,
         detach,
@@ -80,6 +80,7 @@ fn record(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     messages: Vec<String>,
+    commit_to_fixup: Option<Revset>,
     interactive: bool,
     branch_name: Option<String>,
     detach: bool,
@@ -169,11 +170,59 @@ fn record(
             messages
         };
         let args = {
-            let mut args = vec!["commit"];
-            args.extend(messages.iter().flat_map(|message| ["--message", message]));
+            let mut args = vec!["commit".to_string()];
+            args.extend(
+                messages
+                    .iter()
+                    .flat_map(|message| ["--message".to_string(), message.to_string()]),
+            );
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-                args.push("--all");
+                args.push("--all".to_string());
             }
+            if let Some(revset) = commit_to_fixup {
+                let event_replayer =
+                    EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+                let event_cursor = event_replayer.make_default_cursor();
+                let references_snapshot = repo.get_references_snapshot()?;
+                let mut dag = Dag::open_and_sync(
+                    effects,
+                    &repo,
+                    &event_replayer,
+                    event_cursor,
+                    &references_snapshot,
+                )?;
+                let head: Option<&[lib::git::Commit<'_>]> =
+                    snapshot.head_commit.as_ref().map(std::slice::from_ref);
+                let commit = match resolve_commit_to_fixup(
+                    &repo,
+                    &mut dag,
+                    effects,
+                    &revset,
+                    &ResolveRevsetOptions::default(),
+                    head,
+                )? {
+                    Ok(commit) => commit,
+                    Err(ResolveFixupCommitError::NotAnAncestor) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "The commit supplied to --fixup must be an ancestor of the commit being created.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                    Err(ResolveFixupCommitError::MoreThanOneCommit {
+                        revset_to_fixup,
+                        commit_count,
+                    }) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+                let commit = commit.get_oid().to_string();
+                args.extend(["--fixup".to_string(), commit]);
+            };
             args
         };
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);

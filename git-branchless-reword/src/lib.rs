@@ -13,7 +13,6 @@ pub mod dialoguer_edit;
 
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
-use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
@@ -137,14 +136,33 @@ pub fn reword(
     let messages = match messages {
         InitialCommitMessages::Discard | InitialCommitMessages::Messages(_) => messages,
         InitialCommitMessages::FixUp(revset) => {
-            let commit_to_fixup = try_exit_code!(resolve_commit_to_fixup(
+            let commit_to_fixup = match resolve_commit_to_fixup(
                 &repo,
                 &mut dag,
                 effects,
                 &revset,
                 resolve_revset_options,
-                Some(&commits)
-            )?);
+                Some(&commits),
+            )? {
+                Ok(commit) => commit,
+                Err(ResolveFixupCommitError::NotAnAncestor) => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+                Err(ResolveFixupCommitError::MoreThanOneCommit {
+                    revset_to_fixup,
+                    commit_count,
+                }) => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+            };
             let message = commit_to_fixup.get_summary()?.to_vec();
             let message = format!("fixup! {}", message.into_string_lossy());
             InitialCommitMessages::Messages(vec![message])
@@ -307,6 +325,23 @@ pub fn reword(
     }
 }
 
+#[must_use]
+/// Possible errors when resolving commit for the --fixup flag
+pub enum ResolveFixupCommitError {
+    /// Error when there are more than one commit supplied to --fixup
+    MoreThanOneCommit {
+        /// String representation for the revset supplied to --fixup.
+        revset_to_fixup: String,
+        /// The number of commits that the revset resolves to.
+        /// It should be exactly one but it is not, hence the error.
+        commit_count: usize,
+    },
+
+    /// Error when the commit supplied to --fixup is not an ancestor of
+    /// the commit(s) being edited (either reworded or recorded).
+    NotAnAncestor,
+}
+
 /// Generate a commit message with the fixup! prefix.
 pub fn resolve_commit_to_fixup<'repo>(
     repo: &'repo Repo,
@@ -315,7 +350,7 @@ pub fn resolve_commit_to_fixup<'repo>(
     revset_to_fixup: &Revset, // revset as the fixup! target
     resolve_revset_options: &ResolveRevsetOptions,
     reworded_commits: Option<&[Commit<'_>]>, // whose messages are being reworded
-) -> EyreExitOr<Commit<'repo>> {
+) -> eyre::Result<Result<Commit<'repo>, ResolveFixupCommitError>> {
     let commits_to_fixup = resolve_commits_from_hashes(
         repo,
         dag,
@@ -333,24 +368,15 @@ pub fn resolve_commit_to_fixup<'repo>(
                     &dag.query_common_ancestors(commits)?,
                     commit_to_fixup.get_oid(),
                 )? {
-                    writeln!(
-                    effects.get_error_stream(),
-                    "The commit supplied to --fixup must be an ancestor of all commits whose messages are being edited.\nAborting.",
-                )?;
-                    return Ok(Err(ExitCode(1)));
+                    return Ok(Err(ResolveFixupCommitError::NotAnAncestor));
                 }
             }
             Ok(Ok(commit_to_fixup.clone()))
         }
-        commits => {
-            writeln!(
-                effects.get_error_stream(),
-                "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
-                revset_to_fixup,
-                commits.len()
-            )?;
-            Ok(Err(ExitCode(1)))
-        }
+        commits => Ok(Err(ResolveFixupCommitError::MoreThanOneCommit {
+            revset_to_fixup: revset_to_fixup.to_string(),
+            commit_count: commits.len(),
+        })),
     }
 }
 
