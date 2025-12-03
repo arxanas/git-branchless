@@ -507,10 +507,10 @@ fn test_reword_fixup_ancestry_issue() -> eyre::Result<()> {
             ..Default::default()
         },
     )?;
-    insta::assert_snapshot!(stderr, @r"
-    The commit supplied to --fixup must be an ancestor of all commits whose messages are being edited.
-    Aborting.
-    ");
+    insta::assert_snapshot!(stderr, @r###"
+        The commit supplied to --fixup must be an ancestor of all commits being reworded.
+        Aborting.
+    "###);
 
     Ok(())
 }

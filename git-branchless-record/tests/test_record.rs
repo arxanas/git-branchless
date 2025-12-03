@@ -824,3 +824,67 @@ fn test_record_interactive_commit_message_template() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_fixup() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.write_file_txt("test1", "update test1\n")?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    ");
+
+    git.branchless("record", &["--fixup", "roots(all())"])?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ 7b720ed (> test) fixup! create initial.txt
+    ");
+
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    git.write_file_txt("test1", "update test1 again\n")?;
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    @ 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 7b720ed (test) fixup! create initial.txt
+    ");
+
+    let (_stdout, stderr) = git.branchless_with_options(
+        "record",
+        &["--fixup", &test2_oid.to_string()],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    insta::assert_snapshot!(stderr, @r"
+    The commit supplied to --fixup must be an ancestor of the commit being created.
+    Aborting.
+    ");
+
+    Ok(())
+}
