@@ -7,7 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.10.0"
 
 [dependencies]
-cursive = { version = "0.20.0", default-features = false, features = [
+cursive = { version = "0.21.1", default-features = false, features = [
     "crossterm-backend",
 ] }
 cursive_buffered_backend = { workspace = true }
