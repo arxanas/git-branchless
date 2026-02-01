@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use eyre::Context;
 use itertools::Itertools;
 
-use lib::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use lib::core::eventlog::{BRANCHLESS_TRANSACTION_ID_ENV_VAR, EventLogDb, EventTransactionId};
 use lib::git::{GitRunInfo, Repo};
 use lib::util::{ExitCode, EyreExitOr};
 

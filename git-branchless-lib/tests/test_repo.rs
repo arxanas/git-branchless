@@ -4,7 +4,7 @@ use branchless::git::{
     AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion, Repo,
     StatusEntry,
 };
-use branchless::testing::{make_git, make_git_worktree, GitWorktreeWrapper};
+use branchless::testing::{GitWorktreeWrapper, make_git, make_git_worktree};
 
 #[test]
 fn test_parse_git_version_output() {

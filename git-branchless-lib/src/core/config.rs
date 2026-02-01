@@ -134,7 +134,10 @@ pub fn get_commit_template(repo: &Repo) -> eyre::Result<Option<String>> {
         match repo.get_working_copy_path() {
             Some(root) => root.join(commit_template_path),
             None => {
-                warn!(?commit_template_path, "Commit template path was relative, but this repository does not have a working copy");
+                warn!(
+                    ?commit_template_path,
+                    "Commit template path was relative, but this repository does not have a working copy"
+                );
                 return Ok(None);
             }
         }

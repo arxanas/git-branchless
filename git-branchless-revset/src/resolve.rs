@@ -9,9 +9,9 @@ use lib::git::Repo;
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::Expr;
 use crate::eval::EvalError;
 use crate::parser::ParseError;
-use crate::Expr;
 use crate::{eval, parse};
 
 /// The result of attempting to resolve commits.

@@ -3,4 +3,4 @@
 mod cursive;
 pub mod testing;
 
-pub use self::cursive::{with_siv, SingletonView};
+pub use self::cursive::{SingletonView, with_siv};

@@ -12,8 +12,8 @@ use cursive_core::theme::Effect;
 use cursive_core::utils::markup::StyledString;
 use git_branchless_opts::Revset;
 use git_branchless_test::{
-    run_tests, FixInfo, ResolvedTestOptions, TestOutput, TestResults, TestStatus,
-    TestingAbortedError, Verbosity,
+    FixInfo, ResolvedTestOptions, TestOutput, TestResults, TestStatus, TestingAbortedError,
+    Verbosity, run_tests,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -23,8 +23,9 @@ use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::EventLogDb;
 use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    execute_rebase_plan,
 };
 use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError, TestCommand};
 use lib::try_exit_code;
@@ -35,7 +36,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, warn};
 
-use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, STYLE_PUSHED};
+use crate::{CommitStatus, CreateStatus, Forge, STYLE_PUSHED, SubmitOptions, SubmitStatus};
 
 /// Wrapper around the Phabricator "ID" type. (This is *not* a PHID, just a
 /// regular ID).
@@ -703,13 +704,15 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             return Ok(Err(ExitCode(1)));
         }
 
-        try_exit_code!(self.update_dependencies(
-            &success_commits
-                .into_iter()
-                .map(|(commit_oid, _test_output)| commit_oid)
-                .collect(),
-            &CommitSet::empty()
-        )?);
+        try_exit_code!(
+            self.update_dependencies(
+                &success_commits
+                    .into_iter()
+                    .map(|(commit_oid, _test_output)| commit_oid)
+                    .collect(),
+                &CommitSet::empty()
+            )?
+        );
         Ok(Ok(()))
     }
 }

@@ -1,4 +1,4 @@
-use lib::testing::{make_git, GitRunOptions, GitWrapper};
+use lib::testing::{GitRunOptions, GitWrapper, make_git};
 use maplit::hashmap;
 
 fn write_test_script(git: &GitWrapper) -> eyre::Result<()> {

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, make_git};
 
 #[test]
 fn test_split_detached_head() -> eyre::Result<()> {

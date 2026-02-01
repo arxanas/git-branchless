@@ -35,9 +35,9 @@ use tracing::level_filters::LevelFilter;
 use tracing::{info, instrument, warn};
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
 
 /// Shared context for all commands.
 #[derive(Clone, Debug)]

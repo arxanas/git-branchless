@@ -1,4 +1,4 @@
-use lib::testing::{make_git, make_git_worktree, GitRunOptions, GitWorktreeWrapper};
+use lib::testing::{GitRunOptions, GitWorktreeWrapper, make_git, make_git_worktree};
 
 #[test]
 fn test_is_rebase_underway() -> eyre::Result<()> {

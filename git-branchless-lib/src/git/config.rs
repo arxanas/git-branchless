@@ -111,7 +111,7 @@ impl GetConfigValue<bool> for bool {
                 Err(err) if err.code() == git2::ErrorCode::NotFound => None,
                 Err(err) => {
                     return Err(wrap_git_error(err))
-                        .wrap_err("Looking up bool value for config key")
+                        .wrap_err("Looking up bool value for config key");
                 }
             };
             Ok(value)
@@ -129,7 +129,7 @@ impl GetConfigValue<i32> for i32 {
                 Err(err) if err.code() == git2::ErrorCode::NotFound => None,
                 Err(err) => {
                     return Err(wrap_git_error(err))
-                        .wrap_err("Looking up bool value for config key")
+                        .wrap_err("Looking up bool value for config key");
                 }
             };
             Ok(value)
@@ -147,7 +147,7 @@ impl GetConfigValue<PathBuf> for PathBuf {
                 Err(err) if err.code() == git2::ErrorCode::NotFound => None,
                 Err(err) => {
                     return Err(wrap_git_error(err))
-                        .wrap_err("Looking up path value for config key")
+                        .wrap_err("Looking up path value for config key");
                 }
             };
             Ok(value)
@@ -239,7 +239,7 @@ pub trait ConfigWrite {
     /// Remove the multivariable entry with the provided key and whose value
     /// matches the provided regex. If such a key is not present, does nothing.
     fn remove_multivar(&mut self, key: impl AsRef<str>, regex: impl AsRef<str>)
-        -> eyre::Result<()>;
+    -> eyre::Result<()>;
 }
 
 impl Config {

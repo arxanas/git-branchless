@@ -12,8 +12,8 @@ use tracing::instrument;
 
 use crate::core::config::get_auto_switch_branches;
 use crate::git::{
-    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
-    Repo, Stage, UpdateIndexCommand, WorkingCopySnapshot,
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, Stage,
+    UpdateIndexCommand, WorkingCopySnapshot, update_index,
 };
 use crate::try_exit_code;
 use crate::util::EyreExitOr;
@@ -262,13 +262,15 @@ pub fn restore_snapshot(
 
     // Discard any working copy changes. The caller is responsible for having
     // snapshotted them if necessary.
-    try_exit_code!(git_run_info
-        .run(
-            effects,
-            Some(event_tx_id),
-            &["reset", "--hard", "HEAD", "--"]
-        )
-        .wrap_err("Discarding working copy changes")?);
+    try_exit_code!(
+        git_run_info
+            .run(
+                effects,
+                Some(event_tx_id),
+                &["reset", "--hard", "HEAD", "--"]
+            )
+            .wrap_err("Discarding working copy changes")?
+    );
 
     // Check out the unstaged changes. Note that we don't call `git reset --hard
     // <target>` directly as part of the previous step, and instead do this
@@ -276,29 +278,33 @@ pub fn restore_snapshot(
     // don't get thrown away as part of checking out the snapshot, but instead
     // abort the procedure.
     // FIXME: it might be worth attempting to un-check-out this commit?
-    try_exit_code!(git_run_info
-        .run(
-            effects,
-            Some(event_tx_id),
-            &[
-                "checkout",
-                &snapshot.commit_unstaged.get_oid().to_string(),
-                "--"
-            ],
-        )
-        .wrap_err("Checking out unstaged changes (fail if conflict)")?);
+    try_exit_code!(
+        git_run_info
+            .run(
+                effects,
+                Some(event_tx_id),
+                &[
+                    "checkout",
+                    &snapshot.commit_unstaged.get_oid().to_string(),
+                    "--"
+                ],
+            )
+            .wrap_err("Checking out unstaged changes (fail if conflict)")?
+    );
 
     // Restore any unstaged changes. They're already present in the working
     // copy, so we just have to adjust `HEAD`.
     match &snapshot.head_commit {
         Some(head_commit) => {
-            try_exit_code!(git_run_info
-                .run(
-                    effects,
-                    Some(event_tx_id),
-                    &["reset", &head_commit.get_oid().to_string(), "--"],
-                )
-                .wrap_err("Update HEAD for unstaged changes")?);
+            try_exit_code!(
+                git_run_info
+                    .run(
+                        effects,
+                        Some(event_tx_id),
+                        &["reset", &head_commit.get_oid().to_string(), "--"],
+                    )
+                    .wrap_err("Update HEAD for unstaged changes")?
+            );
         }
         None => {
             // Do nothing. The branch, if any, will be restored later below.
@@ -352,21 +358,25 @@ pub fn restore_snapshot(
             Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
             None => MaybeZeroOid::Zero,
         };
-        try_exit_code!(git_run_info
-            .run(
-                effects,
-                Some(event_tx_id),
-                &["update-ref", ref_name.as_str(), &head_oid.to_string()],
-            )
-            .context("Restoring snapshot branch")?);
+        try_exit_code!(
+            git_run_info
+                .run(
+                    effects,
+                    Some(event_tx_id),
+                    &["update-ref", ref_name.as_str(), &head_oid.to_string()],
+                )
+                .context("Restoring snapshot branch")?
+        );
 
-        try_exit_code!(git_run_info
-            .run(
-                effects,
-                Some(event_tx_id),
-                &["symbolic-ref", "HEAD", ref_name.as_str()],
-            )
-            .context("Checking out snapshot branch")?);
+        try_exit_code!(
+            git_run_info
+                .run(
+                    effects,
+                    Some(event_tx_id),
+                    &["symbolic-ref", "HEAD", ref_name.as_str()],
+                )
+                .context("Checking out snapshot branch")?
+        );
     }
 
     Ok(Ok(()))

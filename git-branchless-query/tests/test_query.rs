@@ -1,4 +1,4 @@
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, make_git};
 
 #[test]
 fn test_query() -> eyre::Result<()> {

@@ -31,8 +31,8 @@ use tracing::debug;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::branch_forge::BranchForge;
 use crate::SubmitStatus;
+use crate::branch_forge::BranchForge;
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions};
 
 /// Testing environment variable. When this is set, the executable will use the
@@ -147,8 +147,8 @@ impl Forge for GithubForge<'_> {
             {
                 None => SubmitStatus::Unsubmitted,
                 Some(pull_request_info) => {
-                    let updated_pull_request_info = try_exit_code!(self
-                        .make_updated_pull_request_info(
+                    let updated_pull_request_info =
+                        try_exit_code!(self.make_updated_pull_request_info(
                             effects,
                             &references_snapshot,
                             &pull_request_infos,
@@ -430,8 +430,8 @@ impl Forge for GithubForge<'_> {
                     }
                 };
 
-                let updated_pull_request_info = try_exit_code!(self
-                    .make_updated_pull_request_info(
+                let updated_pull_request_info =
+                    try_exit_code!(self.make_updated_pull_request_info(
                         &effects,
                         &references_snapshot,
                         &pull_request_infos,
@@ -1059,7 +1059,9 @@ mod client {
                 let base_branch_oid = match branches.get(base_ref_name) {
                     Some(oid) => *oid,
                     None => {
-                        eyre::bail!("Could not find base branch {base_ref_name:?} for pull request: {pull_request_info:?}");
+                        eyre::bail!(
+                            "Could not find base branch {base_ref_name:?} for pull request: {pull_request_info:?}"
+                        );
                     }
                 };
                 let SerializedNonZeroOid(head_ref_oid) = pull_request_info.head_ref_oid;

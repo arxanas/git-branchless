@@ -353,7 +353,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             let before_idx_start = old_start;
             let before_idx_end = before_idx_start + old_lines;
             assert!(
-            before_idx_end <= before_lines.len(),
+                before_idx_end <= before_lines.len(),
                 "before_idx_end {end} was not in range [0, {len}): {hunk:?}, path: {path:?}; lines {start}-... are: {lines:?}",
                 start = before_idx_start,
                 end = before_idx_end,
@@ -382,7 +382,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 len = after_lines.len(),
                 hunk = hunk,
                 path = path,
-                lines  = &after_lines[after_idx_start..],
+                lines = &after_lines[after_idx_start..],
             );
             let after_section_lines = after_lines[after_idx_start..after_idx_end]
                 .iter()

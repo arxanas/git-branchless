@@ -1,7 +1,7 @@
 use lib::testing::{
+    GitInitOptions, GitRunOptions, GitWorktreeWrapper, GitWrapperWithRemoteRepo,
     extract_hint_command, make_git, make_git_with_remote_repo, make_git_worktree,
-    remove_rebase_lines, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
-    GitWrapperWithRemoteRepo,
+    remove_rebase_lines,
 };
 
 #[test]
@@ -1992,8 +1992,8 @@ fn test_move_exact_ranges_with_merge_commits_betwixt_not_supported() -> eyre::Re
 }
 
 #[test]
-fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits(
-) -> eyre::Result<()> {
+fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits()
+-> eyre::Result<()> {
     let git = make_git()?;
     if !git.supports_committer_date_is_author_date()? {
         return Ok(());
@@ -2074,8 +2074,8 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
 }
 
 #[test]
-fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commits(
-) -> eyre::Result<()> {
+fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commits()
+-> eyre::Result<()> {
     let git = make_git()?;
     if !git.supports_committer_date_is_author_date()? {
         return Ok(());

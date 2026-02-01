@@ -8,15 +8,15 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use bstr::BString;
-use eyre::{eyre, Context};
+use eyre::{Context, eyre};
 use itertools::Itertools;
 use tracing::{instrument, warn};
 
 use crate::core::config::get_main_worktree_hooks_dir;
 use crate::core::effects::{Effects, OperationType};
-use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::core::eventlog::{BRANCHLESS_TRANSACTION_ID_ENV_VAR, EventTransactionId};
 use crate::git::repo::Repo;
-use crate::util::{get_sh, ExitCode, EyreExitOr};
+use crate::util::{ExitCode, EyreExitOr, get_sh};
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone)]

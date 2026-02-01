@@ -25,15 +25,16 @@ use tracing::instrument;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use lib::core::config::{
-    get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
-    print_hint_suppression_notice, Hint,
+    Hint, get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
+    print_hint_suppression_notice,
 };
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    execute_rebase_plan,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
@@ -90,7 +91,10 @@ pub fn r#move(
         None => match head_oid {
             Some(oid) => Revset(oid.to_string()),
             None => {
-                writeln!(effects.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "No --dest argument was provided, and no OID for HEAD is available as a default"
+                )?;
                 return Ok(Err(ExitCode(1)));
             }
         },
@@ -205,7 +209,10 @@ pub fn r#move(
         match head_oid {
             Some(head_oid) => CommitSet::from(head_oid),
             None => {
-                writeln!(effects.get_output_stream(), "No --source or --base arguments were provided, and no OID for HEAD is available as a default")?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "No --source or --base arguments were provided, and no OID for HEAD is available as a default"
+                )?;
                 return Ok(Err(ExitCode(1)));
             }
         }
@@ -508,7 +515,10 @@ pub fn r#move(
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
 
         ExecuteRebasePlanResult::WouldSucceed if dry_run => {
-            writeln!(effects.get_output_stream(), "(This was a dry-run; no commits were moved. Re-run without --dry-run to actually move commits.)")?;
+            writeln!(
+                effects.get_output_stream(),
+                "(This was a dry-run; no commits were moved. Re-run without --dry-run to actually move commits.)"
+            )?;
             Ok(Ok(()))
         }
 

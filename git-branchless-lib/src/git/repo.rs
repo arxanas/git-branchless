@@ -32,16 +32,16 @@ use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::Glyphs;
 use crate::git::config::{Config, ConfigRead};
 use crate::git::object::Blob;
-use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
+use crate::git::oid::{MaybeZeroOid, NonZeroOid, make_non_zero_oid};
 use crate::git::reference::ReferenceNameError;
 use crate::git::run::GitRunInfo;
-use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
+use crate::git::tree::{Tree, dehydrate_tree, get_changed_paths_between_trees, hydrate_tree};
 use crate::git::{Branch, BranchType, Commit, Reference, ReferenceName};
 
 use super::index::{Index, IndexEntry};
 use super::snapshot::WorkingCopySnapshot;
 use super::status::FileMode;
-use super::{tree, Diff, StatusEntry};
+use super::{Diff, StatusEntry, tree};
 
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
@@ -483,7 +483,7 @@ impl Repo {
                         .message()
                         .contains("unsupported extension name extensions.worktreeconfig") =>
             {
-                return Err(Error::UnsupportedExtensionWorktreeConfig(err))
+                return Err(Error::UnsupportedExtensionWorktreeConfig(err));
             }
             Err(err) => return Err(Error::OpenRepo(err)),
         };
@@ -1040,7 +1040,7 @@ impl Repo {
                 _ => {
                     return Err(Error::UnknownStatusLinePrefix {
                         prefix: *line_prefix,
-                    })
+                    });
                 }
             };
             let entry: StatusEntry = line
@@ -1248,7 +1248,7 @@ impl Repo {
                 return Err(Error::CreateBlobFromPath {
                     source: err.into(),
                     path,
-                })
+                });
             }
         };
         let blob = self.create_blob_from_contents(&contents)?;
@@ -1401,7 +1401,9 @@ impl Repo {
                 };
 
                 if conflicting_paths.is_empty() {
-                    warn!("BUG: A merge conflict was detected, but there were no entries in `conflicting_paths`. Maybe the wrong index entry was used?")
+                    warn!(
+                        "BUG: A merge conflict was detected, but there were no entries in `conflicting_paths`. Maybe the wrong index entry was used?"
+                    )
                 }
 
                 return Err(CreateCommitFastError::MergeConflict { conflicting_paths });
@@ -1684,7 +1686,7 @@ impl<'repo> Signature<'repo> {
             None => {
                 return Err(Error::DecodeUtf8 {
                     item: "signature name",
-                })
+                });
             }
         };
         let email = match self.inner.email() {
@@ -1692,7 +1694,7 @@ impl<'repo> Signature<'repo> {
             None => {
                 return Err(Error::DecodeUtf8 {
                     item: "signature email",
-                })
+                });
             }
         };
         let signature = git2::Signature::new(name, email, &time).map_err(Error::CreateSignature)?;

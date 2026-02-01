@@ -14,7 +14,7 @@ use bstr::ByteSlice;
 use eyre::Context;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
 use itertools::Itertools;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
@@ -23,8 +23,8 @@ use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-    ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
+    RebasePlanPermissions, RepoResource, execute_rebase_plan, move_branches,
 };
 use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 use lib::try_exit_code;

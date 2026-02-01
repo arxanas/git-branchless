@@ -3,8 +3,8 @@ use regex::Regex;
 use thiserror::Error;
 use tracing::instrument;
 
-use super::grammar::ExprParser;
 use super::Expr;
+use super::grammar::ExprParser;
 
 #[derive(Debug, Error)]
 pub enum ParseError {

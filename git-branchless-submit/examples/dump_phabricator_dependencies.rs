@@ -4,7 +4,7 @@ use clap::Parser;
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use git_branchless_submit::phabricator;
-use lib::core::dag::{sorted_commit_set, Dag};
+use lib::core::dag::{Dag, sorted_commit_set};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
@@ -30,7 +30,9 @@ fn main() -> eyre::Result<()> {
             std::env::set_current_dir(working_directory)?;
         }
         None => {
-            eprintln!("Warning: --working-directory was not passed, so running in current directory. But git-branchless is not hosted on Phabricator, so this seems unlikely to be useful, since there will be no assocated Phabricator information. Try running in your repository.");
+            eprintln!(
+                "Warning: --working-directory was not passed, so running in current directory. But git-branchless is not hosted on Phabricator, so this seems unlikely to be useful, since there will be no assocated Phabricator information. Try running in your repository."
+            );
         }
     }
 

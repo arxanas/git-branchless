@@ -2,7 +2,7 @@ use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::rewrite::find_rewrite_target;
 use branchless::git::MaybeZeroOid;
-use branchless::testing::{make_git, Git, GitRunOptions};
+use branchless::testing::{Git, GitRunOptions, make_git};
 use branchless::{core::effects::Effects, git::NonZeroOid};
 
 fn find_rewrite_target_helper(

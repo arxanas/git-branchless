@@ -15,8 +15,8 @@
 pub mod tui;
 
 use std::fmt::Write;
-use std::io::{stdin, BufRead, BufReader, Read};
-use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::io::{BufRead, BufReader, Read, stdin};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 use std::time::SystemTime;
 
 use cursive_core::event::Key;
@@ -27,13 +27,13 @@ use cursive_core::views::{
 };
 use cursive_core::{Cursive, CursiveRunner};
 use eyre::Context;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::repo_ext::RepoExt;
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use tracing::instrument;
 
-use crate::tui::{with_siv, SingletonView};
+use crate::tui::{SingletonView, with_siv};
 use git_branchless_revset::resolve_default_smartlog_commits;
 use git_branchless_smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::{CommitSet, Dag};
@@ -110,8 +110,7 @@ fn render_cursor_smartlog(
 }
 
 fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
-    const EMPTY_EVENT_MESSAGE: &str =
-        "This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57";
+    const EMPTY_EVENT_MESSAGE: &str = "This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57";
 
     let result = match event {
         Event::CommitEvent {
@@ -392,10 +391,12 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             commit_oid,
             ref_name: None,
         } => {
-            vec![StyledStringBuilder::new()
-                .append_plain("Restore snapshot backed up using ")
-                .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
-                .build()]
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Restore snapshot backed up using ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
+                    .build(),
+            ]
         }
     };
     Ok(result)
@@ -524,15 +525,17 @@ fn select_past_event(
                         String::new()
                     };
 
-                    let mut lines = vec![StyledStringBuilder::new()
-                        .append_plain("Repo after transaction ")
-                        .append_plain(events[0].get_event_tx_id().to_string())
-                        .append_plain(" (event ")
-                        .append_plain(event_id.to_string())
-                        .append_plain(")")
-                        .append_plain(relative_time)
-                        .append_plain(". Press 'h' for help, 'q' to quit.")
-                        .build()];
+                    let mut lines = vec![
+                        StyledStringBuilder::new()
+                            .append_plain("Repo after transaction ")
+                            .append_plain(events[0].get_event_tx_id().to_string())
+                            .append_plain(" (event ")
+                            .append_plain(event_id.to_string())
+                            .append_plain(")")
+                            .append_plain(relative_time)
+                            .append_plain(". Press 'h' for help, 'q' to quit.")
+                            .build(),
+                    ];
                     lines.extend(event_description_lines);
                     lines
                 }
@@ -927,16 +930,18 @@ fn undo_events(
     }
 
     if let Some(UndoCheckoutTarget { target, options }) = checkout_target {
-        try_exit_code!(check_out_commit(
-            effects,
-            git_run_info,
-            repo,
-            event_log_db,
-            event_tx_id,
-            Some(target),
-            &options,
-        )
-        .wrap_err("Updating to previous HEAD location")?);
+        try_exit_code!(
+            check_out_commit(
+                effects,
+                git_run_info,
+                repo,
+                event_log_db,
+                event_tx_id,
+                Some(target),
+                &options,
+            )
+            .wrap_err("Updating to previous HEAD location")?
+        );
     }
 
     writeln!(effects.get_output_stream(), "Applied {num_inverse_events}.")?;
