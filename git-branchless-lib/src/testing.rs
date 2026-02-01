@@ -156,6 +156,9 @@ impl Git {
 
     /// Get the `PATH` environment variable to use for testing.
     pub fn get_path_for_env(&self) -> OsString {
+        // TODO: de-deprecate after Rust 1.93
+        // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
+        #[allow(deprecated)]
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
         let branchless_path = cargo_bin_path
             .parent()
@@ -371,7 +374,11 @@ stderr:
         let result = self.run_with_options(&git_run_args, options);
 
         if !should_use_separate_command_binary(subcommand) {
+            // TODO: de-deprecate after Rust 1.93
+            // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
+            #[allow(deprecated)]
             let main_command_exe = assert_cmd::cargo::cargo_bin("git-branchless");
+            #[allow(deprecated)]
             let subcommand_exe =
                 assert_cmd::cargo::cargo_bin(format!("git-branchless-{subcommand}"));
             if main_command_exe.exists() && subcommand_exe.exists() {

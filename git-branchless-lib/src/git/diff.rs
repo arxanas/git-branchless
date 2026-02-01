@@ -174,11 +174,10 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             result.push(File {
                 old_path: None,
                 path: Cow::Owned(path),
-                file_mode: Some(old_file_mode),
+                file_mode: old_file_mode,
                 sections: vec![Section::FileMode {
                     is_checked: false,
-                    before: old_file_mode,
-                    after: FileMode::absent(),
+                    mode: FileMode::Absent,
                 }],
             });
             continue;
@@ -192,7 +191,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 result.push(File {
                     old_path: None,
                     path: Cow::Owned(path),
-                    file_mode: Some(old_file_mode),
+                    file_mode: old_file_mode,
                     sections: vec![Section::Binary {
                         is_checked: false,
                         old_description: Some(Cow::Owned(make_binary_description(
@@ -419,8 +418,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
                 is_checked: false,
-                before: old_file_mode,
-                after: new_file_mode,
+                mode: new_file_mode,
             }]
         } else {
             vec![]
@@ -428,7 +426,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
         result.push(File {
             old_path: None,
             path: Cow::Owned(path),
-            file_mode: Some(old_file_mode),
+            file_mode: old_file_mode,
             sections: [file_mode_section, file_sections].concat().to_vec(),
         });
     }

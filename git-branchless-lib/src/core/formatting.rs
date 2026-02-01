@@ -404,7 +404,7 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
 
     let output = {
         let mut output = output;
-        for effect in effects.iter() {
+        for (effect, _status) in effects.statuses.iter() {
             output = match effect {
                 Effect::Simple => output,
                 Effect::Dim => output.dim(),

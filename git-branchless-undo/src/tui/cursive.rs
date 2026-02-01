@@ -1,7 +1,6 @@
 //! Utilities to render an interactive text-based user interface.
 
 use cursive::backends::crossterm;
-use cursive_buffered_backend::BufferedBackend;
 use cursive_core::theme::{Color, PaletteColor};
 use cursive_core::{Cursive, CursiveRunner};
 
@@ -14,10 +13,9 @@ pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<Cursive>) -> eyre::Result<T>
 ) -> eyre::Result<T> {
     // Use crossterm to ensure that we support Windows.
     let backend = crossterm::Backend::init()?;
-    let backend = BufferedBackend::new(backend);
 
     let effects = effects.enable_tui_mode();
-    let mut siv = Cursive::new().into_runner(Box::new(backend));
+    let mut siv = Cursive::new().into_runner(backend);
     siv.update_theme(|theme| {
         theme.shadow = false;
         theme.palette.extend(vec![
