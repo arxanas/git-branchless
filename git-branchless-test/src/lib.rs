@@ -1211,7 +1211,7 @@ pub struct TestResults {
 
 /// Run tests on the provided set of commits.
 #[instrument]
-pub fn run_tests<'a>(
+pub fn run_tests(
     now: SystemTime,
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -1264,7 +1264,7 @@ pub fn run_tests<'a>(
 }
 
 #[instrument]
-fn run_tests_inner<'a>(
+fn run_tests_inner(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     dag: &Dag,

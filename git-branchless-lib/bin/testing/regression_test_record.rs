@@ -25,8 +25,7 @@ fn entries_from_files(
             let file_path = file.path.clone().into_owned();
             let value = {
                 let (selected, _unselected) = file.get_selected_contents();
-                let blob_oid = match selected {
-                    SelectedContents::Absent => return Ok((file_path, None)),
+                let blob_oid = match selected.contents {
                     SelectedContents::Unchanged => {
                         old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
                     }
@@ -34,18 +33,18 @@ fn entries_from_files(
                         old_description: _,
                         new_description: _,
                     } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
-                    SelectedContents::Present { contents } => {
+                    SelectedContents::Text { contents } => {
                         MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
                     }
                 };
                 match blob_oid {
                     MaybeZeroOid::Zero => None,
                     MaybeZeroOid::NonZero(blob_oid) => {
-                        let new_file_mode = file
-                            .get_file_mode()
-                            .expect("File mode should have been set");
-                        let file_mode = i32::try_from(new_file_mode).unwrap();
-                        let file_mode = FileMode::from(file_mode);
+                        let new_file_mode = match selected.file_mode {
+                            scm_record::FileMode::Unix(_) => selected.file_mode,
+                            scm_record::FileMode::Absent => scm_record::FileMode::FILE_DEFAULT,
+                        };
+                        let file_mode = FileMode::from(new_file_mode);
                         Some((blob_oid, file_mode))
                     }
                 }

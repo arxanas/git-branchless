@@ -432,10 +432,12 @@ fn record_interactive(
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
         .map(|file| -> eyre::Result<UpdateIndexCommand> {
+            let (selected, _unselected) = file.get_selected_contents();
+
             let mode = {
                 let default_mode = FileMode::Blob;
-                match file.get_file_mode() {
-                    None => {
+                match selected.file_mode {
+                    scm_record::FileMode::Absent => {
                         warn!(
                             ?file,
                             ?default_mode,
@@ -443,7 +445,7 @@ fn record_interactive(
                         );
                         default_mode
                     }
-                    Some(mode) => match i32::try_from(mode) {
+                    scm_record::FileMode::Unix(mode) => match i32::try_from(mode) {
                         Ok(mode) => FileMode::from(mode),
                         Err(err) => {
                             warn!(
@@ -458,19 +460,20 @@ fn record_interactive(
                 }
             };
 
-            let (selected, _unselected) = file.get_selected_contents();
-            let oid = match selected {
-                SelectedContents::Absent => MaybeZeroOid::Zero,
-                SelectedContents::Unchanged => {
-                    old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
-                }
-                SelectedContents::Binary {
-                    old_description: _,
-                    new_description: _,
-                } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
-                SelectedContents::Present { contents } => {
-                    MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
-                }
+            let oid = match selected.file_mode {
+                scm_record::FileMode::Absent => MaybeZeroOid::Zero,
+                scm_record::FileMode::Unix(_) => match selected.contents {
+                    SelectedContents::Unchanged => {
+                        old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
+                    }
+                    SelectedContents::Binary {
+                        old_description: _,
+                        new_description: _,
+                    } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
+                    SelectedContents::Text { contents } => {
+                        MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
+                    }
+                },
             };
             let command = match oid {
                 MaybeZeroOid::Zero => UpdateIndexCommand::Delete {

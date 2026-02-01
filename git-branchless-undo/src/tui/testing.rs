@@ -29,6 +29,7 @@ pub struct CursiveTestingBackend {
     event_index: usize,
     just_emitted_event: bool,
     screen: RefCell<Screen>,
+    cursor_pos: RefCell<cursive::Vec2>,
 }
 
 impl CursiveTestingBackend {
@@ -39,6 +40,7 @@ impl CursiveTestingBackend {
             event_index: 0,
             just_emitted_event: false,
             screen: RefCell::new(vec![vec![' '; 120]; 24]),
+            cursor_pos: RefCell::new(cursive::Vec2::zero()),
         })
     }
 }
@@ -78,17 +80,26 @@ impl Backend for CursiveTestingBackend {
         (screen[0].len(), screen.len()).into()
     }
 
-    fn print_at(&self, pos: cursive::Vec2, text: &str) {
-        for (i, c) in text.chars().enumerate() {
+    fn move_to(&self, pos: cursive::Vec2) {
+        *self.cursor_pos.borrow_mut() = pos;
+    }
+
+    fn print(&self, text: &str) {
+        let pos = *self.cursor_pos.borrow();
+        let mut col = pos.x;
+        for c in text.chars() {
             let mut screen = self.screen.borrow_mut();
             let screen_width = screen[0].len();
-            if pos.x + i < screen_width {
-                screen[pos.y][pos.x + i] = c;
+            if col < screen_width {
+                screen[pos.y][col] = c;
+                col += 1;
             } else {
                 // Indicate that the screen was overfull.
                 screen[pos.y][screen_width - 1] = '$';
+                break;
             }
         }
+        self.cursor_pos.borrow_mut().x = col;
     }
 
     fn clear(&self, _color: Color) {

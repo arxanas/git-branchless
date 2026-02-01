@@ -140,6 +140,18 @@ impl From<FileMode> for u32 {
     }
 }
 
+impl From<scm_record::FileMode> for FileMode {
+    fn from(file_mode: scm_record::FileMode) -> Self {
+        match file_mode {
+            scm_record::FileMode::Unix(file_mode) => {
+                let file_mode: i32 = file_mode.try_into().unwrap();
+                Self::from(file_mode)
+            }
+            scm_record::FileMode::Absent => FileMode::Unreadable,
+        }
+    }
+}
+
 impl FromStr for FileMode {
     type Err = eyre::Error;
 
