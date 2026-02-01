@@ -6,7 +6,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
-use lib::core::dag::{union_all, Dag};
+use lib::core::dag::{Dag, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};

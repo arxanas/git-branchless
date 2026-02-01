@@ -12,7 +12,7 @@ use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use lib::{
     core::{
-        check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget},
+        check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit},
         config::get_restack_preserve_timestamps,
         dag::{CommitSet, Dag},
         effects::Effects,
@@ -20,14 +20,14 @@ use lib::{
         gc::mark_commit_reachable,
         repo_ext::RepoExt,
         rewrite::{
-            execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-            ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder,
-            RebasePlanPermissions, RepoResource,
+            BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+            MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+            execute_rebase_plan, move_branches,
         },
     },
     git::{
-        make_empty_tree, summarize_diff_for_temporary_commit, CherryPickFastOptions, GitRunInfo,
-        MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+        CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+        make_empty_tree, summarize_diff_for_temporary_commit,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -583,8 +583,10 @@ pub fn split(
         None
         | Some(ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ })
         | Some(ExecuteRebasePlanResult::WouldSucceed) => {
-            try_exit_code!(git_run_info
-                .run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?);
+            try_exit_code!(
+                git_run_info
+                    .run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?
+            );
             Ok(Ok(()))
         }
 

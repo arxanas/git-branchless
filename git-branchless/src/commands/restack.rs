@@ -70,13 +70,13 @@ use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use git_branchless_smartlog::smartlog;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{
-    execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoPool, RepoResource,
+    execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 

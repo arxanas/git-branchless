@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use lib::testing::{make_git, GitRunOptions, GitWrapper};
+use lib::testing::{GitRunOptions, GitWrapper, make_git};
 
 fn mock_env(git: &GitWrapper) -> HashMap<String, String> {
     git.get_base_env(0)

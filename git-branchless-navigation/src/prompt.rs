@@ -34,12 +34,12 @@ mod skim {
     use itertools::Itertools;
 
     use lib::core::formatting::Glyphs;
-    use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
+    use lib::core::node_descriptors::{NodeDescriptor, NodeObject, render_node_descriptors};
     use lib::git::{Commit, NonZeroOid};
 
     use skim::{
-        prelude::SkimOptionsBuilder, AnsiString, DisplayContext, ItemPreview, Matches,
-        PreviewContext, Skim, SkimItem, SkimItemReceiver, SkimItemSender,
+        AnsiString, DisplayContext, ItemPreview, Matches, PreviewContext, Skim, SkimItem,
+        SkimItemReceiver, SkimItemSender, prelude::SkimOptionsBuilder,
     };
 
     #[derive(Debug)]

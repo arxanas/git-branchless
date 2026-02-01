@@ -10,7 +10,7 @@ use tracing::{instrument, warn};
 
 use super::oid::make_non_zero_oid;
 use super::status::FileMode;
-use super::{repo, MaybeZeroOid, NonZeroOid, Repo};
+use super::{MaybeZeroOid, NonZeroOid, Repo, repo};
 
 #[derive(Debug, Error)]
 pub enum Error {

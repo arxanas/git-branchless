@@ -7,7 +7,7 @@
 
 use std::{fmt::Display, path::PathBuf};
 
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 use super::{Commit, NonZeroOid, Repo, RepoError};
 

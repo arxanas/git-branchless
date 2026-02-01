@@ -16,9 +16,9 @@ use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
-use git_branchless_reword::{edit_message, resolve_commit_to_fixup, ResolveFixupCommitError};
+use git_branchless_reword::{ResolveFixupCommitError, edit_message, resolve_commit_to_fixup};
 use itertools::Itertools;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -26,14 +26,14 @@ use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::Pluralize;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
-    RepoResource,
+    RepoResource, execute_rebase_plan,
 };
 use lib::git::{
-    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -271,7 +271,9 @@ fn record(
                         )?);
                     }
                     parent_commits => {
-                        eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                        eyre::bail!(
+                            "git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}"
+                        );
                     }
                 }
 
@@ -285,11 +287,15 @@ fn record(
                 let head_commit = repo.find_commit_or_fail(*oid)?;
                 match head_commit.get_parents().as_slice() {
                     [] => {
-                        eyre::bail!("git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible.");
+                        eyre::bail!(
+                            "git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible."
+                        );
                     }
                     [parent_commit] => Some(CheckoutTarget::Oid(parent_commit.get_oid())),
                     parent_commits => {
-                        eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
+                        eyre::bail!(
+                            "git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}"
+                        );
                     }
                 }
             }

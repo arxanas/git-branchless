@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use git_branchless_undo::testing::{select_past_event, undo_events};
 use git_branchless_undo::tui::testing::{
-    screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
+    CursiveTestingBackend, CursiveTestingEvent, screen_to_string,
 };
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
@@ -12,7 +12,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, trim_lines, Git, GitInitOptions, GitRunOptions};
+use lib::testing::{Git, GitInitOptions, GitRunOptions, make_git, trim_lines};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};

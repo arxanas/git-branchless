@@ -1,7 +1,7 @@
 use lib::git::GitVersion;
 use lib::testing::{
-    make_git_with_remote_repo, remove_nondeterministic_lines, GitInitOptions, GitRunOptions,
-    GitWrapperWithRemoteRepo,
+    GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo, make_git_with_remote_repo,
+    remove_nondeterministic_lines,
 };
 
 /// Minimum version due to changes in the output of `git push`.

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{
-    hydrate_tree, process_diff_for_record, Commit, FileMode, MaybeZeroOid, NonZeroOid, Repo, Tree,
+    Commit, FileMode, MaybeZeroOid, NonZeroOid, Repo, Tree, hydrate_tree, process_diff_for_record,
 };
 use bstr::ByteSlice;
 use eyre::Context;

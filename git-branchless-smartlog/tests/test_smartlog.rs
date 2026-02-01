@@ -1,4 +1,4 @@
-use lib::testing::{extract_hint_command, make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, extract_hint_command, make_git};
 
 #[test]
 fn test_init_smartlog() -> eyre::Result<()> {

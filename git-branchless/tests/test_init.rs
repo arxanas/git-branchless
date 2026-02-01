@@ -4,7 +4,7 @@ use eyre::Context;
 use itertools::Itertools;
 use lib::git::GitVersion;
 use lib::testing::{
-    make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
+    GitInitOptions, GitRunOptions, GitWorktreeWrapper, make_git, make_git_worktree,
 };
 use regex::Regex;
 

@@ -12,10 +12,10 @@ use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::repo_ext::RepoExt;
 use branchless::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlan, RebasePlanBuilder, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlan,
+    RebasePlanBuilder, RepoResource, execute_rebase_plan,
 };
-use branchless::testing::{make_git, Git};
+use branchless::testing::{Git, make_git};
 
 #[test]
 fn test_cache_shared_between_builders() -> eyre::Result<()> {

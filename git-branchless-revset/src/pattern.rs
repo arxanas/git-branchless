@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Local};
-use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
+use chrono_english::{DateError, Dialect, Interval, parse_date_string, parse_duration};
 use chronoutil::RelativeDuration;
 use eden_dag::set::hints::{Flags, Hints};
 use futures::StreamExt;

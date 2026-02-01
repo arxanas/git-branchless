@@ -149,11 +149,13 @@ impl Forge for BranchForge<'_> {
                     remote_commit_name: None,
                 },
 
-                [BranchInfo {
-                    branch,
-                    branch_name,
-                    remote_name,
-                }] => match branch.get_upstream_branch()? {
+                [
+                    BranchInfo {
+                        branch,
+                        branch_name,
+                        remote_name,
+                    },
+                ] => match branch.get_upstream_branch()? {
                     None => CommitStatus {
                         submit_status: SubmitStatus::Unsubmitted,
                         remote_name: None,
@@ -244,9 +246,10 @@ These remotes are available: {}",
             let (effects, progress) = self.effects.start_operation(OperationType::PushCommits);
             let _effects = effects;
             progress.notify_progress(0, unsubmitted_branch_names.len());
-            try_exit_code!(self
-                .git_run_info
-                .run(self.effects, Some(event_tx_id), &args)?);
+            try_exit_code!(
+                self.git_run_info
+                    .run(self.effects, Some(event_tx_id), &args)?
+            );
             Ok(Ok(commits
                 .into_iter()
                 .filter_map(|(commit_oid, commit_status)| {

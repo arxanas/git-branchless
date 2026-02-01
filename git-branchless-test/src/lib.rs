@@ -35,28 +35,28 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::config::{
-    get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
-    print_hint_suppression_notice, Hint,
+    Hint, get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
+    print_hint_suppression_notice,
 };
-use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
-use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set};
+use lib::core::effects::{Effects, OperationIcon, OperationType, icons};
 use lib::core::eventlog::{
-    EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
+    BRANCHLESS_TRANSACTION_ID_ENV_VAR, EventLogDb, EventReplayer, EventTransactionId,
 };
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebaseCommand, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebaseCommand,
+    RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource, execute_rebase_plan,
 };
 use lib::git::{
-    get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
-    make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid,
-    Repo, SerializedNonZeroOid, SerializedTestResult, TestCommand, WorkingCopyChangesType,
-    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid, Repo,
+    SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE, TestCommand, WorkingCopyChangesType, get_latest_test_command_path,
+    get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir, make_test_command_slug,
 };
 use lib::try_exit_code;
-use lib::util::{get_sh, ExitCode, EyreExitOr};
+use lib::util::{ExitCode, EyreExitOr, get_sh};
 use rayon::ThreadPoolBuilder;
 use scm_bisect::basic::{BasicSourceControlGraph, BasicStrategy, BasicStrategyKind};
 use scm_bisect::search;
@@ -70,7 +70,7 @@ use git_branchless_opts::{
 };
 use git_branchless_revset::resolve_commits;
 
-use crate::worker::{worker, JobResult, WorkQueue, WorkerId};
+use crate::worker::{JobResult, WorkQueue, WorkerId, worker};
 
 lazy_static! {
     static ref STYLE_SUCCESS: Style =
@@ -273,24 +273,25 @@ impl ResolvedTestOptions {
                 let strategy: Option<String> = config.get(strategy_config_key)?;
                 match strategy {
                     None => TestExecutionStrategy::WorkingCopy,
-                    Some(strategy) => {
-                        match TestExecutionStrategy::from_str(&strategy, true) {
-                            Ok(strategy) => strategy,
-                            Err(_) => {
-                                writeln!(effects.get_output_stream(), "Invalid value for config value {strategy_config_key}: {strategy}")?;
-                                writeln!(
-                                    effects.get_output_stream(),
-                                    "Expected one of: {}",
-                                    TestExecutionStrategy::value_variants()
-                                        .iter()
-                                        .filter_map(|variant| variant.to_possible_value())
-                                        .map(|value| value.get_name().to_owned())
-                                        .join(", ")
-                                )?;
-                                return Ok(Err(ExitCode(1)));
-                            }
+                    Some(strategy) => match TestExecutionStrategy::from_str(&strategy, true) {
+                        Ok(strategy) => strategy,
+                        Err(_) => {
+                            writeln!(
+                                effects.get_output_stream(),
+                                "Invalid value for config value {strategy_config_key}: {strategy}"
+                            )?;
+                            writeln!(
+                                effects.get_output_stream(),
+                                "Expected one of: {}",
+                                TestExecutionStrategy::value_variants()
+                                    .iter()
+                                    .filter_map(|variant| variant.to_possible_value())
+                                    .map(|value| value.get_name().to_owned())
+                                    .join(", ")
+                            )?;
+                            return Ok(Err(ExitCode(1)));
                         }
-                    }
+                    },
                 }
             }
         };
@@ -358,8 +359,9 @@ The --jobs option can only be used with --strategy worktree, but --strategy work
         };
 
         if resolved_interactive != *interactive {
-            writeln!(effects.get_output_stream(),
-            "\
+            writeln!(
+                effects.get_output_stream(),
+                "\
 BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interactive ({interactive:?}). If it doesn't match, then multiple interactive jobs might inadvertently be launched in parallel."
             )?;
             return Ok(Err(ExitCode(1)));
@@ -376,7 +378,10 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
             let move_options = match move_options {
                 Some(move_options) => move_options,
                 None => {
-                    writeln!(effects.get_output_stream(), "BUG: fixes were requested to be applied, but no `BuildRebasePlanOptions` were provided.")?;
+                    writeln!(
+                        effects.get_output_stream(),
+                        "BUG: fixes were requested to be applied, but no `BuildRebasePlanOptions` were provided."
+                    )?;
                     return Ok(Err(ExitCode(1)));
                 }
             };
@@ -1052,9 +1057,11 @@ impl TestOutput {
             let contents = match std::fs::read_to_string(path) {
                 Ok(contents) => contents,
                 Err(_) => {
-                    return vec![StyledStringBuilder::new()
-                        .append_plain("<failed to read file>")
-                        .build()]
+                    return vec![
+                        StyledStringBuilder::new()
+                            .append_plain("<failed to read file>")
+                            .build(),
+                    ];
                 }
             };
 
@@ -1642,7 +1649,9 @@ fn event_loop(
                     commit_oid,
                     operation_type: _,
                 } = job;
-                eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
+                eyre::bail!(
+                    "Worker {worker_id} failed when processing commit {commit_oid}: {error_message}"
+                );
             }
 
             Ok(JobResult::Done(job, test_output)) => (job, test_output),
@@ -2096,7 +2105,10 @@ fn apply_fixes(
             ExecuteRebasePlanResult::Succeeded { rewritten_oids } => rewritten_oids,
             ExecuteRebasePlanResult::WouldSucceed => return Ok(Ok(())),
             ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
-                writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}"
+                )?;
                 return Ok(Err(ExitCode(1)));
             }
             ExecuteRebasePlanResult::Failed { exit_code } => return Ok(Err(exit_code)),
@@ -2179,7 +2191,10 @@ fn apply_fixes(
     }
 
     if dry_run {
-        writeln!(effects.get_output_stream(), "(This was a dry-run, so no commits were rewritten. Re-run without the --dry-run option to apply fixes.)")?;
+        writeln!(
+            effects.get_output_stream(),
+            "(This was a dry-run, so no commits were rewritten. Re-run without the --dry-run option to apply fixes.)"
+        )?;
     }
 
     Ok(Ok(()))
@@ -2691,7 +2706,9 @@ To abort testing entirely, run:      {exit127}",
                     ))?;
                 println!("{warning}");
                 println!("To save your changes, create a new branch or note the commit hash.");
-                println!("To incorporate the changes from the main repository, switch to the main repository's current commit or branch.");
+                println!(
+                    "To incorporate the changes from the main repository, switch to the main repository's current commit or branch."
+                );
             }
         }
     } else {

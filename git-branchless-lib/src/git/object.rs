@@ -8,7 +8,7 @@ use tracing::instrument;
 
 use crate::core::formatting::{Glyphs, StyledStringBuilder};
 use crate::core::node_descriptors::{
-    render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject, Redactor,
+    CommitMessageDescriptor, CommitOidDescriptor, NodeObject, Redactor, render_node_descriptors,
 };
 use crate::git::oid::make_non_zero_oid;
 use crate::git::repo::{Error, Result, Signature};

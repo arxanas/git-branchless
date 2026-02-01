@@ -1,4 +1,4 @@
-use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
+use lib::testing::{GitRunOptions, make_git, remove_rebase_lines, trim_lines};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {

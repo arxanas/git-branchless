@@ -19,8 +19,8 @@ use std::time::SystemTime;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{Revset, SmartlogArgs};
 use lib::core::config::{
-    get_hint_enabled, get_hint_string, get_smartlog_default_revset, print_hint_suppression_notice,
-    Hint,
+    Hint, get_hint_enabled, get_hint_string, get_smartlog_default_revset,
+    print_hint_suppression_notice,
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
@@ -38,8 +38,8 @@ use lib::core::node_descriptors::{
 };
 use lib::git::{GitRunInfo, Repo};
 
-pub use graph::{make_smartlog_graph, SmartlogGraph};
-pub use render::{render_graph, SmartlogOptions};
+pub use graph::{SmartlogGraph, make_smartlog_graph};
+pub use render::{SmartlogOptions, render_graph};
 
 use git_branchless_revset::resolve_commits;
 
@@ -205,10 +205,9 @@ mod graph {
         let mut immediate_links: Vec<(NonZeroOid, NonZeroOid, bool)> = Vec::new();
         let mut non_immediate_links: Vec<(NonZeroOid, NonZeroOid, bool)> = Vec::new();
 
-        let non_main_node_oids =
-            graph
-                .iter()
-                .filter_map(|(child_oid, node)| if !node.is_main { Some(child_oid) } else { None });
+        let non_main_node_oids = graph
+            .iter()
+            .filter_map(|(child_oid, node)| if !node.is_main { Some(child_oid) } else { None });
 
         let graph_vertices: CommitSet = graph.keys().cloned().collect();
         for child_oid in non_main_node_oids {
@@ -383,9 +382,9 @@ mod render {
 
     use lib::core::dag::{CommitSet, Dag};
     use lib::core::effects::Effects;
-    use lib::core::formatting::{set_effect, Pluralize};
     use lib::core::formatting::{Glyphs, StyledStringBuilder};
-    use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
+    use lib::core::formatting::{Pluralize, set_effect};
+    use lib::core::node_descriptors::{NodeDescriptor, render_node_descriptors};
     use lib::git::{NonZeroOid, Repo};
 
     use git_branchless_opts::{ResolveRevsetOptions, Revset};

@@ -31,16 +31,16 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Glyphs, Pluralize};
-use lib::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
+use lib::core::node_descriptors::{CommitOidDescriptor, NodeObject, render_node_descriptors};
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
+    RebasePlanPermissions, RepoResource, execute_rebase_plan,
 };
-use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, message_prettify};
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;

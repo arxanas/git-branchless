@@ -14,14 +14,14 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set, union_all};
 use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, FailedMergeInfo, RebasePlan, RebasePlanBuilder, RebasePlanPermissions,
-    RepoPool, RepoResource,
+    RepoPool, RepoResource, execute_rebase_plan,
 };
 use lib::core::task::ResourcePool;
 use lib::git::{

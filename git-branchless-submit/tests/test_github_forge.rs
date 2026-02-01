@@ -4,7 +4,7 @@ use std::fs;
 use git_branchless_submit::github::testing::MockGithubClient;
 use lib::git::{GitVersion, SerializedNonZeroOid};
 use lib::testing::{
-    make_git_with_remote_repo, remove_rebase_lines, Git, GitRunOptions, GitWrapperWithRemoteRepo,
+    Git, GitRunOptions, GitWrapperWithRemoteRepo, make_git_with_remote_repo, remove_rebase_lines,
 };
 
 /// Minimum version due to changes in the output of `git push`.

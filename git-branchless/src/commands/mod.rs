@@ -17,8 +17,8 @@ use lib::util::ExitCode;
 use lib::{core::gc, util::EyreExitOr};
 
 use git_branchless_opts::{
-    rewrite_args, Command, MessageArgs, Opts, ResolveRevsetOptions, SnapshotSubcommand,
-    WrappedCommand,
+    Command, MessageArgs, Opts, ResolveRevsetOptions, SnapshotSubcommand, WrappedCommand,
+    rewrite_args,
 };
 use lib::git::GitRunInfo;
 
