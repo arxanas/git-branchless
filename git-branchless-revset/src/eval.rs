@@ -1507,7 +1507,7 @@ mod tests {
             insta::assert_snapshot!(_stderr, @r###"
             Evaluation error for expression 'parseError()': failed to parse alias expression 'foo('
             parse error: Unrecognized EOF found at 4
-            Expected one of "(", ")", "..", ":", "::", a commit/branch/tag or a string literal
+            Expected one of a commit/branch/tag, a string literal, "(", ")", "..", ":" or "::"
             "###);
         }
 

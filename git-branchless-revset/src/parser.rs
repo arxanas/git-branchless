@@ -125,21 +125,21 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo(,)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 4:5\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
         insta::assert_debug_snapshot!(parse("foo(,bar)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 4:5\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
         insta::assert_debug_snapshot!(parse("foo(bar,,)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 8:9\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 8:9\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
@@ -229,7 +229,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"(\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized EOF found at 5\nExpected one of a commit/branch/tag, a string literal, \"(\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
