@@ -4,14 +4,14 @@ categories = ["command-line-utilities", "development-tools"]
 default-run = "git-branchless"
 description = "Branchless workflow for Git"
 documentation = "https://github.com/arxanas/git-branchless/wiki"
-edition = "2021"
+edition = "2024"
 homepage = "https://github.com/arxanas/git-branchless"
 keywords = ["cli", "git"]
 license = "MIT OR Apache-2.0"
 name = "git-branchless"
 readme = "../README.md"
 repository = "https://github.com/arxanas/git-branchless"
-rust-version = "1.82"
+rust-version = "1.86"
 version = "0.10.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
