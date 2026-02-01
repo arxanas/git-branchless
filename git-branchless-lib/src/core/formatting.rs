@@ -411,7 +411,7 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
                 Effect::Reverse => output.reverse(),
                 Effect::Bold => output.bold(),
                 Effect::Italic => output.italic(),
-                Effect::Strikethrough => eyre::bail!("Not implemented: Effect::Strikethrough"),
+                Effect::Strikethrough => output, // Not supported by console crate, skip it
                 Effect::Underline => output.underlined(),
                 Effect::Blink => output.blink(),
             };
