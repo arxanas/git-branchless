@@ -673,32 +673,6 @@ fn parse_bulk_edit_message(
     })
 }
 
-/// Return the root commits for given a list of commits. This is the list of commits that have *no*
-/// ancestors also in the list. The idea is to find the minimum number of subtrees that much be
-/// rebased to include all of our rewording.
-#[instrument]
-fn find_subtree_roots<'repo>(
-    repo: &'repo Repo,
-    dag: &Dag,
-    commits: &[Commit],
-) -> eyre::Result<Vec<Commit<'repo>>> {
-    let commits: CommitSet = commits.iter().map(|commit| commit.get_oid()).collect();
-
-    // Find the vertices representing the roots of this set of commits
-    let subtree_roots = dag
-        .query_roots(commits)
-        .wrap_err("Computing subtree roots")?;
-
-    // convert the vertices back into actual Commits
-    let root_commits = dag
-        .commit_set_to_vec(&subtree_roots)?
-        .into_iter()
-        .filter_map(|oid| repo.find_commit(oid).ok()?)
-        .collect();
-
-    Ok(root_commits)
-}
-
 /// Print a basic status report of what commits were reworded.
 #[instrument]
 fn render_status_report(

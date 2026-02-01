@@ -1540,7 +1540,7 @@ impl Repo {
             let mut result = self.get_paths_touched_by_commit(parent_commit)?;
             match opts {
                 AmendFastOptions::FromIndex { paths } => result.extend(paths.iter().cloned()),
-                AmendFastOptions::FromWorkingCopy { ref status_entries } => {
+                AmendFastOptions::FromWorkingCopy { status_entries } => {
                     for entry in status_entries {
                         result.extend(entry.paths().iter().cloned());
                     }
