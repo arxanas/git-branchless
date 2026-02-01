@@ -69,7 +69,11 @@ fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
             Ok(nesting_level) => nesting_level.parse::<usize>().unwrap_or_default(),
             Err(_) => 0,
         };
-        std::env::set_var(NESTING_LEVEL_KEY, (nesting_level + 1).to_string());
+        // SAFETY: We're setting an environment variable that we control and read immediately
+        // after. This is done at the start of execution before any threading occurs.
+        unsafe {
+            std::env::set_var(NESTING_LEVEL_KEY, (nesting_level + 1).to_string());
+        }
 
         let should_include_function_args = match std::env::var("RUST_PROFILE_INCLUDE_ARGS") {
             Ok(value) if !value.is_empty() => true,
