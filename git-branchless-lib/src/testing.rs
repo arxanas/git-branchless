@@ -900,6 +900,27 @@ pub fn remove_nondeterministic_lines(output: String) -> String {
         .collect()
 }
 
+/// Predefined filters for use with insta snapshot testing.
+pub mod insta_filters {
+    type InstaReplacementFilters<'a> = &'a [(&'a str, &'a str)];
+
+    /// Redaction for numbering of events
+    pub const NUMBERING: InstaReplacementFilters = &[
+        (r"(?m)^[0-9]+\. ", "#. "),
+        (
+            "Applied ([0-9]+) inverse events.",
+            "Applied # inverse events.",
+        ),
+    ];
+
+    /// Redaction for no-op checkouts, which is present in e.g. git<=2.43,
+    /// but disappears in e.g. git>=2.46
+    pub const NO_OP_CHECKOUTS: InstaReplacementFilters = &[(
+        r"\n2\. Check out from 94b1077 create file1.txt\s*to 94b1077 create file1.txt\n",
+        "\n",
+    )];
+}
+
 /// Utilities for testing in a virtual terminal (PTY).
 pub mod pty {
     use std::sync::{mpsc::channel, Arc, Mutex};
