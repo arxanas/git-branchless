@@ -127,6 +127,10 @@ pub struct Glyphs {
     /// commit or merged from this parent commit.
     pub commit_merge: &'static str,
 
+    /// Alternative character for `commit_merge` when the smartlog orientation
+    /// is reversed.
+    pub commit_merge_rev: &'static str,
+
     /// Character used to point to the currently-checked-out branch.
     pub branch_arrow: &'static str,
 
@@ -179,6 +183,7 @@ impl Glyphs {
             commit_main_obsolete_head: "%",
             commit_omitted: "#",
             commit_merge: "&",
+            commit_merge_rev: "&",
             branch_arrow: ">",
             bullet_point: "-",
             cycle_arrow: ">",
@@ -204,6 +209,7 @@ impl Glyphs {
             commit_obsolete_head: "⦻",
             commit_omitted: "◌",
             commit_merge: "↓",
+            commit_merge_rev: "↑",
             commit_main: "◇",
             commit_main_head: "◆",
             commit_main_obsolete: "✕",
@@ -223,6 +229,7 @@ impl Glyphs {
     pub fn reverse_order(mut self, reverse: bool) -> Self {
         if reverse {
             std::mem::swap(&mut self.split, &mut self.merge);
+            std::mem::swap(&mut self.commit_merge, &mut self.commit_merge_rev);
         }
         self
     }
