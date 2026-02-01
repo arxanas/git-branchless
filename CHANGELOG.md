@@ -9,12 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#1464): created `git split` command to extract changes from a commit
+- (#1603): added `git move --dry-run` to test in-memory rebases
+- (#1632): added `git record --fixup` option, to create a fixup commit (similar to `reword --fixup`)
+
 ### Changed
 
-- BREAKING (#1593): ~~The minimum supported Rust version (MSRV) is now 1.82.~~ See #1638 below.
-- `scm-record` upgraded to [v0.5.0](https://github.com/arxanas/scm-record/releases/tag/v0.5.0).
-- (#1463): `git switch` now accepts a revset whose sole head will be checked out
+- (#1270): `git smartlog` now renders with curved corners
+- (#1271): `git smartlog` renders commit nodes more consistently with other nodes
+- (#1462) BREAKING: `git record` will use a default commit message with `--stash` (instead of prompting for one)
+- (#1463): `git switch` now accepts a revset whose sole head will be checked out, and correctly treats `-` to mean last checked out commit or branch
+- (#1492): `scm-record` upgraded to [v0.5.0](https://github.com/arxanas/scm-record/releases/tag/v0.5.0).
+- (#1591): improved performance of some revset expressions 
+- (#1593) BREAKING: ~~The minimum supported Rust version (MSRV) is now 1.82.~~ See #1638 below.
 - (#1638) BREAKING: The minimum supported Rust version (MSRV) is now 1.86, and the rust edition is now 2024.
+
+### Fixed
+
+- (#1439): fix panic with custom git status configuration
+- (#1611): fix behavior of `git record --stash` on a detached HEAD
+- (#1618): fix behavior of various commands when operating on branches that have the same name as files in the current directory
 
 ## [v0.10.0] - 2024-10-10
 
