@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- (#1461): added `!` revset postfix operator as shortcut for "only child"
 - (#1464): created `git split` command to extract changes from a commit
 - (#1603): added `git move --dry-run` to test in-memory rebases
 - (#1632): added `git record --fixup` option, to create a fixup commit (similar to `reword --fixup`)

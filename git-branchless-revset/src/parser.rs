@@ -667,4 +667,73 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_revset_child_operator() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo!"), @r###"
+        Ok(
+            FunctionCall(
+                "sole",
+                [
+                    FunctionCall(
+                        "children",
+                        [
+                            Name(
+                                "foo",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        insta::assert_debug_snapshot!(parse("@! + @!!"), @r###"
+        Ok(
+            FunctionCall(
+                "union",
+                [
+                    FunctionCall(
+                        "sole",
+                        [
+                            FunctionCall(
+                                "children",
+                                [
+                                    Name(
+                                        "@",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    FunctionCall(
+                        "sole",
+                        [
+                            FunctionCall(
+                                "children",
+                                [
+                                    FunctionCall(
+                                        "sole",
+                                        [
+                                            FunctionCall(
+                                                "children",
+                                                [
+                                                    Name(
+                                                        "@",
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
 }
