@@ -269,6 +269,7 @@ pub fn r#move(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        reparent,
     } = *move_options;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
@@ -313,6 +314,10 @@ pub fn r#move(
                 }
             } else {
                 builder.move_subtree(source_root, vec![dest_oid])?;
+            }
+
+            if reparent {
+                builder.reparent_subtree(source_root, vec![dest_oid], &repo)?;
             }
         }
 
@@ -418,6 +423,10 @@ pub fn r#move(
             } else {
                 builder.move_subtree(component_root, vec![component_dest_oid])?;
             }
+
+            if reparent {
+                builder.reparent_subtree(component_root, vec![component_dest_oid], &repo)?;
+            }
         }
 
         if insert {
@@ -476,6 +485,9 @@ pub fn r#move(
 
             for dest_child in dag.commit_set_to_vec(&dest_children)? {
                 builder.move_subtree(dest_child, vec![source_head])?;
+                if reparent {
+                    builder.reparent_subtree(dest_child, vec![source_head], &repo)?;
+                }
             }
         }
         builder.build(effects, &pool, &repo_pool)?

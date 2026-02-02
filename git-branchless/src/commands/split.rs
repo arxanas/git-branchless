@@ -80,7 +80,12 @@ pub fn split(
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
+        reparent,
     } = *move_options;
+
+    // reparenting is only relevant for non-Insert* modes
+    let should_reparent =
+        reparent && !matches!(split_mode, SplitMode::InsertAfter | SplitMode::InsertBefore);
 
     let target_oid: NonZeroOid = match resolve_commits(
         effects,
@@ -533,10 +538,16 @@ pub fn split(
         for child in dag.commit_set_to_vec(&children)? {
             match (&split_mode, extracted_commit_oid) {
                 (_, None) | (SplitMode::DetachAfter, Some(_)) => {
-                    builder.move_subtree(child, vec![remainder_commit_oid])?
+                    builder.move_subtree(child, vec![remainder_commit_oid])?;
+                    if should_reparent {
+                        builder.reparent_subtree(child, vec![remainder_commit_oid], &repo)?;
+                    }
                 }
                 (_, Some(extracted_commit_oid)) => {
-                    builder.move_subtree(child, vec![extracted_commit_oid])?
+                    builder.move_subtree(child, vec![extracted_commit_oid])?;
+                    if should_reparent {
+                        builder.reparent_subtree(child, vec![extracted_commit_oid], &repo)?;
+                    }
                 }
             }
         }

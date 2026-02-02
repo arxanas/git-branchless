@@ -33,15 +33,11 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
     } = opts;
 
     let exit_code = match command {
-        Command::Amend {
-            move_options,
-            reparent,
-        } => amend::amend(
+        Command::Amend { move_options } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
-            reparent,
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
