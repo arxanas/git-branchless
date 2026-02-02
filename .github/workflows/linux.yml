@@ -21,12 +21,12 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: git/git
           ref: ${{ matrix.git-version }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: cache-git-build
         with:
           key: ${{ runner.os }}-git-${{ matrix.git-version }}
@@ -46,7 +46,7 @@ jobs:
         run: tar -czf git.tar.gz git git-*
 
       - name: "Upload artifact: git"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: git-${{ matrix.git-version }}
           path: git.tar.gz
@@ -61,9 +61,9 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: "Download artifact: git"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: git-${{ matrix.git-version }}
 
@@ -78,7 +78,7 @@ jobs:
           override: true
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
       - name: Compile (all features)
         run: cargo build --all-features --all-targets --workspace
