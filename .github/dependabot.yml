@@ -16,12 +16,9 @@ updates:
         patterns: 
           - "*"
         exclude-patterns:
-          - "git2|clap_mangen"
+          - "clap_mangen"
            
       # flakey or problematic deps are still submitted individually
-      git2:
-        patterns:
-          - "git2"
       clap_mangen:
         patterns:
           - "clap_mangen"
