@@ -6,7 +6,7 @@
 
 use std::fmt::Display;
 
-use cursive::theme::{Effect, Style};
+use cursive::theme::{ConcreteEffects, Effect, Style};
 use cursive::utils::markup::StyledString;
 use cursive::utils::span::Span;
 
@@ -404,14 +404,14 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
 
     let output = {
         let mut output = output;
-        for (effect, _status) in effects.statuses.iter() {
+        for effect in effects.resolve(ConcreteEffects::empty()) {
             output = match effect {
                 Effect::Simple => output,
                 Effect::Dim => output.dim(),
                 Effect::Reverse => output.reverse(),
                 Effect::Bold => output.bold(),
                 Effect::Italic => output.italic(),
-                Effect::Strikethrough => output, // Not supported by console crate, skip it
+                Effect::Strikethrough => eyre::bail!("Not implemented: Effect::Strikethrough"),
                 Effect::Underline => output.underlined(),
                 Effect::Blink => output.blink(),
             };
