@@ -48,6 +48,7 @@ async-trait = { workspace = true }
 bstr = { workspace = true }
 chashmap = { workspace = true }
 chrono = { workspace = true }
+clap = { workspace = true }
 color-eyre = { workspace = true }
 concolor = { workspace = true }
 console = { workspace = true }
