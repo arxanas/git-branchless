@@ -30,6 +30,7 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
     RepoResource, execute_rebase_plan,
 };
+use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
@@ -61,6 +62,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     } = args;
     record(
         &effects,
@@ -72,6 +74,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     )
 }
 
@@ -86,6 +89,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -93,22 +97,50 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    let (snapshot, working_copy_changes_type) = {
+    let (snapshot, working_copy_changes_type, files_to_add) = {
         let head_info = repo.get_head_info()?;
         let index = repo.get_index()?;
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
-        match working_copy_changes_type {
+        let files_to_add = match working_copy_changes_type {
             WorkingCopyChangesType::None => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "There are no changes to tracked files in the working copy to commit."
-                )?;
-                return Ok(Ok(()));
+                let files_to_add = if interactive {
+                    Vec::new()
+                } else {
+                    try_exit_code!(process_untracked_files(
+                        effects,
+                        git_run_info,
+                        &repo,
+                        event_tx_id,
+                        untracked_file_strategy,
+                    )?)
+                };
+
+                if files_to_add.is_empty() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "There are no changes to tracked files in the working copy to commit."
+                    )?;
+                    return Ok(Ok(()));
+                } else {
+                    files_to_add
+                }
             }
-            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
+                Vec::new()
+            }
+            WorkingCopyChangesType::Staged => Vec::new(),
+            WorkingCopyChangesType::Unstaged => {
+                try_exit_code!(process_untracked_files(
+                    effects,
+                    git_run_info,
+                    &repo,
+                    event_tx_id,
+                    untracked_file_strategy,
+                )?)
+            }
             WorkingCopyChangesType::Conflicts => {
                 writeln!(
                     effects.get_output_stream(),
@@ -120,8 +152,9 @@ fn record(
                 )?;
                 return Ok(Err(ExitCode(1)));
             }
-        }
-        (snapshot, working_copy_changes_type)
+        };
+
+        (snapshot, working_copy_changes_type, files_to_add)
     };
 
     if let Some(branch_name) = branch_name {
@@ -163,6 +196,31 @@ fn record(
             )?);
         }
     } else {
+        if !files_to_add.is_empty() {
+            // call `git add` for the new untracked files to be commited
+            //
+            // Note that `git commit` has some functionality for this, by
+            // listing files as arguments to the commit command. However, the
+            // docs for that state "the commit will ignore changes staged in the
+            // index, and instead record the current content of the listed files
+            // (which must already be known to Git);" (See
+            // https://git-scm.com/docs/git-commit#_description, item 3)
+            //
+            // The implication is that new working copy files would cause the
+            // commit to ignore any changes in the index, which is not what we
+            // want. Looking into this can be future scope; it could avoid this
+            // extra call to `git add`. On the other hand, this extra call is
+            // not very onerous.
+
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
         let messages = if messages.is_empty() && stash {
             get_default_stash_message(&repo, effects, &snapshot, &working_copy_changes_type)
                 .map(|message| vec![message])?

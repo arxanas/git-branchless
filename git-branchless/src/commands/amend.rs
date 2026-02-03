@@ -26,7 +26,10 @@ use lib::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
     RebasePlanPermissions, RepoResource, execute_rebase_plan, move_branches,
 };
-use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
+use lib::git::{
+    AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo, StatusEntry,
+};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -40,6 +43,7 @@ pub fn amend(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     reparent: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -131,8 +135,22 @@ pub fn amend(
                 .collect(),
         }
     } else {
+        let untracked_entries = try_exit_code!(process_untracked_files(
+            effects,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            untracked_file_strategy,
+        )?)
+        .into_iter()
+        .map(StatusEntry::new_untracked);
+
         AmendFastOptions::FromWorkingCopy {
-            status_entries: unstaged_entries.clone(),
+            status_entries: unstaged_entries
+                .iter()
+                .cloned()
+                .chain(untracked_entries)
+                .collect_vec(),
         }
     };
     if opts.is_empty() {

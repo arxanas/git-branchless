@@ -250,6 +250,10 @@ pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAban
 /// Possible hint types.
 #[derive(Clone, Debug)]
 pub enum Hint {
+    /// Suggest running `git add` on skipped, untracked files, which are never
+    /// automatically reconsidered for tracking.
+    AddSkippedFiles,
+
     /// Suggest running `git test clean` in order to clean cached test results.
     CleanCachedTestResults,
 
@@ -269,6 +273,7 @@ pub enum Hint {
 impl Hint {
     fn get_config_key(&self) -> &'static str {
         match self {
+            Hint::AddSkippedFiles => "branchless.hint.addSkippedFiles",
             Hint::CleanCachedTestResults => "branchless.hint.cleanCachedTestResults",
             Hint::MoveImplicitHeadArgument => "branchless.hint.moveImplicitHeadArgument",
             Hint::RestackWarnAbandoned => "branchless.hint.restackWarnAbandoned",
