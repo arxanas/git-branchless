@@ -14,6 +14,7 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use eyre::OptionExt;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
 use git_branchless_reword::{ResolveFixupCommitError, edit_message, resolve_commit_to_fixup};
@@ -32,9 +33,10 @@ use lib::core::rewrite::{
 };
 use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
-    CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-    ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
-    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
+    CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand, WorkingCopyChangesType,
+    WorkingCopySnapshot, process_diff_for_record, summarize_diff_for_temporary_commit,
+    update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -62,6 +64,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        new,
         untracked_file_strategy,
     } = args;
     record(
@@ -74,6 +77,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        new,
         untracked_file_strategy,
     )
 }
@@ -89,6 +93,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    new: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
@@ -97,193 +102,30 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    let (snapshot, working_copy_changes_type, files_to_add) = {
-        let head_info = repo.get_head_info()?;
-        let index = repo.get_index()?;
-        let (snapshot, _status) =
-            repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
-
-        let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
-        let files_to_add = match working_copy_changes_type {
-            WorkingCopyChangesType::None => {
-                let files_to_add = if interactive {
-                    Vec::new()
-                } else {
-                    try_exit_code!(process_untracked_files(
-                        effects,
-                        git_run_info,
-                        &repo,
-                        event_tx_id,
-                        untracked_file_strategy,
-                    )?)
-                };
-
-                if files_to_add.is_empty() {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "There are no changes to tracked files in the working copy to commit."
-                    )?;
-                    return Ok(Ok(()));
-                } else {
-                    files_to_add
-                }
-            }
-            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
-                Vec::new()
-            }
-            WorkingCopyChangesType::Staged => Vec::new(),
-            WorkingCopyChangesType::Unstaged => {
-                try_exit_code!(process_untracked_files(
-                    effects,
-                    git_run_info,
-                    &repo,
-                    event_tx_id,
-                    untracked_file_strategy,
-                )?)
-            }
-            WorkingCopyChangesType::Conflicts => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "Cannot commit changes while there are unresolved merge conflicts."
-                )?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "Resolve them and try again. Aborting."
-                )?;
-                return Ok(Err(ExitCode(1)));
-            }
-        };
-
-        (snapshot, working_copy_changes_type, files_to_add)
-    };
-
-    if let Some(branch_name) = branch_name {
-        try_exit_code!(check_out_commit(
-            effects,
-            git_run_info,
+    if new {
+        try_exit_code!(create_new_commit(
             &repo,
+            &now,
+            git_run_info,
+            effects,
             &event_log_db,
-            event_tx_id,
-            None,
-            &CheckOutCommitOptions {
-                additional_args: vec![OsString::from("-b"), OsString::from(branch_name)],
-                force_detach: false,
-                reset: false,
-                render_smartlog: false,
-            },
+            &event_tx_id,
+            messages,
         )?);
-    }
-
-    if interactive {
-        if working_copy_changes_type == WorkingCopyChangesType::Staged {
-            writeln!(
-                effects.get_output_stream(),
-                "Cannot select changes interactively while there are already staged changes."
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "Either commit or unstage your changes and try again. Aborting."
-            )?;
-            return Ok(Err(ExitCode(1)));
-        } else {
-            try_exit_code!(record_interactive(
-                effects,
-                git_run_info,
-                &repo,
-                &snapshot,
-                event_tx_id,
-                messages,
-            )?);
-        }
     } else {
-        if !files_to_add.is_empty() {
-            // call `git add` for the new untracked files to be commited
-            //
-            // Note that `git commit` has some functionality for this, by
-            // listing files as arguments to the commit command. However, the
-            // docs for that state "the commit will ignore changes staged in the
-            // index, and instead record the current content of the listed files
-            // (which must already be known to Git);" (See
-            // https://git-scm.com/docs/git-commit#_description, item 3)
-            //
-            // The implication is that new working copy files would cause the
-            // commit to ignore any changes in the index, which is not what we
-            // want. Looking into this can be future scope; it could avoid this
-            // extra call to `git add`. On the other hand, this extra call is
-            // not very onerous.
-
-            let args = {
-                let mut args = vec!["add".to_string()];
-                // use repo-canonical paths even if adding in a repo subdir
-                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
-                args
-            };
-            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
-        }
-
-        let messages = if messages.is_empty() && stash {
-            get_default_stash_message(&repo, effects, &snapshot, &working_copy_changes_type)
-                .map(|message| vec![message])?
-        } else {
-            messages
-        };
-        let args = {
-            let mut args = vec!["commit".to_string()];
-            args.extend(
-                messages
-                    .iter()
-                    .flat_map(|message| ["--message".to_string(), message.to_string()]),
-            );
-            if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-                args.push("--all".to_string());
-            }
-            if let Some(revset) = commit_to_fixup {
-                let event_replayer =
-                    EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-                let event_cursor = event_replayer.make_default_cursor();
-                let references_snapshot = repo.get_references_snapshot()?;
-                let mut dag = Dag::open_and_sync(
-                    effects,
-                    &repo,
-                    &event_replayer,
-                    event_cursor,
-                    &references_snapshot,
-                )?;
-                let head: Option<&[lib::git::Commit<'_>]> =
-                    snapshot.head_commit.as_ref().map(std::slice::from_ref);
-                let commit = match resolve_commit_to_fixup(
-                    &repo,
-                    &mut dag,
-                    effects,
-                    &revset,
-                    &ResolveRevsetOptions::default(),
-                    head,
-                )? {
-                    Ok(commit) => commit,
-                    Err(ResolveFixupCommitError::NotAnAncestor) => {
-                        writeln!(
-                            effects.get_error_stream(),
-                            "The commit supplied to --fixup must be an ancestor of the commit being created.\nAborting.",
-                        )?;
-                        return Ok(Err(ExitCode(1)));
-                    }
-                    Err(ResolveFixupCommitError::MoreThanOneCommit {
-                        revset_to_fixup,
-                        commit_count,
-                    }) => {
-                        writeln!(
-                            effects.get_error_stream(),
-                            "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
-                        )?;
-                        return Ok(Err(ExitCode(1)));
-                    }
-                };
-                let commit = commit.get_oid().to_string();
-                args.extend(["--fixup".to_string(), commit]);
-            };
-            args
-        };
-        try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
+        try_exit_code!(create_commit_with_changes(
+            &repo,
+            git_run_info,
+            effects,
+            &event_log_db,
+            &event_tx_id,
+            messages,
+            commit_to_fixup,
+            interactive,
+            branch_name,
+            stash,
+            untracked_file_strategy
+        )?);
     }
 
     if detach || stash {
@@ -390,6 +232,299 @@ fn record(
             event_tx_id
         )?);
     }
+
+    Ok(Ok(()))
+}
+
+#[instrument]
+fn create_commit_with_changes(
+    repo: &Repo,
+    git_run_info: &GitRunInfo,
+    effects: &Effects,
+    event_log_db: &EventLogDb,
+    event_tx_id: &EventTransactionId,
+    messages: Vec<String>,
+    commit_to_fixup: Option<Revset>,
+    interactive: bool,
+    branch_name: Option<String>,
+    stash: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
+) -> EyreExitOr<()> {
+    let (snapshot, working_copy_changes_type, files_to_add) = {
+        let head_info = repo.get_head_info()?;
+        let index = repo.get_index()?;
+        let (snapshot, _status) = repo.get_status(
+            effects,
+            git_run_info,
+            &index,
+            &head_info,
+            Some(*event_tx_id),
+        )?;
+
+        let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
+        let files_to_add = match working_copy_changes_type {
+            WorkingCopyChangesType::None => {
+                let files_to_add = if interactive {
+                    Vec::new()
+                } else {
+                    try_exit_code!(process_untracked_files(
+                        effects,
+                        git_run_info,
+                        repo,
+                        *event_tx_id,
+                        untracked_file_strategy,
+                    )?)
+                };
+
+                if files_to_add.is_empty() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "There are no changes to tracked files in the working copy to commit."
+                    )?;
+                    return Ok(Ok(()));
+                } else {
+                    files_to_add
+                }
+            }
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
+                Vec::new()
+            }
+            WorkingCopyChangesType::Staged => Vec::new(),
+            WorkingCopyChangesType::Unstaged => {
+                try_exit_code!(process_untracked_files(
+                    effects,
+                    git_run_info,
+                    repo,
+                    *event_tx_id,
+                    untracked_file_strategy,
+                )?)
+            }
+            WorkingCopyChangesType::Conflicts => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Cannot commit changes while there are unresolved merge conflicts."
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "Resolve them and try again. Aborting."
+                )?;
+                return Ok(Err(ExitCode(1)));
+            }
+        };
+
+        (snapshot, working_copy_changes_type, files_to_add)
+    };
+
+    if let Some(branch_name) = branch_name {
+        try_exit_code!(check_out_commit(
+            effects,
+            git_run_info,
+            repo,
+            event_log_db,
+            *event_tx_id,
+            None,
+            &CheckOutCommitOptions {
+                additional_args: vec![OsString::from("-b"), OsString::from(branch_name)],
+                force_detach: false,
+                reset: false,
+                render_smartlog: false,
+            },
+        )?);
+    }
+
+    if interactive {
+        if working_copy_changes_type == WorkingCopyChangesType::Staged {
+            writeln!(
+                effects.get_output_stream(),
+                "Cannot select changes interactively while there are already staged changes."
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "Either commit or unstage your changes and try again. Aborting."
+            )?;
+            Ok(Err(ExitCode(1)))
+        } else {
+            record_interactive(
+                effects,
+                git_run_info,
+                repo,
+                &snapshot,
+                *event_tx_id,
+                messages,
+            )
+        }
+    } else {
+        if !files_to_add.is_empty() {
+            // call `git add` for the new untracked files to be commited
+            //
+            // Note that `git commit` has some functionality for this, by
+            // listing files as arguments to the commit command. However, the
+            // docs for that state "the commit will ignore changes staged in the
+            // index, and instead record the current content of the listed files
+            // (which must already be known to Git);" (See
+            // https://git-scm.com/docs/git-commit#_description, item 3)
+            //
+            // The implication is that new working copy files would cause the
+            // commit to ignore any changes in the index, which is not what we
+            // want. Looking into this can be future scope; it could avoid this
+            // extra call to `git add`. On the other hand, this extra call is
+            // not very onerous.
+
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            let _ = git_run_info.run_direct_no_wrapping(Some(*event_tx_id), &args)?;
+        }
+
+        let messages = if messages.is_empty() && stash {
+            get_default_stash_message(repo, effects, &snapshot, &working_copy_changes_type)
+                .map(|message| vec![message])?
+        } else {
+            messages
+        };
+        let args = {
+            let mut args = vec!["commit".to_string()];
+            args.extend(
+                messages
+                    .iter()
+                    .flat_map(|message| ["--message".to_string(), message.to_string()]),
+            );
+            if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
+                args.push("--all".to_string());
+            }
+            if let Some(revset) = commit_to_fixup {
+                let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
+                let event_cursor = event_replayer.make_default_cursor();
+                let references_snapshot = repo.get_references_snapshot()?;
+                let mut dag = Dag::open_and_sync(
+                    effects,
+                    repo,
+                    &event_replayer,
+                    event_cursor,
+                    &references_snapshot,
+                )?;
+                let head: Option<&[lib::git::Commit<'_>]> =
+                    snapshot.head_commit.as_ref().map(std::slice::from_ref);
+                let commit = match resolve_commit_to_fixup(
+                    repo,
+                    &mut dag,
+                    effects,
+                    &revset,
+                    &ResolveRevsetOptions::default(),
+                    head,
+                )? {
+                    Ok(commit) => commit,
+                    Err(ResolveFixupCommitError::NotAnAncestor) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "The commit supplied to --fixup must be an ancestor of the commit being created.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                    Err(ResolveFixupCommitError::MoreThanOneCommit {
+                        revset_to_fixup,
+                        commit_count,
+                    }) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+                let commit = commit.get_oid().to_string();
+                args.extend(["--fixup".to_string(), commit]);
+            };
+            args
+        };
+        git_run_info.run_direct_no_wrapping(Some(*event_tx_id), &args)
+    }
+}
+
+#[instrument]
+fn create_new_commit(
+    repo: &Repo,
+    now: &SystemTime,
+    git_run_info: &GitRunInfo,
+    effects: &Effects,
+    event_log_db: &EventLogDb,
+    event_tx_id: &EventTransactionId,
+    messages: Vec<String>,
+) -> EyreExitOr<()> {
+    let head_info = repo.get_head_info()?;
+    let current_commit_oid = match head_info {
+        ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: _,
+        } => oid,
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: _,
+        } => unimplemented!("unborn head"),
+    };
+
+    let current_commit = repo.find_commit_or_fail(current_commit_oid)?;
+    let current_tree = current_commit.get_tree()?;
+
+    let (author, committer) = {
+        let config = repo.get_readonly_config()?;
+        let name: String = config
+            .get("user.name")?
+            .ok_or_eyre("TODO no user.name configured")?;
+        let email: String = config
+            .get("user.email")?
+            .ok_or_eyre("TODO no user.email configured")?;
+
+        // TODO: support GIT_AUTHOR_DATE/GIT_COMMITTER_DATE
+        // FIXME: is there a better way to mock the time? `git` will use the
+        // `GIT_AUTHOR_DATE` env, but we don't (as far as I can tell) create
+        // entirely new commits like this elsewhere
+        let (author_date, committer_date) =
+            if std::env::var("TEST_RECORD_NEW_FAKE_COMMIT_TIME").is_ok() {
+                (
+                    current_commit.get_author().get_time().to_system_time()?,
+                    current_commit.get_committer().get_time().to_system_time()?,
+                )
+            } else {
+                (*now, *now)
+            };
+
+        (
+            Signature::new(&name, &email, &author_date)?,
+            Signature::new(&name, &email, &committer_date)?,
+        )
+    };
+
+    let new_oid = repo.create_commit(
+        None,
+        &author,
+        &committer,
+        &messages.join("\n\n"),
+        &current_tree,
+        vec![&current_commit],
+    )?;
+
+    // TODO: move branch if ref_name
+    // TODO: mark commit reachable (will show in sl if descendants, but not if detached)
+    // FIXME: --new --create <branch> doesn't seem to work
+
+    try_exit_code!(check_out_commit(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        *event_tx_id,
+        Some(CheckoutTarget::Oid(new_oid)),
+        &CheckOutCommitOptions {
+            additional_args: vec![],
+            force_detach: false,
+            reset: false,
+            render_smartlog: false,
+        },
+    )?);
 
     Ok(Ok(()))
 }
