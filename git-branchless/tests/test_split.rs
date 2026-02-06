@@ -1394,3 +1394,79 @@ fn test_split_will_not_split_to_empty_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_split_does_not_unhide_obsolete_children() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    {
+        // Create test1.txt and test2.txt in a single commit
+        git.write_file_txt("test1", "contents1")?;
+        git.write_file_txt("test2", "contents2")?;
+        git.run(&["add", "."])?;
+        git.run(&["commit", "-m", "first commit"])?;
+
+        // Create a third file in "second commit"
+        git.write_file_txt("test3", "contents3")?;
+        git.run(&["add", "."])?;
+        git.run(&["commit", "-m", "second commit"])?;
+
+        // verify initial state
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            O f777ecc (master) create initial.txt
+            |
+            o 4d11d02 first commit
+            |
+            @ 61d094b second commit
+        "###);
+    }
+
+    {
+        // amend the current commit in some way
+        git.write_file_txt("test2", "updated2")?;
+        git.branchless("amend", &[])?;
+
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            O f777ecc (master) create initial.txt
+            |
+            o 4d11d02 first commit
+            |
+            @ 6698c7b second commit
+        "###);
+    }
+
+    {
+        // Split the first commit (HEAD~) by extracting test2.txt
+        // This will rebase children onto the split result.
+        // There should be only 1 child. split should not unhide previously
+        // hidden/rewritten/obsolete commits.
+        let (stdout, _stderr) = git.branchless("split", &["HEAD~", "test2.txt"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            Attempting rebase in-memory...
+            [1/1] Committed as: ae95d4c second commit
+            branchless: processing 1 rewritten commit
+            branchless: running command: <git-executable> checkout ae95d4c54730973107527df675e53de5aec4f855 --
+            In-memory rebase succeeded.
+            O f777ecc (master) create initial.txt
+            |
+            o 8e5c74b first commit
+            |
+            o a55d783 temp(split): test2.txt (+1)
+            |
+            @ ae95d4c second commit
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 2 +-
+            test3.txt | 1 +
+            2 files changed, 2 insertions(+), 1 deletion(-)
+        ");
+    }
+
+    Ok(())
+}
