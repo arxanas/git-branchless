@@ -504,6 +504,186 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_record_new() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+
+    {
+        // --new w/ changes in the working copy
+        git.write_file_txt("test1", "new test1 contents\n")?;
+
+        let (stdout, _stderr) = git.branchless("record", &["-m", "empty commit 1", "--new"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout ebf97de456b71d33b95e6fd0a28139ece0f209d0 --
+        M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit ebf97de456b71d33b95e6fd0a28139ece0f209d0
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            empty commit 1
+        "###);
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ ebf97de empty commit 1
+        "###);
+    }
+
+    {
+        // --new w/ changes in the index
+        git.run(&["add", "test1.txt"])?;
+
+        let (stdout, _stderr) = git.branchless("record", &["-m", "empty commit 2", "--new"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 064c1bc41faa18fbe1332a5190976112f7b89fdb --
+        M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 064c1bc41faa18fbe1332a5190976112f7b89fdb
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            empty commit 2
+        "###);
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o ebf97de empty commit 1
+        |
+        @ 064c1bc empty commit 2
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_uses_user_name_and_email() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+            commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            Author: Testy McTestface <test@example.com>
+            Date:   Thu Oct 29 12:34:56 2020 -0100
+
+                create test1.txt
+
+            test1.txt
+        "###);
+    }
+
+    {
+        git.run(&["config", "user.name", "Uncreative User Name"])?;
+        git.run(&["config", "user.email", "boring@example.com"])?;
+        git.write_file_txt("test1", "new test1 contents\n")?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit 1", "--new"],
+            &GitRunOptions {
+                time: 2,
+                env: {
+                    [("TEST_RECORD_NEW_FAKE_COMMIT_TIME", "true")]
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect()
+                },
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+            branchless: running command: <git-executable> checkout 30fa5a52eb8542e52686e6cd34bb40fdb99ba09f --
+            M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(_stderr+&stdout, @r###"
+            commit 30fa5a52eb8542e52686e6cd34bb40fdb99ba09f
+            Author: Uncreative User Name <boring@example.com>
+            Date:   Thu Oct 29 08:34:56 2020 -0500
+
+                empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_insert() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["switch", "--create", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
+
+    let (stdout, _stderr) =
+        git.branchless("record", &["-m", "empty commit", "--new", "--insert"])?;
+    insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 910c8aacfa6e8f315cd578772e7bab2e636dacb5 --
+        M	test1.txt
+        Attempting rebase in-memory...
+        [1/1] Committed as: ae12a93 create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+    "###);
+
+    let (stdout, _stderr) = git.run(&["show"])?;
+    insta::assert_snapshot!(stdout, @r###"
+        commit 910c8aacfa6e8f315cd578772e7bab2e636dacb5
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            empty commit
+    "###);
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        @ 910c8aa empty commit
+        |
+        o ae12a93 (test) create test2.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
 fn test_record_detach() -> eyre::Result<()> {
     let git = make_git()?;
 
