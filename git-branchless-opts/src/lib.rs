@@ -344,6 +344,10 @@ pub struct RecordArgs {
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
 
+    /// Create an empty commit, leaving any changes uncommitted.
+    #[clap(action, long = "new", conflicts_with("stash"))]
+    pub new: bool,
+
     /// How should newly encountered, untracked files be handled?
     #[clap(value_parser, long = "untracked", conflicts_with_all(&["interactive"]))]
     pub untracked_file_strategy: Option<UntrackedFileStrategy>,

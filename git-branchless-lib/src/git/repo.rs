@@ -1659,6 +1659,18 @@ impl std::fmt::Debug for Signature<'_> {
 }
 
 impl<'repo> Signature<'repo> {
+    /// Create a new signature.
+    #[instrument]
+    pub fn new(name: &str, email: &str, now: &SystemTime) -> Result<Self> {
+        Ok({
+            Signature {
+                inner: git2::Signature::now(name, email).map_err(Error::CreateSignature)?,
+            }
+            .update_timestamp(*now)?
+        })
+    }
+
+    /// Create an automated signature, for internal use.
     #[instrument]
     pub fn automated() -> Result<Self> {
         Ok(Signature {
@@ -1708,10 +1720,12 @@ impl<'repo> Signature<'repo> {
         }
     }
 
+    /// Get the name applied to this signature.
     pub fn get_name(&self) -> Option<&str> {
         self.inner.name()
     }
 
+    /// Get the email applied to this signature.
     pub fn get_email(&self) -> Option<&str> {
         self.inner.email()
     }
