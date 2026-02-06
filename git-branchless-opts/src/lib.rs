@@ -171,12 +171,10 @@ pub struct SwitchOptions {
     #[clap(action, short = 'd', long = "detach")]
     pub detach: bool,
 
-    /// The commit or branch to check out.
+    /// The commit or branch to check out. If not provided, defaults to the
+    /// current commit.
     ///
     /// If a revset is provided, it must evaluate to set with exactly 1 head.
-    ///
-    /// If this is not provided, then interactive commit selection starts as
-    /// if `--interactive` were passed.
     ///
     /// If this is provided and the `--interactive` flag is passed, this
     /// text is used to pre-fill the interactive commit selector.
