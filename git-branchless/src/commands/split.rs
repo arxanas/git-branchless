@@ -530,6 +530,7 @@ pub fn split(
         builder.move_subtree(target_oid, vec![remainder_commit_oid])?
     } else {
         let children = dag.query_children(CommitSet::from(target_oid))?;
+        let children = dag.filter_visible_commits(children)?;
         for child in dag.commit_set_to_vec(&children)? {
             match (&split_mode, extracted_commit_oid) {
                 (_, None) | (SplitMode::DetachAfter, Some(_)) => {
