@@ -577,20 +577,7 @@ impl Repo {
             return Ok(None);
         }
 
-        // `git2` doesn't seem to support a way to directly look up the parent repository for the
-        // worktree.
-        let worktree_info_dir = self.get_path();
-        let parent_repo_path = match worktree_info_dir
-            .parent() // remove `.git`
-            .and_then(|path| path.parent()) // remove worktree name
-            .and_then(|path| path.parent()) // remove `worktrees`
-        {
-            Some(path) => path,
-            None => {
-                return Err(Error::OpenParentWorktreeRepository {
-                    path: worktree_info_dir.to_owned()});
-            },
-        };
+        let parent_repo_path = self.inner.commondir();
         let parent_repo = Self::from_dir(parent_repo_path)?;
         Ok(Some(parent_repo))
     }
