@@ -4,7 +4,10 @@ use branchless::git::{
     AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion, Repo,
     StatusEntry,
 };
-use branchless::testing::{Git, GitWorktreeWrapper, make_git, make_git_worktree};
+use branchless::testing::{
+    GitWorktreeWrapper, GitWrapperWithRemoteRepo, make_git, make_git_with_remote_repo,
+    make_git_worktree,
+};
 
 #[test]
 fn test_parse_git_version_output() {
@@ -306,39 +309,38 @@ fn test_worktree_working_copy_path() -> eyre::Result<()> {
 
 #[test]
 fn test_open_worktree_parent_repo_bare_clone() -> eyre::Result<()> {
-    let git = make_git()?;
-    git.init_repo()?;
-    git.commit_file("test1", 1)?;
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard_original,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
 
-    let temp_dir = tempfile::tempdir()?;
-    let bare_path = temp_dir.path().join("bare");
-    let worktree_path = temp_dir.path().join("worktree");
+    // Create a bare clone of the original repo.
+    original_repo.init_repo()?;
 
-    // Create a bare clone.
-    let source = format!("file://{}", git.repo_path.to_str().unwrap());
-    git.run(&["clone", "--bare", &source, bare_path.to_str().unwrap()])?;
-
-    // Create a linked worktree from the bare clone.
-    let bare_git = Git {
-        repo_path: bare_path.clone(),
-        ..(*git).clone()
-    };
-    bare_git.run(&[
-        "worktree",
-        "add",
-        "--detach",
-        worktree_path.to_str().unwrap(),
+    // `clone_repo_into` reinitializes the destination after cloning, adding a `.git` directory
+    // and losing the bare state. Run `git clone --bare` directly instead.
+    original_repo.run(&[
+        "clone",
+        "--bare",
+        original_repo.repo_path.to_str().unwrap(),
+        cloned_repo.repo_path.to_str().unwrap(),
     ])?;
 
-    let worktree_repo = Repo::from_dir(&worktree_path)?;
-    let parent_repo = worktree_repo
+    // Create a linked worktree from the bare clone.
+    let GitWorktreeWrapper {
+        temp_dir: _guard_worktree,
+        worktree,
+    } = make_git_worktree(&cloned_repo, "new-worktree")?;
+
+    let parent_repo = worktree
+        .get_repo()?
         .open_worktree_parent_repo()?
         .expect("expected to find parent repo for worktree of bare clone");
     assert_eq!(
         std::fs::canonicalize(parent_repo.get_path())?,
-        std::fs::canonicalize(&bare_path)?,
+        std::fs::canonicalize(cloned_repo.repo_path)?,
     );
 
-    drop(temp_dir);
     Ok(())
 }
