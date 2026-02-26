@@ -825,22 +825,18 @@ pub fn smartlog(
         exact,
     )?;
 
-    if reverse {
-        print!(
-            "\
-branchless: WARNING: The `--reverse` flag is deprecated.
-branchless: Please use the `branchless.smartlog.reverse` configuration option.
-"
-        );
-    }
-    let reverse_cfg = get_smartlog_reverse(&repo)?;
-    let reverse_value = match (reverse_cfg, reverse) {
-        (.., true) => true,
-        _ => reverse_cfg,
+    let reverse = if reverse {
+        writeln!(
+            effects.get_error_stream(),
+            "WARNING: The `--reverse` flag is deprecated.\nPlease use the `branchless.smartlog.reverse` configuration option."
+        )?;
+        true
+    } else {
+        get_smartlog_reverse(&repo)?
     };
 
     let mut lines = render_graph(
-        &effects.reverse_order(reverse_value),
+        &effects.reverse_order(reverse),
         &repo,
         &dag,
         &graph,
@@ -863,7 +859,7 @@ branchless: Please use the `branchless.smartlog.reverse` configuration option.
         ],
     )?
     .into_iter();
-    while let Some(line) = if reverse_value {
+    while let Some(line) = if reverse {
         lines.next_back()
     } else {
         lines.next()
