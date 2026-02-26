@@ -316,16 +316,19 @@ fn test_open_worktree_parent_repo_bare_clone() -> eyre::Result<()> {
     } = make_git_with_remote_repo()?;
 
     // Create a bare clone of the original repo.
-    original_repo.init_repo()?;
+    {
+        original_repo.init_repo()?;
 
-    // `clone_repo_into` reinitializes the destination after cloning, adding a `.git` directory
-    // and losing the bare state. Run `git clone --bare` directly instead.
-    original_repo.run(&[
-        "clone",
-        "--bare",
-        original_repo.repo_path.to_str().unwrap(),
-        cloned_repo.repo_path.to_str().unwrap(),
-    ])?;
+        // `git.clone_repo_into` reinitializes the destination after cloning,
+        // adding a `.git` directory and losing the bare state. Run `git clone
+        // --bare` directly instead.
+        original_repo.run(&[
+            "clone",
+            "--bare",
+            original_repo.repo_path.to_str().unwrap(),
+            cloned_repo.repo_path.to_str().unwrap(),
+        ])?;
+    }
 
     // Create a linked worktree from the bare clone.
     let GitWorktreeWrapper {
@@ -337,6 +340,7 @@ fn test_open_worktree_parent_repo_bare_clone() -> eyre::Result<()> {
         .get_repo()?
         .open_worktree_parent_repo()?
         .expect("expected to find parent repo for worktree of bare clone");
+
     assert_eq!(
         std::fs::canonicalize(parent_repo.get_path())?,
         std::fs::canonicalize(cloned_repo.repo_path)?,
