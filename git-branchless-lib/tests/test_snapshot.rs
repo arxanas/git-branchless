@@ -4,7 +4,7 @@ use branchless::core::effects::Effects;
 use branchless::core::eventlog::EventLogDb;
 use branchless::core::formatting::Glyphs;
 use branchless::git::WorkingCopyChangesType;
-use branchless::testing::{make_git, GitRunOptions};
+use branchless::testing::{GitRunOptions, make_git};
 
 #[test]
 fn test_has_conflicts() -> eyre::Result<()> {

@@ -1,4 +1,4 @@
-use lib::testing::{extract_hint_command, make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, extract_hint_command, make_git};
 
 #[test]
 fn test_init_smartlog() -> eyre::Result<()> {
@@ -183,6 +183,7 @@ fn test_merge_commit_reverse_order() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.smartlog.reverse", "true"])?;
     git.run(&["checkout", "-b", "test1", "master"])?;
     git.commit_file("test1", 1)?;
     git.run(&["checkout", "-b", "test2and3", "master"])?;
@@ -196,7 +197,7 @@ fn test_merge_commit_reverse_order() -> eyre::Result<()> {
         },
     )?;
 
-    let (stdout, _) = git.branchless("smartlog", &["--reverse"])?;
+    let (stdout, _) = git.branchless("smartlog", &[])?;
     insta::assert_snapshot!(stdout, @r###"
     @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
     |\
@@ -499,7 +500,7 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
     Ok(())
 }
 
-/// When --reverse is specified hints still appear at the end of output
+/// When branchless.smartlog.reverse is `true`, hints still appear at the end of output
 #[test]
 fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
     let git = make_git()?;
@@ -508,6 +509,7 @@ fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
+    git.run(&["config", "branchless.smartlog.reverse", "true"])?;
 
     git.detach_head()?;
     git.commit_file("test1", 1)?;
@@ -515,7 +517,7 @@ fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
-    let (stdout, _) = git.branchless("smartlog", &["--reverse"])?;
+    let (stdout, _) = git.branchless("smartlog", &[])?;
     insta::assert_snapshot!(stdout, @r###"
     o 96d1c37 create test2.txt
     |

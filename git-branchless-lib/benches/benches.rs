@@ -10,7 +10,7 @@ use branchless::core::rewrite::{
     BuildRebasePlanOptions, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use rayon::ThreadPoolBuilder;
 
 fn get_repo() -> Repo {

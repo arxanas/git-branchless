@@ -248,10 +248,10 @@ mod tests {
     use crate::search::EagerSolution;
     use crate::search::Search;
     use crate::search::Status;
-    use crate::testing::arb_strategy;
-    use crate::testing::arb_test_graph_and_nodes;
     use crate::testing::TestGraph;
     use crate::testing::UsizeGraph;
+    use crate::testing::arb_strategy;
+    use crate::testing::arb_test_graph_and_nodes;
 
     use itertools::Itertools;
     use maplit::hashmap;

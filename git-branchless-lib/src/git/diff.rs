@@ -174,11 +174,10 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             result.push(File {
                 old_path: None,
                 path: Cow::Owned(path),
-                file_mode: Some(old_file_mode),
+                file_mode: old_file_mode,
                 sections: vec![Section::FileMode {
                     is_checked: false,
-                    before: old_file_mode,
-                    after: FileMode::absent(),
+                    mode: FileMode::Absent,
                 }],
             });
             continue;
@@ -192,7 +191,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 result.push(File {
                     old_path: None,
                     path: Cow::Owned(path),
-                    file_mode: Some(old_file_mode),
+                    file_mode: old_file_mode,
                     sections: vec![Section::Binary {
                         is_checked: false,
                         old_description: Some(Cow::Owned(make_binary_description(
@@ -353,7 +352,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             let before_idx_start = old_start;
             let before_idx_end = before_idx_start + old_lines;
             assert!(
-            before_idx_end <= before_lines.len(),
+                before_idx_end <= before_lines.len(),
                 "before_idx_end {end} was not in range [0, {len}): {hunk:?}, path: {path:?}; lines {start}-... are: {lines:?}",
                 start = before_idx_start,
                 end = before_idx_end,
@@ -382,7 +381,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 len = after_lines.len(),
                 hunk = hunk,
                 path = path,
-                lines  = &after_lines[after_idx_start..],
+                lines = &after_lines[after_idx_start..],
             );
             let after_section_lines = after_lines[after_idx_start..after_idx_end]
                 .iter()
@@ -419,8 +418,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
                 is_checked: false,
-                before: old_file_mode,
-                after: new_file_mode,
+                mode: new_file_mode,
             }]
         } else {
             vec![]
@@ -428,7 +426,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
         result.push(File {
             old_path: None,
             path: Cow::Owned(path),
-            file_mode: Some(old_file_mode),
+            file_mode: old_file_mode,
             sections: [file_mode_section, file_sections].concat().to_vec(),
         });
     }

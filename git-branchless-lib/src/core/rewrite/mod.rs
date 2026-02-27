@@ -9,8 +9,8 @@ use std::sync::Mutex;
 
 pub use evolve::{find_abandoned_children, find_rewrite_target};
 pub use execute::{
-    execute_rebase_plan, move_branches, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    FailedMergeInfo, MergeConflictRemediation,
+    ExecuteRebasePlanOptions, ExecuteRebasePlanResult, FailedMergeInfo, MergeConflictRemediation,
+    execute_rebase_plan, move_branches,
 };
 pub use plan::{
     BuildRebasePlanError, BuildRebasePlanOptions, OidOrLabel, RebaseCommand, RebasePlan,

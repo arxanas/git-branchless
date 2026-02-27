@@ -34,12 +34,12 @@ mod skim {
     use itertools::Itertools;
 
     use lib::core::formatting::Glyphs;
-    use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
+    use lib::core::node_descriptors::{NodeDescriptor, NodeObject, render_node_descriptors};
     use lib::git::{Commit, NonZeroOid};
 
     use skim::{
-        prelude::SkimOptionsBuilder, AnsiString, DisplayContext, ItemPreview, Matches,
-        PreviewContext, Skim, SkimItem, SkimItemReceiver, SkimItemSender,
+        AnsiString, DisplayContext, ItemPreview, Matches, PreviewContext, Skim, SkimItem,
+        SkimItemReceiver, SkimItemSender, prelude::SkimOptionsBuilder,
     };
 
     #[derive(Debug)]
@@ -124,13 +124,13 @@ mod skim {
         commit_descriptors: &mut [&mut dyn NodeDescriptor],
     ) -> eyre::Result<Option<NonZeroOid>> {
         let options = SkimOptionsBuilder::default()
-            .height(Some("100%"))
-            .preview(Some(""))
-            .preview_window(Some("up:70%"))
+            .height("100%".to_string())
+            .preview(Some("".to_string()))
+            .preview_window("up:70%".to_string())
             .sync(true) // Consume all items before displaying selector.
-            .bind(vec!["Enter:accept"])
-            .header(header)
-            .query(Some(initial_query))
+            .bind(vec!["Enter:accept".to_string()])
+            .header(header.map(|h| h.to_string()))
+            .query(Some(initial_query.to_string()))
             .build()
             .map_err(|e| eyre!("building Skim options failed: {}", e))?;
 

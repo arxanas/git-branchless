@@ -2,7 +2,7 @@
 
 use bstr::ByteSlice;
 use std::fmt::{Debug, Display, Write};
-use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
+use std::io::{Stderr, Stdout, Write as WriteIo, stderr, stdout};
 use std::mem::take;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -610,7 +610,7 @@ impl Effects {
         match self.dest {
             OutputDest::Stdout => {}
             OutputDest::Suppress | OutputDest::BufferForTest { .. } => {
-                return (self.clone(), progress)
+                return (self.clone(), progress);
             }
         }
 

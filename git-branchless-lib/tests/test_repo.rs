@@ -4,7 +4,10 @@ use branchless::git::{
     AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion, Repo,
     StatusEntry,
 };
-use branchless::testing::{make_git, make_git_worktree, GitWorktreeWrapper};
+use branchless::testing::{
+    GitWorktreeWrapper, GitWrapperWithRemoteRepo, make_git, make_git_with_remote_repo,
+    make_git_worktree,
+};
 
 #[test]
 fn test_parse_git_version_output() {
@@ -299,6 +302,48 @@ fn test_worktree_working_copy_path() -> eyre::Result<()> {
     assert_eq!(
         canonicalize(directly_opened_worktree_repo.get_working_copy_path()),
         canonicalize(worktree_repo.get_working_copy_path())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_open_worktree_parent_repo_bare_clone() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard_original,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    // Create a bare clone of the original repo.
+    {
+        original_repo.init_repo()?;
+
+        // `git.clone_repo_into` reinitializes the destination after cloning,
+        // adding a `.git` directory and losing the bare state. Run `git clone
+        // --bare` directly instead.
+        original_repo.run(&[
+            "clone",
+            "--bare",
+            original_repo.repo_path.to_str().unwrap(),
+            cloned_repo.repo_path.to_str().unwrap(),
+        ])?;
+    }
+
+    // Create a linked worktree from the bare clone.
+    let GitWorktreeWrapper {
+        temp_dir: _guard_worktree,
+        worktree,
+    } = make_git_worktree(&cloned_repo, "new-worktree")?;
+
+    let parent_repo = worktree
+        .get_repo()?
+        .open_worktree_parent_repo()?
+        .expect("expected to find parent repo for worktree of bare clone");
+
+    assert_eq!(
+        std::fs::canonicalize(parent_repo.get_path())?,
+        std::fs::canonicalize(cloned_repo.repo_path)?,
     );
 
     Ok(())

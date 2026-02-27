@@ -140,6 +140,18 @@ impl From<FileMode> for u32 {
     }
 }
 
+impl From<scm_record::FileMode> for FileMode {
+    fn from(file_mode: scm_record::FileMode) -> Self {
+        match file_mode {
+            scm_record::FileMode::Unix(file_mode) => {
+                let file_mode: i32 = file_mode.try_into().unwrap();
+                Self::from(file_mode)
+            }
+            scm_record::FileMode::Absent => FileMode::Unreadable,
+        }
+    }
+}
+
 impl FromStr for FileMode {
     type Err = eyre::Error;
 
@@ -191,6 +203,17 @@ pub struct StatusEntry {
 }
 
 impl StatusEntry {
+    /// Create a status entry for a currently-untracked, to-be-added file.
+    pub fn new_untracked(filename: String) -> Self {
+        StatusEntry {
+            index_status: FileStatus::Untracked,
+            working_copy_status: FileStatus::Untracked,
+            working_copy_file_mode: FileMode::Blob,
+            path: PathBuf::from(filename),
+            orig_path: None,
+        }
+    }
+
     /// Returns the paths associated with the status entry.
     pub fn paths(&self) -> Vec<PathBuf> {
         let mut result = vec![self.path.clone()];

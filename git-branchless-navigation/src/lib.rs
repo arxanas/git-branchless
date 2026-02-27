@@ -20,7 +20,7 @@ use std::time::SystemTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::repo_ext::RepoExt;
 use lib::util::{ExitCode, EyreExitOr};
 use tracing::{instrument, warn};
@@ -29,7 +29,7 @@ use git_branchless_opts::{ResolveRevsetOptions, Revset, SwitchOptions, TraverseC
 use git_branchless_revset::{resolve_commits, resolve_default_smartlog_commits};
 use git_branchless_smartlog::make_smartlog_graph;
 use lib::core::config::get_next_interactive;
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::Pluralize;
@@ -295,7 +295,10 @@ fn advance(
                         descriptor
                     )?;
                 }
-                writeln!(effects.get_output_stream(), "(Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous commits)")?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "(Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous commits)"
+                )?;
                 return Ok(None);
             }
         };

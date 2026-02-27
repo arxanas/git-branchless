@@ -1,4 +1,8 @@
-use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
+use lib::testing::{
+    GitRunOptions, make_git,
+    pty::{PtyAction, run_in_pty},
+    remove_rebase_lines, trim_lines,
+};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {
@@ -27,7 +31,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         branchless: processing 1 update: ref HEAD
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
+        branchless: running command: <git-executable> reset 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50 --
         Attempting rebase in-memory...
         [1/1] Committed as: b51f01b create test3.txt
         branchless: processing 1 rewritten commit
@@ -65,7 +69,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.branchless("amend", &[])?;
             insta::assert_snapshot!(stdout, @r###"
-            branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233
+            branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233 --
             Attempting rebase in-memory...
             This operation would cause a merge conflict:
             - (1 conflicting file) b51f01b create test3.txt
@@ -118,7 +122,7 @@ fn test_amend_rename() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset f6b255388219264f4bcd258a3020d262c2d7b03e
+        branchless: running command: <git-executable> reset f6b255388219264f4bcd258a3020d262c2d7b03e --
         Amended with 2 staged changes.
         "###);
     }
@@ -157,7 +161,7 @@ fn test_amend_delete() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
+        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -196,7 +200,7 @@ fn test_amend_delete_only_in_index() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
+        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe --
         Amended with 1 staged change.
         "###);
     }
@@ -282,7 +286,7 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset f8e4ba1be5cefcf22e831f51b1525b0be8215a31
+        branchless: running command: <git-executable> reset f8e4ba1be5cefcf22e831f51b1525b0be8215a31 --
         Unstaged changes after reset:
         M	test2.txt
         Amended with 1 staged change. (Some uncommitted changes were not amended.)
@@ -326,7 +330,7 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 2e69581cb466962fa85e5918f29af6d2925fdd6f
+        branchless: running command: <git-executable> reset 2e69581cb466962fa85e5918f29af6d2925fdd6f --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -369,7 +373,7 @@ fn test_amend_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 3b98a960e6ebde39a933c25413b43bce8c0fd128
+        branchless: running command: <git-executable> reset 3b98a960e6ebde39a933c25413b43bce8c0fd128 --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -387,15 +391,16 @@ fn test_amend_head() -> eyre::Result<()> {
     git.write_file_txt("newfile", "some new file")?;
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
-        insta::assert_snapshot!(stdout, @"There are no uncommitted or staged changes. Nothing to amend.
-");
+        insta::assert_snapshot!(stdout, @r###"
+        There are no uncommitted or staged changes. Nothing to amend.
+        "###);
     }
 
     git.run(&["add", "."])?;
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 685ef311b070a460b7c86a9aed068be563978021
+        branchless: running command: <git-executable> reset 685ef311b070a460b7c86a9aed068be563978021 --
         Amended with 1 staged change.
         "###);
     }
@@ -428,7 +433,7 @@ fn test_amend_head_with_file_with_space() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 5ccdda3c1e0dca9aa58634b37cfa9cac09e3975b
+        branchless: running command: <git-executable> reset 5ccdda3c1e0dca9aa58634b37cfa9cac09e3975b --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -440,6 +445,210 @@ fn test_amend_head_with_file_with_space() -> eyre::Result<()> {
         |
         @ 5ccdda3 create test file with space.txt
         "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_with_new_untracked_files() -> eyre::Result<()> {
+    //
+    // This test mostly mimics the corresponding test for `record`. Changes here
+    // may also need to be made there.
+    //
+    // See fn test_record_with_new_untracked_files in git-branchless-record/tests/test_record.rs
+    //
+
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        // confirm initial state: only test1
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        // working copy & disabled (default) => test2 not added
+        git.write_file_txt("test1", "test1 updated 1")?;
+        git.write_file_txt("test2", "test2 new")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 7e3c3a90f4d173b07747712f9c8fb7b3bb9902e3 --
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        // working copy & add
+        git.write_file_txt("test1", "test1 updated 2")?;
+        // test2 should still be considered "new" because last run was disabled
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Including 1 new untracked file: test2.txt
+        branchless: running command: <git-executable> reset c6ba988a5528776b74f8eb23d067b399762358e6 --
+        Amended with 2 uncommitted changes.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        // working copy & skip
+        git.write_file_txt("test2", "test2 updated 3")?;
+        git.write_file_txt("test3", "test3 new")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "skip"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 new untracked file: test3.txt
+        hint: this file will remain skipped and will not be automatically reconsidered
+        hint: to add it yourself: git add
+        hint: disable this hint by running: git config --global branchless.hint.addSkippedFiles false
+        branchless: running command: <git-executable> reset 7fa9d6e9747d464c52ebf08b2477237e9685ff11 --
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            2 files changed, 2 insertions(+)
+        ");
+    }
+
+    {
+        // working copy & prompt
+        git.write_file_txt("test2", "test2 updated 4")?;
+        // test3.txt should remain skipped because we've already seen it
+        git.write_file_txt("test4", "test4 new")?;
+
+        run_in_pty(
+            &git,
+            "amend",
+            &["--untracked", "prompt"],
+            &[PtyAction::WaitUntilContains("test4"), PtyAction::Write("y")],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            3 files changed, 3 insertions(+)
+        ");
+    }
+
+    {
+        // working copy & add
+        // -> only new files in working copy, no changes to tracked files
+        // test3.txt still skipped
+        git.write_file_txt("test5", "test5 new")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 previously skipped file: test3.txt
+        Including 1 new untracked file: test5.txt
+        branchless: running command: <git-executable> reset dc6825a5feb1d36a022a432bc5f992ead8748a00 --
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            test5.txt | 1 +
+            4 files changed, 4 insertions(+)
+        ");
+    }
+
+    {
+        // index (staged) & add => untracked wc changes ignored
+        git.write_file_txt("test5", "test5 updated\n6")?; // using \n to indicate 2 added lines, below
+        git.write_file_txt("test6", "test6 new")?;
+        git.run(&["add", "test5.txt"])?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset f734544d45f317a2ce0304ea45c3d62e0e50b1a2 --
+        Amended with 1 staged change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            test5.txt | 2 ++
+            4 files changed, 5 insertions(+)
+        ");
+    }
+
+    {
+        // working copy & disable (again) => still no output about added/skipped files
+        git.write_file_txt("test1", "test1 updated\n7")?; // using \n to indicate 2 added lines, below
+
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 93af47a41ecad2de9b2ffe67586df62f6850ace8 --
+        Amended with 1 uncommitted change.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 2 ++
+            test2.txt | 1 +
+            test4.txt | 1 +
+            test5.txt | 2 ++
+            4 files changed, 6 insertions(+)
+        ");
+    }
+
+    {
+        // working copy & add (again)
+        //  - test3 still skipped
+        //  - test6 added because it was totally skipped during last/disabled run
+        git.write_file_txt("test1", "test1 updated 8")?;
+
+        let (stdout, _stderr) = git.branchless("amend", &["--untracked", "add"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Skipping 1 previously skipped file: test3.txt
+        Including 1 new untracked file: test6.txt
+        branchless: running command: <git-executable> reset d52a98c726910a75f2b9163665d849236c918442 --
+        Amended with 2 uncommitted changes.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt | 1 +
+            test2.txt | 1 +
+            test4.txt | 1 +
+            test5.txt | 2 ++
+            test6.txt | 1 +
+            5 files changed, 6 insertions(+)
+        ");
     }
 
     Ok(())
@@ -465,7 +674,7 @@ fn test_amend_executable() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset f00ec4b5a81438f4e792ca5576a290b16fed8fdb
+        branchless: running command: <git-executable> reset f00ec4b5a81438f4e792ca5576a290b16fed8fdb --
         Amended with 1 staged change.
         "###);
     }
@@ -567,7 +776,7 @@ fn test_amend_undo() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: processing 1 update: branch foo
-        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> reset foo --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -608,11 +817,11 @@ fn test_amend_undo() -> eyre::Result<()> {
         6. Restore snapshot for branch foo
                     pointing to c0bdfb5 create file1.txt
                 backed up using a293e0b branchless: automated working copy snapshot
-        branchless: running command: <git-executable> checkout a293e0b4502882ced673f83b6742539ee06cbc74 -B foo
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> checkout a293e0b4502882ced673f83b6742539ee06cbc74 -B foo --
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at a293e0b branchless: automated working copy snapshot
-        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006
-        branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408
+        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006 --
+        branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408 --
         Unstaged changes after reset:
         M	file1.txt
         branchless: running command: <git-executable> update-ref refs/heads/foo c0bdfb5ba33c02bba2aa451efe2f220f12232408
@@ -674,7 +883,7 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
+        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201 --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -700,11 +909,11 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
                       as c0bdfb5 create file1.txt
         4. Restore snapshot for c0bdfb5 create file1.txt
                 backed up using 55e9304 branchless: automated working copy snapshot
-        branchless: running command: <git-executable> checkout 55e9304c975103af25622dca880679182506f49f
-        branchless: running command: <git-executable> reset --hard HEAD
+        branchless: running command: <git-executable> checkout 55e9304c975103af25622dca880679182506f49f --
+        branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 55e9304 branchless: automated working copy snapshot
-        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006
-        branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408
+        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006 --
+        branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408 --
         Unstaged changes after reset:
         M	file1.txt
         O f777ecc (master) create initial.txt
@@ -749,7 +958,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
             ],
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526 --
         Rebase constraints before adding descendants: [
             (
                 NonZeroOid(3d8543b87d55c5b7995935e18e05cb6c399fb526),
@@ -922,7 +1131,7 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
         let (stdout, _stderr) =
             git.branchless("amend", &["--reparent", "--debug-dump-rebase-plan"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset d517a648915434edf38114da4efd820ec6f513cf
+        branchless: running command: <git-executable> reset d517a648915434edf38114da4efd820ec6f513cf --
         Rebase plan: Some(
             RebasePlan {
                 first_dest_oid: NonZeroOid(7ec39c7da50fc25deeea3318d937e1005de2a047),
@@ -1050,12 +1259,12 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: processing 1 update: branch foo
-        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> reset foo --
         Attempting rebase in-memory...
         [1/1] Committed as: fc597fa create test2.txt
         branchless: processing 1 update: branch bar
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout foo
+        branchless: running command: <git-executable> checkout foo --
         In-memory rebase succeeded.
         Restacked 1 commit.
         Amended with 1 uncommitted change.
@@ -1104,7 +1313,7 @@ fn test_amend_merge() -> eyre::Result<()> {
         )?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526 --
         Attempting rebase in-memory...
         Failed to merge in-memory, trying again on-disk...
         branchless: running command: <git-executable> diff --quiet
@@ -1166,7 +1375,7 @@ fn test_amend_move_detached_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: processing 1 update: branch foo
-        branchless: running command: <git-executable> reset 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0
+        branchless: running command: <git-executable> reset 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0 --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -1201,7 +1410,7 @@ fn test_amend_merge_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 3ebbc8fdaff7b5d5d0f1101feb3640d06b0297a2
+        branchless: running command: <git-executable> reset 3ebbc8fdaff7b5d5d0f1101feb3640d06b0297a2 --
         Amended with 1 uncommitted change.
         "###);
     }
@@ -1240,6 +1449,50 @@ fn test_amend_merge_commit() -> eyre::Result<()> {
         @@@ -1,0 -1,1 +1,1 @@@
          -test1 contents
         ++new test1 contents
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_with_branch_name_matching_file() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+
+    // Create a branch named 'foo'
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test1", 1)?;
+
+    // Create a file with the same name as the branch
+    git.write_file("foo", "some file content\n")?;
+
+    // Try to amend - this should work despite the file name matching the branch name
+    {
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        There are no uncommitted or staged changes. Nothing to amend.
+        "###);
+    }
+
+    // Now modify test1 and amend - this should also work
+    git.write_file_txt("test1", "modified contents\n")?;
+    {
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: processing 1 update: branch foo
+        branchless: running command: <git-executable> reset foo --
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ d408d49 (> foo) create test1.txt
         "###);
     }
 

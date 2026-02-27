@@ -31,16 +31,16 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, sorted_commit_set, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Glyphs, Pluralize};
-use lib::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
+use lib::core::node_descriptors::{CommitOidDescriptor, NodeObject, render_node_descriptors};
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
+    RebasePlanPermissions, RepoResource, execute_rebase_plan,
 };
-use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, message_prettify};
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
@@ -136,35 +136,29 @@ pub fn reword(
     let messages = match messages {
         InitialCommitMessages::Discard | InitialCommitMessages::Messages(_) => messages,
         InitialCommitMessages::FixUp(revset) => {
-            let commits_to_fixup = resolve_commits_from_hashes(
+            let commit_to_fixup = match resolve_commit_to_fixup(
                 &repo,
                 &mut dag,
                 effects,
-                vec![revset.clone()],
+                &revset,
                 resolve_revset_options,
-            )?
-            .unwrap_or_default();
-            let commit_to_fixup = match commits_to_fixup.as_slice() {
-                [commit_to_fixup] => {
-                    let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
-                    if !dag.set_contains(
-                        &dag.query_common_ancestors(commits)?,
-                        commit_to_fixup.get_oid(),
-                    )? {
-                        writeln!(
-                            effects.get_error_stream(),
-                            "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
-                        )?;
-                        return Ok(Err(ExitCode(1)));
-                    }
-                    commit_to_fixup
-                }
-                commits => {
+                Some(&commits),
+            )? {
+                Ok(commit) => commit,
+                Err(ResolveFixupCommitError::NotAnAncestor) => {
                     writeln!(
                         effects.get_error_stream(),
-                        "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
-                        revset,
-                        commits.len()
+                        "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+                Err(ResolveFixupCommitError::MoreThanOneCommit {
+                    revset_to_fixup,
+                    commit_count,
+                }) => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
                     )?;
                     return Ok(Err(ExitCode(1)));
                 }
@@ -328,6 +322,61 @@ pub fn reword(
             Ok(Err(ExitCode(1)))
         }
         ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
+    }
+}
+
+#[must_use]
+/// Possible errors when resolving commit for the --fixup flag
+pub enum ResolveFixupCommitError {
+    /// Error when there are more than one commit supplied to --fixup
+    MoreThanOneCommit {
+        /// String representation for the revset supplied to --fixup.
+        revset_to_fixup: String,
+        /// The number of commits that the revset resolves to.
+        /// It should be exactly one but it is not, hence the error.
+        commit_count: usize,
+    },
+
+    /// Error when the commit supplied to --fixup is not an ancestor of
+    /// the commit(s) being edited (either reworded or recorded).
+    NotAnAncestor,
+}
+
+/// Generate a commit message with the fixup! prefix.
+pub fn resolve_commit_to_fixup<'repo>(
+    repo: &'repo Repo,
+    dag: &mut Dag,
+    effects: &Effects,
+    revset_to_fixup: &Revset, // revset as the fixup! target
+    resolve_revset_options: &ResolveRevsetOptions,
+    reworded_commits: Option<&[Commit<'_>]>, // whose messages are being reworded
+) -> eyre::Result<Result<Commit<'repo>, ResolveFixupCommitError>> {
+    let commits_to_fixup = resolve_commits_from_hashes(
+        repo,
+        dag,
+        effects,
+        vec![revset_to_fixup.clone()],
+        resolve_revset_options,
+    )?
+    .unwrap_or_default();
+    match commits_to_fixup.as_slice() {
+        [commit_to_fixup] => {
+            if let Some(commits) = reworded_commits {
+                // check if commit_to_fixup is an ancestor of all edited commits
+                let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
+                if !dag.set_contains(
+                    &dag.query_common_ancestors(commits)?,
+                    commit_to_fixup.get_oid(),
+                )? {
+                    return Ok(Err(ResolveFixupCommitError::NotAnAncestor));
+                }
+            }
+            Ok(Ok(commit_to_fixup.clone()))
+        }
+        commits => Ok(Err(ResolveFixupCommitError::MoreThanOneCommit {
+            revset_to_fixup: revset_to_fixup.to_string(),
+            commit_count: commits.len(),
+        })),
     }
 }
 
@@ -622,32 +671,6 @@ fn parse_bulk_edit_message(
         messages,
         unexpected,
     })
-}
-
-/// Return the root commits for given a list of commits. This is the list of commits that have *no*
-/// ancestors also in the list. The idea is to find the minimum number of subtrees that much be
-/// rebased to include all of our rewording.
-#[instrument]
-fn find_subtree_roots<'repo>(
-    repo: &'repo Repo,
-    dag: &Dag,
-    commits: &[Commit],
-) -> eyre::Result<Vec<Commit<'repo>>> {
-    let commits: CommitSet = commits.iter().map(|commit| commit.get_oid()).collect();
-
-    // Find the vertices representing the roots of this set of commits
-    let subtree_roots = dag
-        .query_roots(commits)
-        .wrap_err("Computing subtree roots")?;
-
-    // convert the vertices back into actual Commits
-    let root_commits = dag
-        .commit_set_to_vec(&subtree_roots)?
-        .into_iter()
-        .filter_map(|oid| repo.find_commit(oid).ok()?)
-        .collect();
-
-    Ok(root_commits)
 }
 
 /// Print a basic status report of what commits were reworded.

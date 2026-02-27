@@ -13,10 +13,10 @@ use lib::core::formatting::Pluralize;
 use lib::git::{ConfigRead, Repo, RepoError, ResolvedReferenceInfo};
 use tracing::instrument;
 
-use super::builtins::FUNCTIONS;
-use super::parser::{parse, ParseError};
-use super::pattern::{Pattern, PatternError};
 use super::Expr;
+use super::builtins::FUNCTIONS;
+use super::parser::{ParseError, parse};
+use super::pattern::{Pattern, PatternError};
 
 #[derive(Debug)]
 pub(super) struct Context<'a> {
@@ -160,7 +160,7 @@ pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
         Ok(None) | Err(_) => {
             return Err(EvalError::UnboundName {
                 name: name.to_owned(),
-            })
+            });
         }
     };
 
@@ -360,7 +360,7 @@ mod tests {
     use lib::core::formatting::Glyphs;
     use lib::core::repo_ext::RepoExt;
     use lib::git::Commit;
-    use lib::testing::{make_git, GitRunOptions};
+    use lib::testing::{GitRunOptions, make_git};
 
     use super::*;
 
@@ -1507,7 +1507,7 @@ mod tests {
             insta::assert_snapshot!(_stderr, @r###"
             Evaluation error for expression 'parseError()': failed to parse alias expression 'foo('
             parse error: Unrecognized EOF found at 4
-            Expected one of "(", ")", "..", ":", "::", a commit/branch/tag or a string literal
+            Expected one of a commit/branch/tag, a string literal, "(", ")", "..", ":" or "::"
             "###);
         }
 

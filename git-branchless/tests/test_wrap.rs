@@ -3,7 +3,7 @@ use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_times
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::git::GitVersion;
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, make_git};
 
 #[test]
 fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {

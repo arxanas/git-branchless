@@ -15,7 +15,7 @@ use tracing::instrument;
 
 use crate::core::effects::Effects;
 use crate::core::eventlog::{
-    is_gc_ref, CommitActivityStatus, EventCursor, EventLogDb, EventReplayer,
+    CommitActivityStatus, EventCursor, EventLogDb, EventReplayer, is_gc_ref,
 };
 use crate::core::formatting::Pluralize;
 use crate::git::{NonZeroOid, Reference, Repo};

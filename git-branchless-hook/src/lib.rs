@@ -18,7 +18,7 @@
 
 use std::fmt::Write;
 use std::fs::File;
-use std::io::{stdin, BufRead};
+use std::io::{BufRead, stdin};
 use std::time::SystemTime;
 
 use eyre::Context;
@@ -31,7 +31,7 @@ use lib::core::rewrite::rewrite_hooks::get_deferred_commits_path;
 use lib::util::EyreExitOr;
 use tracing::{error, instrument, warn};
 
-use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
+use lib::core::eventlog::{Event, EventLogDb, EventReplayer, should_ignore_ref_updates};
 use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::gc::{gc, mark_commit_reachable};
 use lib::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, Repo};
@@ -503,8 +503,8 @@ mod reference_transaction {
 #[instrument]
 fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
     use reference_transaction::{
-        fix_packed_reference_oid, parse_reference_transaction_line, read_packed_refs_file,
-        ParsedReferenceTransactionLine,
+        ParsedReferenceTransactionLine, fix_packed_reference_oid, parse_reference_transaction_line,
+        read_packed_refs_file,
     };
 
     if transaction_state != "committed" {

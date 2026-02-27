@@ -24,7 +24,7 @@ use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
 use github::GithubForge;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use lib::core::dag::{union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag, union_all};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};

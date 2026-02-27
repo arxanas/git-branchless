@@ -25,7 +25,7 @@ use lib::core::node_descriptors::{
 };
 use lib::git::{GitRunInfo, Repo, ResolvedReferenceInfo};
 
-use git_branchless_init::{determine_hook_path, Hook, ALL_HOOKS};
+use git_branchless_init::{ALL_HOOKS, Hook, determine_hook_path};
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {

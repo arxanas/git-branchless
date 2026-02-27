@@ -166,7 +166,9 @@ pub struct EagerSolution<Node: Debug + Hash + Eq> {
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum SearchError<TNode, TGraphError, TStrategyError> {
-    #[error("node {node:?} has already been classified as a {status:?} node, but was returned as a new midpoint to search; this would loop indefinitely")]
+    #[error(
+        "node {node:?} has already been classified as a {status:?} node, but was returned as a new midpoint to search; this would loop indefinitely"
+    )]
     AlreadySearchedMidpoint { node: TNode, status: Status },
 
     #[error(transparent)]
@@ -180,7 +182,9 @@ pub enum SearchError<TNode, TGraphError, TStrategyError> {
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum NotifyError<TNode, TGraphError> {
-    #[error("inconsistent state transition: {ancestor_node:?} ({ancestor_status:?}) was marked as an ancestor of {descendant_node:?} ({descendant_status:?}")]
+    #[error(
+        "inconsistent state transition: {ancestor_node:?} ({ancestor_status:?}) was marked as an ancestor of {descendant_node:?} ({descendant_status:?}"
+    )]
     InconsistentStateTransition {
         ancestor_node: TNode,
         ancestor_status: Status,
@@ -410,7 +414,7 @@ impl<G: Graph> Search<G> {
                     node,
                     from: *existing_status,
                     to: status,
-                })
+                });
             }
             _ => {}
         }

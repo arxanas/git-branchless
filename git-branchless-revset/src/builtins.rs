@@ -6,9 +6,9 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
 use lib::git::{
-    get_latest_test_command_path, get_test_tree_dir, CategorizedReferenceName, Commit,
-    MaybeZeroOid, Repo, SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE,
-    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    CategorizedReferenceName, Commit, MaybeZeroOid, Repo, SerializedNonZeroOid,
+    SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE, get_latest_test_command_path, get_test_tree_dir,
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -17,13 +17,13 @@ use tracing::{instrument, warn};
 use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
 
-use crate::eval::{
-    eval0, eval0_or_1, eval0_or_1_pattern, eval1, eval1_pattern, eval2, eval_number_rhs, Context,
-    EvalError, EvalResult,
-};
-use crate::pattern::{make_pattern_matcher_set, Pattern};
-use crate::pattern::{PatternError, PatternMatcher};
 use crate::Expr;
+use crate::eval::{
+    Context, EvalError, EvalResult, eval_number_rhs, eval0, eval0_or_1, eval0_or_1_pattern, eval1,
+    eval1_pattern, eval2,
+};
+use crate::pattern::{Pattern, make_pattern_matcher_set};
+use crate::pattern::{PatternError, PatternMatcher};
 
 type FnType =
     &'static (dyn Fn(&mut Context, &str, &[Expr], &Option<&CommitSet>) -> EvalResult + Sync);

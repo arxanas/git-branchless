@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::core::config::env_vars::{
-    get_git_exec_path, get_path_to_git, should_use_separate_command_binary, TEST_GIT,
-    TEST_SEPARATE_COMMAND_BINARIES,
+    TEST_GIT, TEST_SEPARATE_COMMAND_BINARIES, get_git_exec_path, get_path_to_git,
+    should_use_separate_command_binary,
 };
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
@@ -156,6 +156,9 @@ impl Git {
 
     /// Get the `PATH` environment variable to use for testing.
     pub fn get_path_for_env(&self) -> OsString {
+        // TODO: de-deprecate after Rust 1.93
+        // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
+        #[allow(deprecated)]
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
         let branchless_path = cargo_bin_path
             .parent()
@@ -371,7 +374,11 @@ stderr:
         let result = self.run_with_options(&git_run_args, options);
 
         if !should_use_separate_command_binary(subcommand) {
+            // TODO: de-deprecate after Rust 1.93
+            // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
+            #[allow(deprecated)]
             let main_command_exe = assert_cmd::cargo::cargo_bin("git-branchless");
+            #[allow(deprecated)]
             let subcommand_exe =
                 assert_cmd::cargo::cargo_bin(format!("git-branchless-{subcommand}"));
             if main_command_exe.exists() && subcommand_exe.exists() {
@@ -902,12 +909,12 @@ pub fn remove_nondeterministic_lines(output: String) -> String {
 
 /// Utilities for testing in a virtual terminal (PTY).
 pub mod pty {
-    use std::sync::{mpsc::channel, Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc::channel};
     use std::thread;
     use std::time::Duration;
 
     use eyre::eyre;
-    use portable_pty::{native_pty_system, CommandBuilder, ExitStatus, PtySize};
+    use portable_pty::{CommandBuilder, ExitStatus, PtySize, native_pty_system};
 
     use super::Git;
 

@@ -1,5 +1,5 @@
 use eyre::WrapErr;
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{GitRunOptions, make_git};
 
 #[test]
 fn test_git_is_not_a_wrapper() -> eyre::Result<()> {

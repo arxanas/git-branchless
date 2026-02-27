@@ -1,6 +1,6 @@
 [package]
 description = "Supporting library for git-branchless"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 name = "scm-bisect"
 repository = "https://github.com/arxanas/git-branchless"
@@ -17,4 +17,4 @@ tracing = "0.1"
 [dev-dependencies]
 insta = "1"
 maplit = "1"
-proptest = "1.7.0"
+proptest = "1.9.0"

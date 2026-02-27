@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
+use lib::core::untracked_file_cache::UntrackedFileStrategy;
 use lib::git::NonZeroOid;
 
 /// A revset expression. Can be a commit hash, branch name, or one of the
@@ -177,12 +178,10 @@ pub struct SwitchOptions {
     #[clap(action, short = 'd', long = "detach")]
     pub detach: bool,
 
-    /// The commit or branch to check out.
+    /// The commit or branch to check out. If not provided, defaults to the
+    /// current commit.
     ///
     /// If a revset is provided, it must evaluate to set with exactly 1 head.
-    ///
-    /// If this is not provided, then interactive commit selection starts as
-    /// if `--interactive` were passed.
     ///
     /// If this is provided and the `--interactive` flag is passed, this
     /// text is used to pre-fill the interactive commit selector.
@@ -306,13 +305,28 @@ pub struct QueryArgs {
     pub raw: bool,
 }
 
-/// Create a commit by interactively selecting which changes to include.
+/// Specify commit messages
 #[derive(Debug, Parser)]
-pub struct RecordArgs {
-    /// The commit message to use. If not provided, will be prompted to provide a commit message
+pub struct MessageArgs {
+    /// The commit message to use. Multiple messages will be combined
+    /// as separate paragraphs, similar to `git commit`.
+    /// If not provided, you will be prompted to provide a commit message
     /// interactively.
     #[clap(value_parser, short = 'm', long = "message")]
     pub messages: Vec<String>,
+
+    /// A commit to "fix up". The message will be prefixed with `fixup!`
+    /// following the supplied commit, suitable for use with `git rebase --autosquash`.
+    #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages"]))]
+    pub commit_to_fixup: Option<Revset>,
+}
+
+/// Create a commit by interactively selecting which changes to include.
+#[derive(Debug, Parser)]
+pub struct RecordArgs {
+    /// Options for supplying commit messages.
+    #[clap(flatten)]
+    pub message_args: MessageArgs,
 
     /// Select changes to include interactively, rather than using the
     /// current staged/unstaged changes.
@@ -336,6 +350,10 @@ pub struct RecordArgs {
     /// After making the new commit, switch back to the previous commit.
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
+
+    /// How should newly encountered, untracked files be handled?
+    #[clap(value_parser, long = "untracked", conflicts_with_all(&["interactive"]))]
+    pub untracked_file_strategy: Option<UntrackedFileStrategy>,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
@@ -353,7 +371,7 @@ pub struct SmartlogArgs {
     pub revset: Option<Revset>,
 
     /// Print the smartlog in the opposite of the usual order, with the latest
-    /// commits first.
+    /// commits first. (DEPRECATED: should be configured with `branchless.smartlog.reverse`)
     #[clap(long)]
     pub reverse: bool,
 
@@ -449,6 +467,10 @@ pub enum Command {
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
+
+        /// How should newly encountered, untracked files be handled?
+        #[clap(action, long = "untracked")]
+        untracked_file_strategy: Option<UntrackedFileStrategy>,
     },
 
     /// Gather information about recent operations to upload as part of a bug
@@ -628,22 +650,16 @@ pub enum Command {
         #[clap(action, short = 'f', long = "force-rewrite", visible_alias = "fr")]
         force_rewrite_public_commits: bool,
 
-        /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
-        /// similar to `git commit`.
-        #[clap(value_parser, short = 'm', long = "message")]
-        messages: Vec<String>,
+        /// Options for supplying commit messages.
+        #[clap(flatten)]
+        message_args: MessageArgs,
 
         /// Throw away the original commit messages.
         ///
         /// If `commit.template` is set, then the editor is pre-populated with
         /// that; otherwise, the editor starts empty.
-        #[clap(action, short = 'd', long = "discard", conflicts_with("messages"))]
+        #[clap(action, short = 'd', long = "discard", conflicts_with_all(&["messages", "commit_to_fixup"]))]
         discard: bool,
-
-        /// A commit to "fix up". The reworded commits will become `fixup!` commits (suitable for
-        /// use with `git rebase --autosquash`) targeting the supplied commit.
-        #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages", "discard"]))]
-        commit_to_fixup: Option<Revset>,
     },
 
     /// `smartlog` command.

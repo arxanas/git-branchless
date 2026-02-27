@@ -8,7 +8,7 @@ use bstr::BString;
 use eyre::Context;
 use tracing::warn;
 
-use crate::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use crate::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::Pluralize;
@@ -657,7 +657,7 @@ mod in_memory {
                                         commit_oid: *commit_oid,
                                         conflicting_paths,
                                     },
-                                ))
+                                ));
                             }
                             Err(other) => eyre::bail!(other),
                         };

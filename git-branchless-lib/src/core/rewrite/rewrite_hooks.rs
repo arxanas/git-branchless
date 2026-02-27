@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::fmt::Write;
 use std::fs::File;
-use std::io::{stdin, BufRead, BufReader, Read, Write as WriteIo};
+use std::io::{BufRead, BufReader, Read, Write as WriteIo, stdin};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -15,7 +15,7 @@ use tempfile::NamedTempFile;
 use tracing::instrument;
 
 use crate::core::check_out::CheckOutCommitOptions;
-use crate::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
+use crate::core::config::{Hint, get_hint_enabled, print_hint_suppression_notice};
 use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};

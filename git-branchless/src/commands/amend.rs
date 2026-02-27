@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use eyre::Context;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
 use itertools::Itertools;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
@@ -21,10 +21,13 @@ use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-    ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
+    RebasePlanPermissions, RepoResource, execute_rebase_plan, move_branches,
 };
-use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
+use lib::git::{
+    AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo, StatusEntry,
+};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -37,6 +40,7 @@ pub fn amend(
     git_run_info: &GitRunInfo,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -128,8 +132,22 @@ pub fn amend(
                 .collect(),
         }
     } else {
+        let untracked_entries = try_exit_code!(process_untracked_files(
+            effects,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            untracked_file_strategy,
+        )?)
+        .into_iter()
+        .map(StatusEntry::new_untracked);
+
         AmendFastOptions::FromWorkingCopy {
-            status_entries: unstaged_entries.clone(),
+            status_entries: unstaged_entries
+                .iter()
+                .cloned()
+                .chain(untracked_entries)
+                .collect_vec(),
         }
     };
     if opts.is_empty() {

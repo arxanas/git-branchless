@@ -1,4 +1,4 @@
-use eyre::{eyre, Context};
+use eyre::{Context, eyre};
 use lib::core::effects::Effects;
 use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};

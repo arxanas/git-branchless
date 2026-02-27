@@ -10,7 +10,7 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_conditions)]
 
 use std::fmt::Write;
-use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
+use std::io::{BufRead, BufReader, Write as WriteIo, stdin, stdout};
 use std::path::{Path, PathBuf};
 
 use console::style;
@@ -22,7 +22,7 @@ use lib::util::EyreExitOr;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use git_branchless_opts::{write_man_pages, InitArgs, InstallManPagesArgs};
+use git_branchless_opts::{InitArgs, InstallManPagesArgs, write_man_pages};
 use lib::core::config::{
     get_default_branch_name, get_default_hooks_dir, get_main_worktree_hooks_dir,
 };
@@ -698,7 +698,7 @@ pub fn command_install_man_pages(ctx: CommandContext, args: InstallManPagesArgs)
 
 #[cfg(test)]
 mod tests {
-    use super::{update_between_lines, UPDATE_MARKER_END, UPDATE_MARKER_START};
+    use super::{UPDATE_MARKER_END, UPDATE_MARKER_START, update_between_lines};
 
     #[test]
     fn test_update_between_lines() {

@@ -3,8 +3,8 @@ use regex::Regex;
 use thiserror::Error;
 use tracing::instrument;
 
-use super::grammar::ExprParser;
 use super::Expr;
+use super::grammar::ExprParser;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
@@ -125,21 +125,21 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo(,)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 4:5\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
         insta::assert_debug_snapshot!(parse("foo(,bar)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 4:5\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
         insta::assert_debug_snapshot!(parse("foo(bar,,)"), @r###"
         Err(
             ParseError(
-                "Unrecognized token `,` found at 8:9\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized token `,` found at 8:9\nExpected one of a commit/branch/tag, a string literal, \"(\", \")\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
@@ -229,7 +229,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"(\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized EOF found at 5\nExpected one of a commit/branch/tag, a string literal, \"(\", \"..\", \":\" or \"::\"",
             ),
         )
         "###);
@@ -657,6 +657,75 @@ mod tests {
                             ),
                             Name(
                                 "3",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_child_operator() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo!"), @r###"
+        Ok(
+            FunctionCall(
+                "sole",
+                [
+                    FunctionCall(
+                        "children",
+                        [
+                            Name(
+                                "foo",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        insta::assert_debug_snapshot!(parse("@! + @!!"), @r###"
+        Ok(
+            FunctionCall(
+                "union",
+                [
+                    FunctionCall(
+                        "sole",
+                        [
+                            FunctionCall(
+                                "children",
+                                [
+                                    Name(
+                                        "@",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    FunctionCall(
+                        "sole",
+                        [
+                            FunctionCall(
+                                "children",
+                                [
+                                    FunctionCall(
+                                        "sole",
+                                        [
+                                            FunctionCall(
+                                                "children",
+                                                [
+                                                    Name(
+                                                        "@",
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                ],
                             ),
                         ],
                     ),

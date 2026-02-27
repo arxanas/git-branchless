@@ -15,10 +15,10 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
-use git_branchless_opts::RecordArgs;
-use git_branchless_reword::edit_message;
+use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
+use git_branchless_reword::{ResolveFixupCommitError, edit_message, resolve_commit_to_fixup};
 use itertools::Itertools;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_commit};
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -26,14 +26,15 @@ use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::Pluralize;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
-    RepoResource,
+    RepoResource, execute_rebase_plan,
 };
+use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
-    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
     CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -52,22 +53,28 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         git_run_info,
     } = ctx;
     let RecordArgs {
-        messages,
+        message_args: MessageArgs {
+            messages,
+            commit_to_fixup,
+        },
         interactive,
         create,
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     } = args;
     record(
         &effects,
         &git_run_info,
         messages,
+        commit_to_fixup,
         interactive,
         create,
         detach,
         insert,
         stash,
+        untracked_file_strategy,
     )
 }
 
@@ -76,11 +83,13 @@ fn record(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     messages: Vec<String>,
+    commit_to_fixup: Option<Revset>,
     interactive: bool,
     branch_name: Option<String>,
     detach: bool,
     insert: bool,
     stash: bool,
+    untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -88,22 +97,50 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    let (snapshot, working_copy_changes_type) = {
+    let (snapshot, working_copy_changes_type, files_to_add) = {
         let head_info = repo.get_head_info()?;
         let index = repo.get_index()?;
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
         let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
-        match working_copy_changes_type {
+        let files_to_add = match working_copy_changes_type {
             WorkingCopyChangesType::None => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "There are no changes to tracked files in the working copy to commit."
-                )?;
-                return Ok(Ok(()));
+                let files_to_add = if interactive {
+                    Vec::new()
+                } else {
+                    try_exit_code!(process_untracked_files(
+                        effects,
+                        git_run_info,
+                        &repo,
+                        event_tx_id,
+                        untracked_file_strategy,
+                    )?)
+                };
+
+                if files_to_add.is_empty() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "There are no changes to tracked files in the working copy to commit."
+                    )?;
+                    return Ok(Ok(()));
+                } else {
+                    files_to_add
+                }
             }
-            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged if interactive => {
+                Vec::new()
+            }
+            WorkingCopyChangesType::Staged => Vec::new(),
+            WorkingCopyChangesType::Unstaged => {
+                try_exit_code!(process_untracked_files(
+                    effects,
+                    git_run_info,
+                    &repo,
+                    event_tx_id,
+                    untracked_file_strategy,
+                )?)
+            }
             WorkingCopyChangesType::Conflicts => {
                 writeln!(
                     effects.get_output_stream(),
@@ -115,8 +152,9 @@ fn record(
                 )?;
                 return Ok(Err(ExitCode(1)));
             }
-        }
-        (snapshot, working_copy_changes_type)
+        };
+
+        (snapshot, working_copy_changes_type, files_to_add)
     };
 
     if let Some(branch_name) = branch_name {
@@ -158,6 +196,31 @@ fn record(
             )?);
         }
     } else {
+        if !files_to_add.is_empty() {
+            // call `git add` for the new untracked files to be commited
+            //
+            // Note that `git commit` has some functionality for this, by
+            // listing files as arguments to the commit command. However, the
+            // docs for that state "the commit will ignore changes staged in the
+            // index, and instead record the current content of the listed files
+            // (which must already be known to Git);" (See
+            // https://git-scm.com/docs/git-commit#_description, item 3)
+            //
+            // The implication is that new working copy files would cause the
+            // commit to ignore any changes in the index, which is not what we
+            // want. Looking into this can be future scope; it could avoid this
+            // extra call to `git add`. On the other hand, this extra call is
+            // not very onerous.
+
+            let args = {
+                let mut args = vec!["add".to_string()];
+                // use repo-canonical paths even if adding in a repo subdir
+                args.extend(files_to_add.iter().map(|p| format!(":/{p}")));
+                args
+            };
+            let _ = git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?;
+        }
+
         let messages = if messages.is_empty() && stash {
             get_default_stash_message(&repo, effects, &snapshot, &working_copy_changes_type)
                 .map(|message| vec![message])?
@@ -165,11 +228,59 @@ fn record(
             messages
         };
         let args = {
-            let mut args = vec!["commit"];
-            args.extend(messages.iter().flat_map(|message| ["--message", message]));
+            let mut args = vec!["commit".to_string()];
+            args.extend(
+                messages
+                    .iter()
+                    .flat_map(|message| ["--message".to_string(), message.to_string()]),
+            );
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-                args.push("--all");
+                args.push("--all".to_string());
             }
+            if let Some(revset) = commit_to_fixup {
+                let event_replayer =
+                    EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+                let event_cursor = event_replayer.make_default_cursor();
+                let references_snapshot = repo.get_references_snapshot()?;
+                let mut dag = Dag::open_and_sync(
+                    effects,
+                    &repo,
+                    &event_replayer,
+                    event_cursor,
+                    &references_snapshot,
+                )?;
+                let head: Option<&[lib::git::Commit<'_>]> =
+                    snapshot.head_commit.as_ref().map(std::slice::from_ref);
+                let commit = match resolve_commit_to_fixup(
+                    &repo,
+                    &mut dag,
+                    effects,
+                    &revset,
+                    &ResolveRevsetOptions::default(),
+                    head,
+                )? {
+                    Ok(commit) => commit,
+                    Err(ResolveFixupCommitError::NotAnAncestor) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "The commit supplied to --fixup must be an ancestor of the commit being created.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                    Err(ResolveFixupCommitError::MoreThanOneCommit {
+                        revset_to_fixup,
+                        commit_count,
+                    }) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "--fixup expects exactly 1 commit, but '{revset_to_fixup}' evaluated to {commit_count}.\nAborting.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+                let commit = commit.get_oid().to_string();
+                args.extend(["--fixup".to_string(), commit]);
+            };
             args
         };
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
@@ -218,7 +329,9 @@ fn record(
                         )?);
                     }
                     parent_commits => {
-                        eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                        eyre::bail!(
+                            "git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}"
+                        );
                     }
                 }
 
@@ -232,11 +345,15 @@ fn record(
                 let head_commit = repo.find_commit_or_fail(*oid)?;
                 match head_commit.get_parents().as_slice() {
                     [] => {
-                        eyre::bail!("git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible.");
+                        eyre::bail!(
+                            "git-branchless record --stash seems to have created a root commit (commit without parents), but this should be impossible."
+                        );
                     }
                     [parent_commit] => Some(CheckoutTarget::Oid(parent_commit.get_oid())),
                     parent_commits => {
-                        eyre::bail!("git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}");
+                        eyre::bail!(
+                            "git-branchless record --stash seems to have created a merge commit, but this should be impossible. Parents: {parent_commits:?}"
+                        );
                     }
                 }
             }
@@ -373,10 +490,12 @@ fn record_interactive(
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
         .map(|file| -> eyre::Result<UpdateIndexCommand> {
+            let (selected, _unselected) = file.get_selected_contents();
+
             let mode = {
                 let default_mode = FileMode::Blob;
-                match file.get_file_mode() {
-                    None => {
+                match selected.file_mode {
+                    scm_record::FileMode::Absent => {
                         warn!(
                             ?file,
                             ?default_mode,
@@ -384,7 +503,7 @@ fn record_interactive(
                         );
                         default_mode
                     }
-                    Some(mode) => match i32::try_from(mode) {
+                    scm_record::FileMode::Unix(mode) => match i32::try_from(mode) {
                         Ok(mode) => FileMode::from(mode),
                         Err(err) => {
                             warn!(
@@ -399,19 +518,20 @@ fn record_interactive(
                 }
             };
 
-            let (selected, _unselected) = file.get_selected_contents();
-            let oid = match selected {
-                SelectedContents::Absent => MaybeZeroOid::Zero,
-                SelectedContents::Unchanged => {
-                    old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
-                }
-                SelectedContents::Binary {
-                    old_description: _,
-                    new_description: _,
-                } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
-                SelectedContents::Present { contents } => {
-                    MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
-                }
+            let oid = match selected.file_mode {
+                scm_record::FileMode::Absent => MaybeZeroOid::Zero,
+                scm_record::FileMode::Unix(_) => match selected.contents {
+                    SelectedContents::Unchanged => {
+                        old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
+                    }
+                    SelectedContents::Binary {
+                        old_description: _,
+                        new_description: _,
+                    } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
+                    SelectedContents::Text { contents } => {
+                        MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
+                    }
+                },
             };
             let command = match oid {
                 MaybeZeroOid::Zero => UpdateIndexCommand::Delete {

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use branchless::core::eventlog::testing::{new_event_cursor, new_event_transaction_id};
 use branchless::core::eventlog::{
-    testing::new_event_replayer, Event, EventLogDb, EventTransactionId,
+    Event, EventLogDb, EventTransactionId, testing::new_event_replayer,
 };
 use branchless::git::{MaybeZeroOid, NonZeroOid, ReferenceName};
 use branchless::testing::make_git;

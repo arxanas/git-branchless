@@ -14,26 +14,26 @@ mod test;
 mod tree;
 
 pub use config::{Config, ConfigRead, ConfigValue, ConfigWrite};
-pub use diff::{process_diff_for_record, summarize_diff_for_temporary_commit, Diff};
-pub use index::{update_index, Index, IndexEntry, Stage, UpdateIndexCommand};
+pub use diff::{Diff, process_diff_for_record, summarize_diff_for_temporary_commit};
+pub use index::{Index, IndexEntry, Stage, UpdateIndexCommand, update_index};
 pub use object::Commit;
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use reference::{
     Branch, BranchType, CategorizedReferenceName, Reference, ReferenceName, ReferenceTarget,
 };
 pub use repo::{
-    message_prettify, AmendFastOptions, CherryPickFastOptions, CreateCommitFastError,
-    Error as RepoError, GitErrorCode, GitVersion, PatchId, Repo, ResolvedReferenceInfo,
-    Result as RepoResult, Time,
+    AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, Error as RepoError,
+    GitErrorCode, GitVersion, PatchId, Repo, ResolvedReferenceInfo, Result as RepoResult, Time,
+    message_prettify,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
 pub use status::{FileMode, FileStatus, StatusEntry};
 pub use test::{
-    get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
-    make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TestCommand,
-    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE, TestCommand, get_latest_test_command_path, get_test_locks_dir,
+    get_test_tree_dir, get_test_worktrees_dir, make_test_command_slug,
 };
 pub use tree::{
-    dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, make_empty_tree, Tree,
+    Tree, dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, make_empty_tree,
 };

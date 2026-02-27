@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use git_branchless_undo::testing::{select_past_event, undo_events};
 use git_branchless_undo::tui::testing::{
-    screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
+    CursiveTestingBackend, CursiveTestingEvent, screen_to_string,
 };
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
@@ -12,7 +12,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, trim_lines, Git, GitInitOptions, GitRunOptions};
+use lib::testing::{Git, GitInitOptions, GitRunOptions, make_git, trim_lines};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};
@@ -412,7 +412,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
                                 to 62fc20d create test1.txt
         3. Check out from 96d1c37 create test2.txt
                        to 62fc20d create test1.txt
-        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         Applied 3 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -642,7 +642,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
                        to f777ecc create initial.txt
         5. Delete branch foo at f777ecc create initial.txt
 
-        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         Applied 5 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -805,7 +805,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
                                 to 62fc20d create test1.txt
         3. Check out from 62fc20d create test1.txt
                        to <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>
-        Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach --
         Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
         "###);
         assert!(exit_code > 0);
@@ -880,7 +880,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
                                 to 96d1c37 create test2.txt
         4. Check out from 9ed8f9a bad message
                        to 96d1c37 create test2.txt
-        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         :
         @ 96d1c37 (master) create test2.txt
         Applied 4 inverse events.
