@@ -540,13 +540,13 @@ pub fn split(
                 (_, None) | (SplitMode::DetachAfter, Some(_)) => {
                     builder.move_subtree(child, vec![remainder_commit_oid])?;
                     if should_reparent {
-                        builder.reparent_subtree(child, vec![remainder_commit_oid], &repo)?;
+                        builder.reparent_commit(child, vec![remainder_commit_oid], &repo)?;
                     }
                 }
                 (_, Some(extracted_commit_oid)) => {
                     builder.move_subtree(child, vec![extracted_commit_oid])?;
                     if should_reparent {
-                        builder.reparent_subtree(child, vec![extracted_commit_oid], &repo)?;
+                        builder.reparent_commit(child, vec![extracted_commit_oid], &repo)?;
                     }
                 }
             }

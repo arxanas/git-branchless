@@ -153,7 +153,7 @@ fn restack_commits(
             for child_oid in abandoned_child_oids {
                 builder.move_subtree(child_oid, vec![dest_oid])?;
                 if reparent {
-                    builder.reparent_subtree(child_oid, vec![dest_oid], &repo)?;
+                    builder.reparent_commit(child_oid, vec![dest_oid], &repo)?;
                 }
             }
         }

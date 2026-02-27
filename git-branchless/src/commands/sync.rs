@@ -279,7 +279,7 @@ fn execute_main_branch_sync_plan(
     };
     builder.move_subtree(root_commit_oid, vec![upstream_main_branch_oid])?;
     if reparent {
-        builder.reparent_subtree(root_commit_oid, vec![upstream_main_branch_oid], repo)?;
+        builder.reparent_commit(root_commit_oid, vec![upstream_main_branch_oid], repo)?;
     }
     let rebase_plan = match builder.build(effects, thread_pool, repo_pool)? {
         Ok(rebase_plan) => rebase_plan,
@@ -373,7 +373,7 @@ fn execute_sync_plans(
 
                     builder.move_subtree(root_commit.get_oid(), vec![main_branch_oid])?;
                     if reparent {
-                        builder.reparent_subtree(
+                        builder.reparent_commit(
                             root_commit.get_oid(),
                             vec![main_branch_oid],
                             &repo,
