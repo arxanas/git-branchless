@@ -266,7 +266,7 @@ pub fn amend(
             builder.move_subtree(descendant_oid, parent_oids.clone())?;
 
             if move_options.reparent {
-                builder.reparent_subtree(descendant_oid, parent_oids, &repo)?;
+                builder.reparent_commit(descendant_oid, parent_oids, &repo)?;
             }
         }
 
