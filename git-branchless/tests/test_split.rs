@@ -663,17 +663,17 @@ fn test_split_reparent() -> eyre::Result<()> {
     {
         let (stdout, _stderr) =
             git.branchless("split", &["HEAD~", "test2.txt", "--discard", "--reparent"])?;
-        insta::assert_snapshot!(&stdout, @r"
-            Attempting rebase in-memory...
-            [1/1] Committed as: 3aec2d3 second commit
-            branchless: processing 1 rewritten commit
-            branchless: running command: <git-executable> checkout 3aec2d3c59e90647cef2f4bbb49a4e09790611c6
-            In-memory rebase succeeded.
-            O f777ecc (master) create initial.txt
-            |
-            o 2932db7 first commit
-            |
-            @ 3aec2d3 second commit
+        insta::assert_snapshot!(&stdout, @"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 3aec2d3 second commit
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 3aec2d3c59e90647cef2f4bbb49a4e09790611c6 --
+        In-memory rebase succeeded.
+        O f777ecc (master) create initial.txt
+        |
+        o 2932db7 first commit
+        |
+        @ 3aec2d3 second commit
         ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
@@ -700,18 +700,18 @@ fn test_split_reparent() -> eyre::Result<()> {
         let (stdout, _stderr) =
             git.branchless("split", &["HEAD~", "test1.txt", "--detach", "--reparent"])?;
         insta::assert_snapshot!(&stdout, @r"
-            Attempting rebase in-memory...
-            [1/1] Committed as: 6249d09 second commit
-            branchless: processing 1 rewritten commit
-            branchless: running command: <git-executable> checkout 6249d093020c9d764e62b8bf8e67228a4445b4f0
-            In-memory rebase succeeded.
-            O f777ecc (master) create initial.txt
-            |
-            o 52618ab first commit
-            |\
-            | o 4271e93 temp(split): test1.txt (+1)
-            |
-            @ 6249d09 second commit
+        Attempting rebase in-memory...
+        [1/1] Committed as: 6249d09 second commit
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 6249d093020c9d764e62b8bf8e67228a4445b4f0 --
+        In-memory rebase succeeded.
+        O f777ecc (master) create initial.txt
+        |
+        o 52618ab first commit
+        |\
+        | o 4271e93 temp(split): test1.txt (+1)
+        |
+        @ 6249d09 second commit
         ");
     }
 
