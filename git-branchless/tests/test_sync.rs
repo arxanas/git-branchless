@@ -241,17 +241,17 @@ fn test_sync_reparent() -> eyre::Result<()> {
         Switched to branch 'master'
         branchless: processing checkout
         "###);
-        insta::assert_snapshot!(stdout, @r"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/2] Committed as: 9343a7d create test1.txt
         [2/2] Committed as: e14bee9 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Attempting rebase in-memory...
         [1/1] Committed as: e8f8c47 create test4.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Synced 62fc20d create test1.txt
         Synced 2b633ed create test4.txt
