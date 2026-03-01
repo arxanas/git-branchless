@@ -32,15 +32,15 @@ push = false
 tag = false
 
 [workspace.dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 async-trait = "0.1.89"
 bstr = "1.12.1"
 bugreport = "0.5.1"
 chashmap = "2.2.2"
-chrono = "0.4.43"
+chrono = "0.4.44"
 chrono-english = "0.1.8"
 chronoutil = "0.2.7"
-clap = "4.5.56"
+clap = "4.5.60"
 clap_mangen = "0.2.27"
 color-eyre = "0.6.5"
 concolor = { version = "0.1.1", features = ["auto"] }
@@ -54,7 +54,7 @@ cursive_core = "0.4.6"
 eden_dag = { package = "sapling-dag", version = "0.1.0" }
 eyre = "0.6.12"
 fslock = "0.2.1"
-futures = "0.3.30"
+futures = "0.3.32"
 git-branchless-hook = { version = "0.10.0", path = "git-branchless-hook" }
 git-branchless-init = { version = "0.10.0", path = "git-branchless-init" }
 git-branchless-invoke = { version = "0.10.0", path = "git-branchless-invoke" }
@@ -72,10 +72,10 @@ git-branchless-undo = { version = "0.10.0", path = "git-branchless-undo" }
 git2 = { version = "0.20.4", default-features = false }
 glob = "0.3.3"
 indexmap = "2.13.0"
-indicatif = { version = "0.18.3", features = ["improved_unicode"] }
+indicatif = { version = "0.18.4", features = ["improved_unicode"] }
 itertools = "0.14.0"
-lalrpop = "0.22.2"
-lalrpop-util = "0.22.2"
+lalrpop = "0.23.0"
+lalrpop-util = "0.23.0"
 lazy_static = "1.5.0"
 lib = { package = "git-branchless-lib", version = "0.10.0", path = "git-branchless-lib" }
 man = "0.3.0"
@@ -84,7 +84,7 @@ once_cell = "1.21.3"
 path-slash = "0.2.1"
 portable-pty = "0.9.0"
 rayon = "1.11.0"
-regex = "1.12.2"
+regex = "1.12.3"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 scm-bisect = { version = "0.3.0", path = "scm-bisect" }
 scm-diff-editor = "0.10.1"
@@ -93,7 +93,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.149"
 shell-words = "1.1.1"
 skim = "0.15.7"
-tempfile = "3.24.0"
+tempfile = "3.26.0"
 textwrap = "0.16.2"
 thiserror = "2.0.18"
 tracing = "0.1.44"
@@ -104,7 +104,7 @@ vt100 = "0.15.2"
 
 # dev-dependencies
 assert_cmd = "2.1.2"
-cc = "1.2.55"
-criterion = { version = "0.8.1", features = ["html_reports"] }
-insta = "1.46.2"
+cc = "1.2.56"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+insta = "1.46.3"
 maplit = "1.0.2"
