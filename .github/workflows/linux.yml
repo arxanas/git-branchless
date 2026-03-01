@@ -46,7 +46,7 @@ jobs:
         run: tar -czf git.tar.gz git git-*
 
       - name: "Upload artifact: git"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: git-${{ matrix.git-version }}
           path: git.tar.gz
@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: "Download artifact: git"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: git-${{ matrix.git-version }}
 
