@@ -35,14 +35,12 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
     let exit_code = match command {
         Command::Amend {
             move_options,
-            reparent,
             untracked_file_strategy,
         } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
-            reparent,
             untracked_file_strategy,
         )?,
 
