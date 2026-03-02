@@ -17,4 +17,4 @@ tracing = "0.1"
 [dev-dependencies]
 insta = "1"
 maplit = "1"
-proptest = "1.9.0"
+proptest = "1.10.0"
