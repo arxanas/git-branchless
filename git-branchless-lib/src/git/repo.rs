@@ -13,6 +13,8 @@ use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::num::TryFromIntError;
 use std::ops::Add;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -1242,6 +1244,68 @@ impl Repo {
         Ok(Some(blob))
     }
 
+    /// Read a symlink and create a blob corresponding to its target path.
+    /// If the symlink doesn't exist on disk, returns `None` instead.
+    #[instrument]
+    pub fn create_blob_from_symlink_path(&self, path: &Path) -> Result<Option<NonZeroOid>> {
+        let path = self
+            .get_working_copy_path()
+            .ok_or_else(|| Error::CreateBlobFromPath {
+                source: eyre::eyre!(
+                    "Repository at {:?} has no working copy path (is bare)",
+                    self.get_path()
+                ),
+                path: path.to_path_buf(),
+            })?
+            .join(path);
+        let link_target = match std::fs::read_link(&path) {
+            Ok(link_target) => link_target,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => {
+                return Err(Error::CreateBlobFromPath {
+                    source: err.into(),
+                    path,
+                });
+            }
+        };
+
+        #[cfg(unix)]
+        let link_target_bytes = link_target.as_os_str().as_bytes().to_vec();
+        #[cfg(not(unix))]
+        let link_target_bytes = link_target.to_string_lossy().into_owned().into_bytes();
+
+        let blob_oid = self.create_blob_from_contents(&link_target_bytes)?;
+        Ok(Some(blob_oid))
+    }
+
+    /// Create an object for the given path in the working copy according to its file mode.
+    #[instrument]
+    pub fn create_blob_from_path_for_mode(
+        &self,
+        path: &Path,
+        file_mode: FileMode,
+        index: &Index,
+    ) -> Result<Option<NonZeroOid>> {
+        match file_mode {
+            FileMode::Blob | FileMode::BlobExecutable | FileMode::BlobGroupWritable => {
+                self.create_blob_from_path(path)
+            }
+            FileMode::Link => self.create_blob_from_symlink_path(path),
+            FileMode::Commit => match index.get_entry(path) {
+                Some(IndexEntry {
+                    oid: MaybeZeroOid::NonZero(oid),
+                    ..
+                }) => Ok(Some(oid)),
+                Some(IndexEntry {
+                    oid: MaybeZeroOid::Zero,
+                    ..
+                })
+                | None => Ok(None),
+            },
+            FileMode::Tree | FileMode::Unreadable => Ok(None),
+        }
+    }
+
     /// Create a blob corresponding to the provided byte slice.
     #[instrument]
     pub fn create_blob_from_contents(&self, contents: &[u8]) -> Result<NonZeroOid> {
@@ -1547,48 +1611,41 @@ impl Repo {
             self.dehydrate_commit(parent_commit, changed_paths.as_slice(), true)?;
         let dehydrated_parent_tree = dehydrated_parent.get_tree()?;
 
-        let repo_path = self
-            .get_working_copy_path()
-            .ok_or(Error::NoWorkingCopyPath)?;
-        let repo_path = &repo_path;
+        let index = self.get_index()?;
+        let index = &index;
         let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = match opts {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
                 .iter()
                 .flat_map(|entry| {
+                    let file_mode = entry.working_copy_file_mode;
                     entry.paths().into_iter().map(
                         move |path| -> Result<(PathBuf, Option<(NonZeroOid, FileMode)>)> {
-                            let file_path = repo_path.join(&path);
-                            // Try to create a new blob OID based on the current on-disk
-                            // contents of the file in the working copy.
                             let entry = self
-                                .create_blob_from_path(&file_path)?
-                                .map(|oid| (oid, entry.working_copy_file_mode));
+                                .create_blob_from_path_for_mode(&path, file_mode, index)?
+                                .map(|oid| (oid, file_mode));
                             Ok((path, entry))
                         },
                     )
                 })
                 .collect::<Result<HashMap<_, _>>>()?,
-            AmendFastOptions::FromIndex { paths } => {
-                let index = self.get_index()?;
-                paths
-                    .iter()
-                    .filter_map(|path| match index.get_entry(path) {
-                        Some(IndexEntry {
-                            oid: MaybeZeroOid::Zero,
-                            ..
-                        }) => {
-                            warn!(?path, "index entry was zero");
-                            None
-                        }
-                        Some(IndexEntry {
-                            oid: MaybeZeroOid::NonZero(oid),
-                            file_mode,
-                            ..
-                        }) => Some((path.clone(), Some((oid, file_mode)))),
-                        None => Some((path.clone(), None)),
-                    })
-                    .collect::<HashMap<_, _>>()
-            }
+            AmendFastOptions::FromIndex { paths } => paths
+                .iter()
+                .filter_map(|path| match index.get_entry(path) {
+                    Some(IndexEntry {
+                        oid: MaybeZeroOid::Zero,
+                        ..
+                    }) => {
+                        warn!(?path, "index entry was zero");
+                        None
+                    }
+                    Some(IndexEntry {
+                        oid: MaybeZeroOid::NonZero(oid),
+                        file_mode,
+                        ..
+                    }) => Some((path.clone(), Some((oid, file_mode)))),
+                    None => Some((path.clone(), None)),
+                })
+                .collect::<HashMap<_, _>>(),
             AmendFastOptions::FromCommit { commit } => {
                 let amended_tree = self.cherry_pick_fast(
                     commit,
