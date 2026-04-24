@@ -1,3 +1,5 @@
+use std::fs;
+
 use lib::testing::{
     GitRunOptions, make_git,
     pty::{PtyAction, run_in_pty},
@@ -1495,6 +1497,93 @@ fn test_amend_with_branch_name_matching_file() -> eyre::Result<()> {
         @ d408d49 (> foo) create test1.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_with_dirty_submodule() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    let submodule_source_path = git.repo_path.join("submodule-source");
+    let submodule_source_path_str = submodule_source_path
+        .to_str()
+        .expect("submodule source path should be UTF-8");
+
+    {
+        // create repo for submodule
+        fs::create_dir(&submodule_source_path)?;
+        git.run(&["-C", submodule_source_path_str, "init"])?;
+        git.run(&[
+            "-C",
+            submodule_source_path_str,
+            "config",
+            "user.name",
+            "Testy McTestface",
+        ])?;
+        git.run(&[
+            "-C",
+            submodule_source_path_str,
+            "config",
+            "user.email",
+            "test@example.com",
+        ])?;
+        fs::write(submodule_source_path.join("file.txt"), "contents\n")?;
+        git.run(&["-C", submodule_source_path_str, "add", "file.txt"])?;
+        git.run(&["-C", submodule_source_path_str, "commit", "-m", "initial"])?;
+    }
+
+    {
+        // add submodule to main repo
+        git.run_with_options(
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                submodule_source_path_str,
+                "sm",
+            ],
+            &GitRunOptions::default(),
+        )?;
+        git.run(&["add", ".gitmodules", "sm"])?;
+        git.run(&["commit", "-m", "add submodule"])?;
+    }
+
+    {
+        // make change in submodule
+        git.run(&["-C", "sm", "config", "user.name", "Testy McTestface"])?;
+        git.run(&["-C", "sm", "config", "user.email", "test@example.com"])?;
+        fs::write(git.repo_path.join("sm/file.txt"), "updated\n")?;
+        git.run(&["-C", "sm", "commit", "-am", "update"])?;
+        git.write_file_txt("test1", "updated contents")?;
+    }
+
+    let (stdout, _stderr) = git.branchless("amend", &[])?;
+
+    insta::with_settings!(
+        {
+            filters => [
+                // The commit SHA will always be nondeterministic because the
+                // submodule is in a directory created by tempdir, which has a
+                // random name, and is included in .gitmodules. So even if we
+                // can control the author and timestamp, we can't control the
+                // content of that commit.
+                ("reset [0-9a-f]+ --", "reset REDACTED_SHA --")
+            ]
+        },
+        {
+            insta::assert_snapshot!(stdout, @r###"
+                branchless: running command: <git-executable> reset REDACTED_SHA --
+                Unstaged changes after reset:
+                M	sm
+                Amended with 2 uncommitted changes.
+            "###);
+        }
+    );
 
     Ok(())
 }
