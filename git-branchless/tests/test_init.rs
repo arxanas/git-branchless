@@ -664,10 +664,10 @@ fn test_install_man_pages() -> eyre::Result<()> {
     See the documentation at https://github.com/arxanas/git\-branchless/wiki.
     .SH OPTIONS
     .TP
-    \fB\-C\fR=\fIWORKING_DIRECTORY\fR
+    \fB\-C\fR \fI<WORKING_DIRECTORY>\fR
     Change to the given directory before executing the rest of the program. (The option is called `\-C` for symmetry with Git.)
     .TP
-    \fB\-\-color\fR=\fICOLOR\fR
+    \fB\-\-color\fR \fI<COLOR>\fR
     Flag to force enable or disable terminal colors
     .br
 
