@@ -26,6 +26,28 @@ use regex::{Captures, Regex};
 use tempfile::TempDir;
 use tracing::{instrument, warn};
 
+/// Find the cargo target profile directory (e.g. `target/debug/`) by
+/// navigating from the current test executable's path.
+fn find_cargo_target_profile_dir() -> Option<PathBuf> {
+    let current_exe = std::env::current_exe().ok()?;
+    let maybe_deps = current_exe.parent()?;
+    // Integration test binaries live at `target/{profile}/{binary}`,
+    // while unit test binaries live at `target/{profile}/deps/{binary}-{hash}`.
+    if maybe_deps.file_name()? == "deps" {
+        Some(maybe_deps.parent()?.to_path_buf())
+    } else {
+        Some(maybe_deps.to_path_buf())
+    }
+}
+
+/// Look up the path to a cargo-built binary, returning `None` if it hasn't
+/// been built yet rather than panicking.
+fn try_find_cargo_bin(name: &str) -> Option<PathBuf> {
+    let bin_path =
+        find_cargo_target_profile_dir()?.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    bin_path.exists().then_some(bin_path)
+}
+
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
 const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
@@ -156,13 +178,8 @@ impl Git {
 
     /// Get the `PATH` environment variable to use for testing.
     pub fn get_path_for_env(&self) -> OsString {
-        // TODO: de-deprecate after Rust 1.93
-        // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
-        #[allow(deprecated)]
-        let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
-        let branchless_path = cargo_bin_path
-            .parent()
-            .expect("Unable to find git-branchless path parent");
+        let branchless_path = find_cargo_target_profile_dir()
+            .expect("Unable to find git-branchless target directory");
         let bash = get_sh().expect("bash missing?");
         let bash_path = bash.parent().unwrap();
         std::env::join_paths(vec![
@@ -374,14 +391,11 @@ stderr:
         let result = self.run_with_options(&git_run_args, options);
 
         if !should_use_separate_command_binary(subcommand) {
-            // TODO: de-deprecate after Rust 1.93
-            // see https://github.com/assert-rs/assert_cmd/issues/268#issuecomment-3733606142
-            #[allow(deprecated)]
-            let main_command_exe = assert_cmd::cargo::cargo_bin("git-branchless");
-            #[allow(deprecated)]
-            let subcommand_exe =
-                assert_cmd::cargo::cargo_bin(format!("git-branchless-{subcommand}"));
-            if main_command_exe.exists() && subcommand_exe.exists() {
+            let main_command_exe = try_find_cargo_bin("git-branchless");
+            let subcommand_exe = try_find_cargo_bin(&format!("git-branchless-{subcommand}"));
+            if let (Some(main_command_exe), Some(subcommand_exe)) =
+                (main_command_exe, subcommand_exe)
+            {
                 let main_command_mtime = main_command_exe.metadata()?.modified()?;
                 let subcommand_mtime = subcommand_exe.metadata()?.modified()?;
                 if subcommand_mtime > main_command_mtime {

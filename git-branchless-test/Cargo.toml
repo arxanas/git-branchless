@@ -31,6 +31,5 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = { workspace = true }
 insta = { workspace = true }
 maplit = { workspace = true }
