@@ -43,7 +43,6 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
-assert_cmd = { workspace = true }
 async-trait = { workspace = true }
 bstr = { workspace = true }
 chashmap = { workspace = true }
