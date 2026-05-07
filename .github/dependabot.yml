@@ -15,13 +15,6 @@ updates:
       deps:
         patterns: 
           - "*"
-        exclude-patterns:
-          - "clap_mangen"
-           
-      # flakey or problematic deps are still submitted individually
-      clap_mangen:
-        patterns:
-          - "clap_mangen"
 
   # group GH actions deps into a single monthly PR
   - package-ecosystem: "github-actions"
