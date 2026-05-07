@@ -393,7 +393,15 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                 resolve_merge_conflicts,
                 dump_rebase_constraints,
                 dump_rebase_plan,
+                reparent: _, // always implied
             } = move_options;
+
+            if *resolve_merge_conflicts {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Ignoring --merge since --reparent is always implied when fixing commits."
+                )?;
+            }
 
             let force_in_memory = true;
             if *force_on_disk {
