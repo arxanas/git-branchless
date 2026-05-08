@@ -1,3 +1,5 @@
+use std::fs;
+
 use lib::testing::{
     GitRunOptions, make_git,
     pty::{PtyAction, run_in_pty},
@@ -1495,6 +1497,63 @@ fn test_amend_with_branch_name_matching_file() -> eyre::Result<()> {
         @ d408d49 (> foo) create test1.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_with_dirty_submodule() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    let submodule_source_path = git.repo_path.join("submodule-source");
+    fs::create_dir(&submodule_source_path)?;
+    let submodule_source_path_str = submodule_source_path
+        .to_str()
+        .expect("submodule source path should be UTF-8");
+    git.run(&["-C", submodule_source_path_str, "init"])?;
+    git.run(&[
+        "-C",
+        submodule_source_path_str,
+        "config",
+        "user.name",
+        "Testy McTestface",
+    ])?;
+    git.run(&[
+        "-C",
+        submodule_source_path_str,
+        "config",
+        "user.email",
+        "test@example.com",
+    ])?;
+    fs::write(submodule_source_path.join("file.txt"), "contents\n")?;
+    git.run(&["-C", submodule_source_path_str, "add", "file.txt"])?;
+    git.run(&["-C", submodule_source_path_str, "commit", "-m", "initial"])?;
+
+    git.run_with_options(
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            submodule_source_path_str,
+            "sm",
+        ],
+        &GitRunOptions::default(),
+    )?;
+    git.run(&["add", ".gitmodules", "sm"])?;
+    git.run(&["commit", "-m", "add submodule"])?;
+
+    git.run(&["-C", "sm", "config", "user.name", "Testy McTestface"])?;
+    git.run(&["-C", "sm", "config", "user.email", "test@example.com"])?;
+    fs::write(git.repo_path.join("sm/file.txt"), "updated\n")?;
+    git.run(&["-C", "sm", "commit", "-am", "update"])?;
+    git.write_file_txt("test1", "updated contents")?;
+
+    let (stdout, _stderr) = git.branchless("amend", &[])?;
+    assert!(stdout.contains("Amended with"));
 
     Ok(())
 }

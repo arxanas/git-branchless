@@ -1,9 +1,10 @@
+use std::fs;
 use std::path::PathBuf;
 
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{FileMode, FileStatus, StatusEntry, WorkingCopyChangesType};
-use branchless::testing::make_git;
+use branchless::testing::{GitInitOptions, GitRunOptions, make_git};
 
 #[test]
 fn test_parse_status_line() {
@@ -277,6 +278,109 @@ fn test_get_status() -> eyre::Result<()> {
             },
         }
         "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_get_status_with_dirty_submodule() -> eyre::Result<()> {
+    let git = make_git()?;
+    let git_run_info = git.get_git_run_info();
+    git.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: true,
+        run_branchless_init: false,
+    })?;
+
+    let submodule_source_path = git.repo_path.join("submodule-source");
+    fs::create_dir(&submodule_source_path)?;
+    let submodule_source_path_str = submodule_source_path
+        .to_str()
+        .expect("submodule source path should be UTF-8");
+    git.run(&["-C", submodule_source_path_str, "init"])?;
+    git.run(&[
+        "-C",
+        submodule_source_path_str,
+        "config",
+        "user.name",
+        "Testy McTestface",
+    ])?;
+    git.run(&[
+        "-C",
+        submodule_source_path_str,
+        "config",
+        "user.email",
+        "test@example.com",
+    ])?;
+    fs::write(submodule_source_path.join("file.txt"), "contents\n")?;
+    git.run(&["-C", submodule_source_path_str, "add", "file.txt"])?;
+    git.run(&["-C", submodule_source_path_str, "commit", "-m", "initial"])?;
+
+    git.run_with_options(
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            submodule_source_path_str,
+            "sm",
+        ],
+        &GitRunOptions::default(),
+    )?;
+    git.run(&["add", ".gitmodules", "sm"])?;
+    git.run(&["commit", "-m", "add submodule"])?;
+
+    git.run(&["-C", "sm", "config", "user.name", "Testy McTestface"])?;
+    git.run(&["-C", "sm", "config", "user.email", "test@example.com"])?;
+    fs::write(git.repo_path.join("sm/file.txt"), "updated\n")?;
+    git.run(&["-C", "sm", "commit", "-am", "update"])?;
+
+    let glyphs = Glyphs::text();
+    let effects = Effects::new_suppress_for_test(glyphs);
+    let repo = git.get_repo()?;
+    let (_snapshot, status) = repo.get_status(
+        &effects,
+        &git_run_info,
+        &repo.get_index()?,
+        &repo.get_head_info()?,
+        None,
+    )?;
+
+    assert!(status.iter().any(|entry| {
+        entry.path == PathBuf::from("sm") && entry.working_copy_file_mode == FileMode::Commit
+    }));
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_get_status_with_directory_symlink_trailing_slash() -> eyre::Result<()> {
+    let git = make_git()?;
+    let git_run_info = git.get_git_run_info();
+    git.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        run_branchless_init: false,
+    })?;
+
+    fs::create_dir(git.repo_path.join("dir"))?;
+    fs::write(git.repo_path.join("dir/file.txt"), "contents\n")?;
+    std::os::unix::fs::symlink("dir/", git.repo_path.join("dir_symlink"))?;
+    git.run(&["add", "dir/file.txt", "dir_symlink"])?;
+
+    let glyphs = Glyphs::text();
+    let effects = Effects::new_suppress_for_test(glyphs);
+    let repo = git.get_repo()?;
+    let (_snapshot, status) = repo.get_status(
+        &effects,
+        &git_run_info,
+        &repo.get_index()?,
+        &repo.get_head_info()?,
+        None,
+    )?;
+
+    assert!(status.iter().any(|entry| {
+        entry.path == PathBuf::from("dir_symlink") && entry.working_copy_file_mode == FileMode::Link
+    }));
 
     Ok(())
 }
