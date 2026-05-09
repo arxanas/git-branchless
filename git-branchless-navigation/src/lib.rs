@@ -36,7 +36,9 @@ use lib::core::formatting::Pluralize;
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
+    WorktreeDescriptor,
 };
+use lib::core::worktree::get_linked_worktrees;
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
 use crate::prompt::prompt_select_commit;
@@ -361,6 +363,7 @@ pub fn traverse_commits(
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let worktree_snapshot = get_linked_worktrees(git_run_info, &repo)?;
     let event_tx_id = event_log_db.make_transaction_id(
         now,
         match command {
@@ -398,6 +401,7 @@ pub fn traverse_commits(
                 &references_snapshot,
                 &Redactor::Disabled,
             )?,
+            &mut WorktreeDescriptor::new(&worktree_snapshot)?,
             &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
             &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
@@ -438,7 +442,11 @@ pub fn traverse_commits(
                 CheckoutTarget::Oid(current_oid)
             } else if branches.len() == 1 {
                 let branch = branches.iter().next().unwrap();
-                CheckoutTarget::Reference(branch.to_owned())
+                if worktree_snapshot.find_by_branch(branch).is_some() {
+                    CheckoutTarget::Oid(current_oid)
+                } else {
+                    CheckoutTarget::Reference(branch.to_owned())
+                }
             } else {
                 // It's ambiguous which branch the user wants; just check out the commit directly.
                 CheckoutTarget::Oid(current_oid)
@@ -491,6 +499,7 @@ pub fn switch(
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let worktree_snapshot = get_linked_worktrees(git_run_info, &repo)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "checkout")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
@@ -554,6 +563,7 @@ pub fn switch(
                         &references_snapshot,
                         &Redactor::Disabled,
                     )?,
+                    &mut WorktreeDescriptor::new(&worktree_snapshot)?,
                     &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
                     &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
                 ],

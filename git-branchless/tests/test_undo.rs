@@ -12,7 +12,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{Git, GitInitOptions, GitRunOptions, make_git, trim_lines};
+use lib::testing::{Git, GitInitOptions, GitRunOptions, make_git, make_git_worktree, trim_lines};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};
@@ -339,7 +339,7 @@ fn test_undo_hide() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(event_cursor, @r###"
         Some(
             EventCursor {
-                event_id: 9,
+                event_id: 10,
             },
         )
         "###);
@@ -410,10 +410,8 @@ fn test_undo_move_refs() -> eyre::Result<()> {
 
         2. Move branch master from 96d1c37 create test2.txt
                                 to 62fc20d create test1.txt
-        3. Check out from 96d1c37 create test2.txt
-                       to 62fc20d create test1.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
-        Applied 3 inverse events.
+        Applied 2 inverse events.
         "###);
         assert_eq!(exit_code, 0);
     }
@@ -425,6 +423,63 @@ fn test_undo_move_refs() -> eyre::Result<()> {
         @ 62fc20d (master) create test1.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_undo_refuses_branch_active_in_other_worktree() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+    let test2_oid = git.commit_file("test2", 2)?;
+
+    let worktree_wrapper = make_git_worktree(&git, "foo-wt")?;
+    let worktree = worktree_wrapper.worktree;
+    worktree.run(&["checkout", "foo"])?;
+
+    git.run(&[
+        "update-ref",
+        "refs/heads/foo",
+        &test2_oid.to_string(),
+        &test1_oid.to_string(),
+    ])?;
+
+    let (stdout, stderr) = git.run_with_options(
+        &["undo", "--yes"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    let stdout = trim_lines(stdout);
+    let stderr = trim_lines(stderr);
+    insta::assert_snapshot!(stdout, @r###"
+    Will apply these actions:
+    1. Move branch foo from 96d1c37 create test2.txt
+                         to 62fc20d create test1.txt
+    "###);
+    assert!(
+        stderr.contains("Branch 'foo' is active in another worktree"),
+        "stderr was: {stderr}"
+    );
+    assert!(stderr.contains("foo-wt"), "stderr was: {stderr}");
+
+    let (foo_oid, _stderr) = git.run(&["rev-parse", "foo"])?;
+    assert_eq!(foo_oid.trim(), test2_oid.to_string());
+
+    let stdout = git.smartlog()?;
+    assert!(stdout.contains("foo"), "smartlog was: {stdout}");
+    assert!(
+        stdout.contains(&test2_oid.to_string()[..7]),
+        "smartlog was: {stdout}"
+    );
 
     Ok(())
 }
@@ -638,12 +693,10 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
 
         3. Move branch master from 62fc20d create test1.txt
                                 to f777ecc create initial.txt
-        4. Check out from 62fc20d create test1.txt
-                       to f777ecc create initial.txt
-        5. Delete branch foo at f777ecc create initial.txt
+        4. Delete branch foo at f777ecc create initial.txt
 
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
-        Applied 5 inverse events.
+        Applied 4 inverse events.
         "###);
         assert_eq!(exit_code, 0);
     }
@@ -846,8 +899,6 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
 
         3. Move branch master from 9ed8f9a bad message
                                 to 96d1c37 create test2.txt
-        4. Check out from 9ed8f9a bad message
-                       to 96d1c37 create test2.txt
         Confirm? [yN] Aborted.
         "###);
     }
@@ -878,12 +929,10 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
 
         3. Move branch master from 9ed8f9a bad message
                                 to 96d1c37 create test2.txt
-        4. Check out from 9ed8f9a bad message
-                       to 96d1c37 create test2.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         :
         @ 96d1c37 (master) create test2.txt
-        Applied 4 inverse events.
+        Applied 3 inverse events.
         "###);
     }
 
