@@ -239,6 +239,73 @@ fn test_split_deleted_file() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_split_renamed_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.commit_file("test1", 1)?;
+
+    git.run(&["mv", "test1.txt", "test1-renamed.txt"])?;
+    git.write_file_txt("test2", "new contents")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |
+            @ d5713a5 first commit
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt => test1-renamed.txt | 0
+            test2.txt                      | 1 +
+            2 files changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test1-renamed.txt"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout 495b4c09b4cc1755847ba0fd42c903f9c7eecc00 --
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |
+            @ 495b4c0 first commit
+            |
+            o ca4a140 temp(split): test1-renamed.txt (0)
+        "###);
+    }
+
+    {
+        git.branchless("next", &[])?;
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt => test1-renamed.txt | 0
+            1 file changed, 0 insertions(+), 0 deletions(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_split_multiple_files() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;

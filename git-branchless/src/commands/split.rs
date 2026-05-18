@@ -28,8 +28,8 @@ use lib::{
     },
     git::{
         CherryPickFastOptions, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-        ResolvedReferenceInfo, hydrate_tree, make_empty_tree, process_diff_for_record,
-        summarize_diff_for_temporary_commit,
+        ResolvedReferenceInfo, get_changed_paths_between_trees, hydrate_tree, make_empty_tree,
+        process_diff_for_record, summarize_diff_for_temporary_commit,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -303,6 +303,41 @@ pub fn split(
         }
     };
 
+    // Pre-compute a map of exact renames in the target commit: new_path -> old_path.
+    // A rename is detected when a path is absent from parent_tree but present in
+    // target_tree, and another path with the SAME blob OID is absent from target_tree
+    // but present in parent_tree (same content = exact rename, no content change).
+    //
+    // This map is used when extracting a renamed file to correctly restore the
+    // original path in the remainder tree, preventing cherry-pick conflicts.
+    let rename_map: HashMap<PathBuf, PathBuf> = {
+        let changed_paths =
+            get_changed_paths_between_trees(&repo, Some(&parent_tree), Some(&target_tree))?;
+        let mut deleted_by_oid: HashMap<NonZeroOid, PathBuf> = HashMap::new();
+        let mut added_entries: Vec<(PathBuf, NonZeroOid)> = Vec::new();
+        for path in changed_paths {
+            let parent_oid = parent_tree.get_oid_for_path(&path)?;
+            let target_oid = target_tree.get_oid_for_path(&path)?;
+            match (parent_oid, target_oid) {
+                (Some(MaybeZeroOid::NonZero(p_oid)), None | Some(MaybeZeroOid::Zero)) => {
+                    deleted_by_oid.insert(p_oid, path);
+                }
+                (None | Some(MaybeZeroOid::Zero), Some(MaybeZeroOid::NonZero(t_oid))) => {
+                    added_entries.push((path, t_oid));
+                }
+                _ => {}
+            }
+        }
+        added_entries
+            .into_iter()
+            .filter_map(|(new_path, blob_oid)| {
+                deleted_by_oid
+                    .get(&blob_oid)
+                    .map(|old_path| (new_path, old_path.clone()))
+            })
+            .collect()
+    };
+
     for (spec, path) in resolved_specs.iter() {
         let path = path.as_path();
 
@@ -331,10 +366,23 @@ pub fn split(
 
                 let target_entry = target_tree.get_path(path)?;
                 let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
-                    // added or modified & InsertBefore => add to extracted commit
-                    (None, Some(commit_entry), SplitMode::InsertBefore)
-                    | (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
+                    // modified & InsertBefore => add to extracted commit (no rename handling needed)
+                    (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
                         remainder_tree.add_or_replace(&repo, path, &commit_entry)?
+                    }
+
+                    // added & InsertBefore => add to extracted commit; for renames, also remove
+                    // the original path (which is present in the parent-based remainder tree)
+                    (None, Some(commit_entry), SplitMode::InsertBefore) => {
+                        let oid = remainder_tree.add_or_replace(&repo, path, &commit_entry)?;
+                        if let Some(old_path) = rename_map.get(path) {
+                            let interim = repo
+                                .find_tree(oid)?
+                                .expect("hydrated tree should always be findable");
+                            interim.remove(&repo, old_path)?
+                        } else {
+                            oid
+                        }
                     }
 
                     // removed & InsertBefore => remove from remainder commit
@@ -342,10 +390,26 @@ pub fn split(
                         remainder_tree.remove(&repo, path)?
                     }
 
-                    // added => remove from remainder commit
+                    // added => remove from remainder commit; for renames, also restore the
+                    // original path from the parent tree so the remainder accurately reflects
+                    // only the non-extracted changes
                     (None, Some(_), SplitMode::InsertAfter)
                     | (None, Some(_), SplitMode::DetachAfter)
-                    | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
+                    | (None, Some(_), SplitMode::Discard) => {
+                        let oid = remainder_tree.remove(&repo, path)?;
+                        if let Some(old_path) = rename_map.get(path) {
+                            if let Some(old_entry) = parent_tree.get_path(old_path)? {
+                                let interim = repo
+                                    .find_tree(oid)?
+                                    .expect("hydrated tree should always be findable");
+                                interim.add_or_replace(&repo, old_path, &old_entry)?
+                            } else {
+                                oid
+                            }
+                        } else {
+                            oid
+                        }
+                    }
 
                     // deleted or modified => replace w/ parent content in split commit
                     (Some(parent_entry), _, _) => {
@@ -494,12 +558,16 @@ pub fn split(
         } else {
             (&remainder_tree, &target_tree)
         };
-        let diff = repo.get_diff_between_trees(
+        let mut diff = repo.get_diff_between_trees(
             effects,
             Some(old_tree),
             new_tree,
             0, // we don't care about the context here
         )?;
+        // Enable rename detection so that a pure rename shows as one file
+        // changed with 0 insertions/deletions rather than two separate
+        // add/delete entries.
+        diff.find_similar()?;
 
         summarize_diff_for_temporary_commit(&diff)?
     };
