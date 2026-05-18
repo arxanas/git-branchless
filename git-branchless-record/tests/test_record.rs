@@ -1653,3 +1653,143 @@ fn test_record_before_merge_conflict() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_staged_and_unstaged() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Stage a change to test1.txt — this should end up in the inserted commit.
+    git.write_file_txt("test1", "staged contents\n")?;
+    git.run(&["add", "test1.txt"])?;
+
+    // Leave an unstaged change to test2.txt — this should stay in the working copy.
+    git.write_file_txt("test2", "unstaged contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless("record", &["-m", "stage test1"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 02b4735] stage test1
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        "###);
+    }
+
+    // The inserted commit (HEAD~) should contain only the staged test1.txt change.
+    {
+        let (stdout, _stderr) = git.run(&["show", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 02b473536b573bdfd6ad7b0f224f167672bdf974
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            stage test1
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..4480ae4 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +staged contents
+        "###);
+    }
+
+    // The unstaged test2.txt change should still be in the working copy.
+    {
+        let (stdout, _stderr) = git.run(&["diff"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        index 4e512d2..e66716d 100644
+        --- a/test2.txt
+        +++ b/test2.txt
+        @@ -1 +1 @@
+        -test2 contents
+        +unstaged contents
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_staged_and_unstaged() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Stage a change to test1.txt — this should end up in the inserted commit.
+    git.write_file_txt("test1", "staged contents\n")?;
+    git.run(&["add", "test1.txt"])?;
+
+    // Leave an unstaged change to test2.txt — this should stay in the working copy.
+    git.write_file_txt("test2", "unstaged contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless("record", &["-m", "stage test1", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 02b4735] stage test1
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 24a7c74 create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        M	test2.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    // The inserted commit (HEAD~) should contain only the staged test1.txt change.
+    {
+        let (stdout, _stderr) = git.run(&["show", "HEAD~"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit f3aa5fda4f220b2ca8d204f46134582f14d4761f
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            stage test1
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..4480ae4 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +staged contents
+        "###);
+    }
+
+    // The unstaged test2.txt change should still be in the working copy.
+    {
+        let (stdout, _stderr) = git.run(&["diff"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        index 4e512d2..e66716d 100644
+        --- a/test2.txt
+        +++ b/test2.txt
+        @@ -1 +1 @@
+        -test2 contents
+        +unstaged contents
+        "###);
+    }
+
+    Ok(())
+}
