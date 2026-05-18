@@ -16,6 +16,15 @@ pub struct Diff<'repo> {
 }
 
 impl Diff<'_> {
+    /// Enable rename and copy detection for this diff.
+    ///
+    /// Must be called before iterating deltas if you want renames to be
+    /// reported as a single `Renamed` delta rather than separate add/delete
+    /// deltas.
+    pub fn find_similar(&mut self) -> eyre::Result<()> {
+        self.inner.find_similar(None).map_err(|e| eyre::eyre!(e))
+    }
+
     /// Summarize this diff into a single line "short" format.
     pub fn short_stats(&self) -> eyre::Result<String> {
         let stats = self.inner.stats()?;
@@ -48,11 +57,15 @@ pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> 
         // returns an Err, so catch and ignore it
         let _ = diff.inner.foreach(
             &mut |delta: git2::DiffDelta, _| {
-                let relevant_path = delta
-                    .old_file()
-                    .path()
-                    .or(delta.new_file().path())
-                    .unwrap_or_else(|| unreachable!("diff should have contained at least 1 file"));
+                // For deletions show the old (removed) path; for everything
+                // else (including renames) prefer the new path so that e.g.
+                // a rename "foo.txt → bar.txt" is labelled as "bar.txt".
+                let relevant_path = if delta.status() == git2::Delta::Deleted {
+                    delta.old_file().path().or_else(|| delta.new_file().path())
+                } else {
+                    delta.new_file().path().or_else(|| delta.old_file().path())
+                }
+                .unwrap_or_else(|| unreachable!("diff should have contained at least 1 file"));
                 filename = Some(format!("{}", relevant_path.display()));
                 false
             },
@@ -67,7 +80,9 @@ pub fn summarize_diff_for_temporary_commit(diff: &Diff) -> eyre::Result<String> 
     };
 
     let ins_del = match (stats.insertions(), stats.deletions()) {
-        (0, 0) => unreachable!("empty diff"),
+        // A diff with no insertions or deletions still has a file change,
+        // e.g. a pure rename or a file-mode change.
+        (0, 0) => "0".to_string(),
         (i, 0) => format!("+{i}"),
         (0, d) => format!("-{d}"),
         (i, d) => format!("+{i}/-{d}"),
