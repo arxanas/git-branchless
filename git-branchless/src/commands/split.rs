@@ -2,6 +2,7 @@
 
 use eyre::Context;
 use rayon::ThreadPoolBuilder;
+use std::collections::HashMap;
 use std::{
     fmt::Write,
     path::{Path, PathBuf},
@@ -26,8 +27,9 @@ use lib::{
         },
     },
     git::{
-        CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
-        make_empty_tree, summarize_diff_for_temporary_commit,
+        CherryPickFastOptions, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+        ResolvedReferenceInfo, hydrate_tree, make_empty_tree, process_diff_for_record,
+        summarize_diff_for_temporary_commit,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -41,6 +43,65 @@ pub enum SplitMode {
     Discard,
     InsertAfter,
     InsertBefore,
+}
+
+/// Mark every `Changed` section in `file` whose new-file line range overlaps
+/// `[start_line, end_line]` as checked. Returns `true` if at least one section
+/// was marked.
+///
+/// `start_line` and `end_line` are 1-indexed line numbers in the new (target)
+/// version of the file.
+fn select_hunks_by_line_range(
+    file: &mut scm_record::File<'_>,
+    start_line: usize,
+    end_line: usize,
+) -> bool {
+    // Track the current line number in the *new* file as we walk sections.
+    let mut new_line_counter: usize = 1;
+    let mut any_selected = false;
+
+    for section in &mut file.sections {
+        match section {
+            scm_record::Section::Unchanged { lines } => {
+                new_line_counter += lines.len();
+            }
+            scm_record::Section::Changed { lines } => {
+                let section_new_start = new_line_counter;
+                let added_count = lines
+                    .iter()
+                    .filter(|l| l.change_type == scm_record::ChangeType::Added)
+                    .count();
+                // New-file range covered by this section (half-open [start, end)).
+                let section_new_end = section_new_start + added_count;
+
+                // Overlap check (1-indexed):
+                //   If added_count > 0: the section covers new-file lines
+                //     section_new_start ..= section_new_end - 1.
+                //     Overlaps [start_line, end_line] when the two intervals share a line.
+                //   If added_count == 0 (pure removal): the deletion sits between
+                //     new-file lines section_new_start-1 and section_new_start.
+                //     Match when start_line <= section_new_start <= end_line + 1.
+                let overlaps = if added_count > 0 {
+                    section_new_start <= end_line && section_new_end > start_line.saturating_sub(1)
+                } else {
+                    section_new_start >= start_line
+                        && section_new_start <= end_line.saturating_add(1)
+                };
+
+                if overlaps {
+                    section.set_checked(true);
+                    any_selected = true;
+                }
+
+                new_line_counter = section_new_end;
+            }
+            scm_record::Section::FileMode { .. } | scm_record::Section::Binary { .. } => {
+                // Not selected by line range.
+            }
+        }
+    }
+
+    any_selected
 }
 
 /// Split a commit and restack its descendants.
@@ -229,6 +290,19 @@ pub fn split(
         }
     };
 
+    // Pre-compute the diff for any LineRange specs (used for hunk selection).
+    let diff_files_for_hunk_selection: Option<Vec<scm_record::File<'static>>> = {
+        let has_line_range = resolved_specs
+            .iter()
+            .any(|(spec, _)| matches!(spec, FileExtractSpec::LineRange { .. }));
+        if has_line_range {
+            let diff = repo.get_diff_between_trees(effects, Some(&parent_tree), &target_tree, 0)?;
+            Some(process_diff_for_record(&repo, &diff)?)
+        } else {
+            None
+        }
+    };
+
     for (spec, path) in resolved_specs.iter() {
         let path = path.as_path();
 
@@ -299,7 +373,119 @@ pub fn split(
                     .expect("should have been found");
             }
 
-            FileExtractSpec::LineRange { .. } => todo!(),
+            FileExtractSpec::LineRange {
+                file,
+                start_line,
+                end_line,
+            } => {
+                // Validate that the file was actually changed in the target commit.
+                if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: file '{filename}' was not changed in commit {oid}.",
+                        filename = path.to_string_lossy(),
+                        oid = target_commit.get_short_oid()?
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                // Locate the file's diff sections (pre-computed before the loop).
+                let diff_files = diff_files_for_hunk_selection.as_ref().unwrap();
+                let scm_file = diff_files.iter().find(|f| f.path.as_ref() == path);
+                let scm_file = match scm_file {
+                    Some(f) => f,
+                    None => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "Aborting: could not find '{filename}' in the diff for commit {oid}.",
+                            filename = path.to_string_lossy(),
+                            oid = target_commit.get_short_oid()?,
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                // Line-range selection is not supported for binary files.
+                if scm_file
+                    .sections
+                    .iter()
+                    .any(|s| matches!(s, scm_record::Section::Binary { .. }))
+                {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: cannot split binary file '{file}' by line range.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                // Clone so we can mutate the `is_checked` flags.
+                let mut scm_file = scm_file.clone();
+                let any_selected =
+                    select_hunks_by_line_range(&mut scm_file, *start_line, *end_line);
+
+                if !any_selected {
+                    let line_number_or_range = if start_line == end_line {
+                        format!("line {start_line}")
+                    } else {
+                        format!("lines {start_line}-{end_line}")
+                    };
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: no changed hunks found overlapping {line_number_or_range} in '{file}'.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                let (selected, unselected) = scm_file.get_selected_contents();
+
+                // Choose which content goes into the remainder tree.
+                //   InsertBefore: the extracted (earlier) commit receives the *selected*
+                //     hunks; the original target is rebased on top and contributes the rest.
+                //   All other modes: the remainder commit keeps the *unselected* hunks,
+                //     and the extracted commit (created via cherry-pick) re-introduces
+                //     the selected hunks on top.
+                let remainder_content = if let SplitMode::InsertBefore = &split_mode {
+                    selected.contents
+                } else {
+                    unselected.contents
+                };
+
+                // Resolve a blob OID from the chosen content.
+                let remainder_blob_oid: Option<NonZeroOid> = match remainder_content {
+                    scm_record::SelectedContents::Unchanged => {
+                        // All hunks were on the other side — this side equals the parent
+                        // version of the file.
+                        match parent_tree.get_oid_for_path(path)? {
+                            None | Some(MaybeZeroOid::Zero) => None,
+                            Some(MaybeZeroOid::NonZero(oid)) => Some(oid),
+                        }
+                    }
+                    scm_record::SelectedContents::Text { contents } => {
+                        Some(repo.create_blob_from_contents(contents.as_bytes())?)
+                    }
+                    scm_record::SelectedContents::Binary { .. } => {
+                        unreachable!("binary files were already rejected above")
+                    }
+                };
+
+                // Determine the file mode from the target tree, falling back to the
+                // parent tree for pure deletions.
+                let file_mode = target_tree
+                    .get_path(path)?
+                    .or_else(|| parent_tree.get_path(path).ok().flatten())
+                    .map(|entry| entry.get_filemode())
+                    .unwrap_or(FileMode::Blob);
+
+                // Graft the new blob into the remainder tree.
+                let entry_map = HashMap::from([(
+                    path.to_path_buf(),
+                    remainder_blob_oid.map(|oid| (oid, file_mode)),
+                )]);
+                let new_tree_oid = hydrate_tree(&repo, Some(&remainder_tree), entry_map)?;
+                remainder_tree = repo
+                    .find_tree(new_tree_oid)?
+                    .expect("hydrated tree should always be findable");
+            }
         }
     }
     let message = {

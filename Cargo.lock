@@ -1517,6 +1517,7 @@ dependencies = [
  "rusqlite",
  "sapling-dag",
  "scm-diff-editor",
+ "scm-record",
  "thiserror 2.0.18",
  "tracing",
  "tracing-chrome",
