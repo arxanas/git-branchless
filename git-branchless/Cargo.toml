@@ -50,6 +50,7 @@ rayon = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true }
 scm-diff-editor = { workspace = true }
+scm-record = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-chrome = { workspace = true }
