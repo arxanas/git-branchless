@@ -62,7 +62,7 @@ fn get_shell_utils_dir() -> Option<PathBuf> {
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
-const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
+const DUMMY_DATE: &str = "Thu, 29 Oct 2020 12:34:56";
 
 /// Wrapper around the Git executable, for testing.
 #[derive(Clone, Debug)]
@@ -218,7 +218,7 @@ impl Git {
     pub fn get_base_env(&self, time: isize) -> Vec<(OsString, OsString)> {
         // Required for determinism, as these values will be baked into the commit
         // hash.
-        let date: OsString = format!("{DUMMY_DATE} -{time:0>2}").into();
+        let date: OsString = format!("{DUMMY_DATE} -{time:0>2}00").into();
 
         // Fake "editor" which accepts the default contents of any commit
         // messages. Usually, we can set this with `git commit -m`, but we have
