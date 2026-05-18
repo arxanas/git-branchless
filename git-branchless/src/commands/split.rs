@@ -8,7 +8,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
+use git_branchless_opts::{FileExtractSpec, MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use lib::{
     core::{
@@ -49,7 +49,7 @@ pub fn split(
     effects: &Effects,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
-    files_to_extract: Vec<String>,
+    files_to_extract: Vec<FileExtractSpec>,
     split_mode: SplitMode,
     move_options: &MoveOptions,
     git_run_info: &GitRunInfo,
@@ -186,11 +186,11 @@ pub fn split(
     };
 
     let cwd = std::env::current_dir()?;
-    // tuple: (input_file, resolved_path)
-    let resolved_paths_to_extract: eyre::Result<Vec<(String, PathBuf)>> = files_to_extract
+    let resolved_specs: eyre::Result<Vec<(FileExtractSpec, PathBuf)>> = files_to_extract
         .into_iter()
-        .map(|file| {
-            let path = Path::new(&file).to_path_buf();
+        .map(|spec| {
+            let file = spec.file_str();
+            let path = Path::new(file).to_path_buf();
             let working_copy_path = match repo.get_working_copy_path() {
                 Some(working_copy_path) => working_copy_path,
                 None => {
@@ -217,82 +217,90 @@ pub fn split(
                 path
             };
 
-            Ok((file, path))
+            Ok((spec, path))
         })
         .collect();
 
-    let resolved_paths_to_extract = match resolved_paths_to_extract {
-        Ok(resolved_paths_to_extract) => resolved_paths_to_extract,
+    let resolved_specs = match resolved_specs {
+        Ok(resolved_specs) => resolved_specs,
         Err(err) => {
             writeln!(effects.get_error_stream(), "{err}")?;
             return Ok(Err(ExitCode(1)));
         }
     };
 
-    for (file, path) in resolved_paths_to_extract.iter() {
+    for (spec, path) in resolved_specs.iter() {
         let path = path.as_path();
 
-        if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
-            writeln!(
-                effects.get_error_stream(),
-                "Aborting: file '{filename}' was not changed in commit {oid}.",
-                filename = path.to_string_lossy(),
-                oid = target_commit.get_short_oid()?
-            )?;
-            return Ok(Err(ExitCode(1)));
-        }
-
-        let parent_entry = match parent_tree.get_path(path) {
-            Ok(entry) => entry,
-            Err(err) => {
-                writeln!(
-                    effects.get_error_stream(),
-                    "uh oh error reading tree entry: {err}.",
-                )?;
-                return Ok(Err(ExitCode(1)));
-            }
-        };
-
-        let target_entry = target_tree.get_path(path)?;
-        let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
-            // added or modified & InsertBefore => add to extracted commit
-            (None, Some(commit_entry), SplitMode::InsertBefore)
-            | (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
-                remainder_tree.add_or_replace(&repo, path, &commit_entry)?
-            }
-
-            // removed & InsertBefore => remove from remainder commit
-            (Some(_), None, SplitMode::InsertBefore) => remainder_tree.remove(&repo, path)?,
-
-            // added => remove from remainder commit
-            (None, Some(_), SplitMode::InsertAfter)
-            | (None, Some(_), SplitMode::DetachAfter)
-            | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
-
-            // deleted or modified => replace w/ parent content in split commit
-            (Some(parent_entry), _, _) => {
-                remainder_tree.add_or_replace(&repo, path, &parent_entry)?
-            }
-
-            (None, _, _) => {
-                if path.exists() {
+        match spec {
+            FileExtractSpec::WholeFile(file) => {
+                if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
                     writeln!(
                         effects.get_error_stream(),
-                        "Aborting: the file '{file}' could not be found in this repo.\nPerhaps it's not under version control?",
+                        "Aborting: file '{filename}' was not changed in commit {oid}.",
+                        filename = path.to_string_lossy(),
+                        oid = target_commit.get_short_oid()?
                     )?;
-                } else {
-                    writeln!(
-                        effects.get_error_stream(),
-                        "Aborting: the file '{file}' does not exist.",
-                    )?;
+                    return Ok(Err(ExitCode(1)));
                 }
-                return Ok(Err(ExitCode(1)));
-            }
-        };
 
-        remainder_tree = repo
-            .find_tree(temp_tree_oid)?
-            .expect("should have been found");
+                let parent_entry = match parent_tree.get_path(path) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "uh oh error reading tree entry: {err}.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                let target_entry = target_tree.get_path(path)?;
+                let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
+                    // added or modified & InsertBefore => add to extracted commit
+                    (None, Some(commit_entry), SplitMode::InsertBefore)
+                    | (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
+                        remainder_tree.add_or_replace(&repo, path, &commit_entry)?
+                    }
+
+                    // removed & InsertBefore => remove from remainder commit
+                    (Some(_), None, SplitMode::InsertBefore) => {
+                        remainder_tree.remove(&repo, path)?
+                    }
+
+                    // added => remove from remainder commit
+                    (None, Some(_), SplitMode::InsertAfter)
+                    | (None, Some(_), SplitMode::DetachAfter)
+                    | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
+
+                    // deleted or modified => replace w/ parent content in split commit
+                    (Some(parent_entry), _, _) => {
+                        remainder_tree.add_or_replace(&repo, path, &parent_entry)?
+                    }
+
+                    (None, _, _) => {
+                        if path.exists() {
+                            writeln!(
+                                effects.get_error_stream(),
+                                "Aborting: the file '{file}' could not be found in this repo.\nPerhaps it's not under version control?",
+                            )?;
+                        } else {
+                            writeln!(
+                                effects.get_error_stream(),
+                                "Aborting: the file '{file}' does not exist.",
+                            )?;
+                        }
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                remainder_tree = repo
+                    .find_tree(temp_tree_oid)?
+                    .expect("should have been found");
+            }
+
+            FileExtractSpec::LineRange { .. } => todo!(),
+        }
     }
     let message = {
         let (old_tree, new_tree) = if let SplitMode::InsertBefore = &split_mode {

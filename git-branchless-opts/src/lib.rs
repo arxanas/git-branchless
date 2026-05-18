@@ -40,6 +40,116 @@ impl Display for Revset {
     }
 }
 
+/// Specifies changes to extract from a commit during a split operation.
+///
+/// May be one of:
+/// - A file path (e.g. `src/main.rs`): extract all changes to that file.
+/// - A file path with a single line number (e.g. `src/main.rs:42`): extract
+///   only the hunk(s) that touch line 42 in the new (target) version of the
+///   file.
+/// - A file path with a line range (e.g. `src/main.rs:10-42`): extract all
+///   hunks that overlap lines 10–42 in the new version of the file.
+///
+/// Line numbers are 1-indexed and refer to the file *after* the commit
+/// (i.e. in the target tree).
+#[derive(Clone, Debug)]
+pub enum FileExtractSpec {
+    /// Extract all changes to the file.
+    WholeFile(String),
+    /// Extract only the changes in the specified line range.
+    LineRange {
+        /// The raw file string as given on the command line.
+        file: String,
+        /// First line of the range (1-indexed, inclusive).
+        start_line: usize,
+        /// Last line of the range (1-indexed, inclusive).
+        end_line: usize,
+    },
+}
+
+impl FileExtractSpec {
+    /// Returns the raw file string as provided on the command line.
+    pub fn file_str(&self) -> &str {
+        match self {
+            Self::WholeFile(s) | Self::LineRange { file: s, .. } => s,
+        }
+    }
+}
+
+fn parse_line_range_suffix(s: &str) -> Option<(usize, usize)> {
+    if let Some((start_str, end_str)) = s.split_once('-') {
+        let start = start_str.parse::<usize>().ok().filter(|&n| n > 0)?;
+        let end = end_str.parse::<usize>().ok().filter(|&n| n >= start)?;
+        Some((start, end))
+    } else {
+        let line = s.parse::<usize>().ok().filter(|&n| n > 0)?;
+        Some((line, line))
+    }
+}
+
+impl FromStr for FileExtractSpec {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let split: Vec<&str> = s.split(':').collect();
+        // TODO: is this exhaustive of all options, esp considering windows?
+        // TODO: consider using #[cfg()] for the windows logic?
+        let (file_part, maybe_range_part) = match split.as_slice() {
+            // empty split (impossible)
+            [] => unreachable!(),
+            // path
+            [_] => (s.to_owned(), None),
+            // :/path
+            ["", _] => (s.to_owned(), None),
+            // path:range or C:\path
+            [one, two] => (one.to_string(), Some(two.to_string())),
+            // :/path:range
+            ["", .., three] => {
+                let colon_pos = three.len() + 1;
+                let file_part = &s[..colon_pos];
+                (file_part.to_owned(), Some(three.to_string()))
+            }
+            // C:\path:range
+            [_, .., three] => {
+                let colon_pos = three.len() + 1;
+                let file_part = &s[..colon_pos];
+                (file_part.to_owned(), Some(three.to_string()))
+            }
+        };
+
+        if let Some(range_part) = maybe_range_part {
+            if let Some((start, end)) = parse_line_range_suffix(&range_part) {
+                return Ok(Self::LineRange {
+                    file: file_part.to_owned(),
+                    start_line: start,
+                    end_line: end,
+                });
+            }
+        }
+
+        Ok(Self::WholeFile(s.to_owned()))
+    }
+}
+
+impl Display for FileExtractSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WholeFile(file) => write!(f, "{file}"),
+            Self::LineRange {
+                file,
+                start_line,
+                end_line,
+            } => {
+                if start_line == end_line {
+                    write!(f, "{file}:{start_line}")
+                } else {
+                    write!(f, "{file}:{start_line}-{end_line}")
+                }
+            }
+        }
+    }
+}
+
 /// A command wrapped by `git-branchless wrap`. The arguments are forwarded to
 /// `git`.
 #[derive(Debug, Parser)]
@@ -692,9 +802,16 @@ pub enum Command {
         #[clap(value_parser)]
         revset: Revset,
 
-        /// Files to extract from the commit.
+        /// Files (or file+line-range specs) to extract from the commit.
+        ///
+        /// Each argument may be:
+        /// - A file path (e.g. `src/main.rs`) to extract all changes to that file.
+        /// - A file path with a single line number (e.g. `src/main.rs:42`) to
+        ///   extract only the hunk(s) touching that line in the committed file.
+        /// - A file path with a line range (e.g. `src/main.rs:10-42`) to extract
+        ///   all hunks overlapping those lines in the committed file.
         #[clap(value_parser, required = true)]
-        files: Vec<String>,
+        files: Vec<FileExtractSpec>,
 
         /// Insert the extracted commit before (as a parent of) the split commit.
         #[clap(action, short = 'b', long)]
