@@ -231,11 +231,12 @@ fn record(
     }
 
     if insert {
-        try_exit_code!(insert_before_siblings(
+        try_exit_code!(insert_before(
             effects,
             git_run_info,
             now,
-            event_tx_id
+            event_tx_id,
+            InsertBeforeTarget::Siblings,
         )?);
     }
 
@@ -734,12 +735,19 @@ fn record_interactive(
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
 
+#[derive(Debug)]
+enum InsertBeforeTarget {
+    /// Insert the newly created commit before its siblings (--insert)
+    Siblings,
+}
+
 #[instrument]
-fn insert_before_siblings(
+fn insert_before(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     now: SystemTime,
     event_tx_id: EventTransactionId,
+    insert_target: InsertBeforeTarget,
 ) -> EyreExitOr<()> {
     // Reopen the repository since references may have changed.
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -770,11 +778,18 @@ fn insert_before_siblings(
         &references_snapshot,
     )?;
     let head_commit = repo.find_commit_or_fail(head_oid)?;
-    let head_commit_set = CommitSet::from(head_oid);
-    let parents = dag.query_parents(head_commit_set.clone())?;
-    let children = dag.query_children(parents)?;
-    let siblings = children.difference(&head_commit_set);
-    let siblings = dag.filter_visible_commits(siblings)?;
+    let commits_to_move = {
+        let head_commit_set = CommitSet::from(head_oid);
+        let parents = dag.query_parents(head_commit_set.clone())?;
+        match insert_target {
+            InsertBeforeTarget::Siblings => {
+                let children = dag.query_children(parents)?;
+                let siblings = children.difference(&head_commit_set);
+                dag.filter_visible_commits(siblings)?
+            }
+        }
+    };
+
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits: false,
         dump_rebase_constraints: false,
@@ -783,26 +798,30 @@ fn insert_before_siblings(
     };
 
     let rebase_plan_result =
-        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &siblings)? {
+        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_move)? {
             Err(err) => Err(err),
             Ok(permissions) => {
-                let head_commit_parents: HashSet<_> =
-                    head_commit.get_parent_oids().into_iter().collect();
                 let mut builder = RebasePlanBuilder::new(&dag, permissions);
-                for sibling_oid in dag.commit_set_to_vec(&siblings)? {
-                    let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
-                    let parent_oids = sibling_commit.get_parent_oids();
-                    let new_parent_oids = parent_oids
-                        .into_iter()
-                        .map(|parent_oid| {
-                            if head_commit_parents.contains(&parent_oid) {
-                                head_oid
-                            } else {
-                                parent_oid
-                            }
-                        })
-                        .collect_vec();
-                    builder.move_subtree(sibling_oid, new_parent_oids)?;
+                match insert_target {
+                    InsertBeforeTarget::Siblings => {
+                        let head_commit_parents: HashSet<_> =
+                            head_commit.get_parent_oids().into_iter().collect();
+                        for sibling_oid in dag.commit_set_to_vec(&commits_to_move)? {
+                            let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
+                            let parent_oids = sibling_commit.get_parent_oids();
+                            let new_parent_oids = parent_oids
+                                .into_iter()
+                                .map(|parent_oid| {
+                                    if head_commit_parents.contains(&parent_oid) {
+                                        head_oid
+                                    } else {
+                                        parent_oid
+                                    }
+                                })
+                                .collect_vec();
+                            builder.move_subtree(sibling_oid, new_parent_oids)?;
+                        }
+                    }
                 }
                 let thread_pool = ThreadPoolBuilder::new().build()?;
                 let repo_pool = RepoResource::new_pool(&repo)?;
