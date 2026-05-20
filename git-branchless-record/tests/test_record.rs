@@ -1454,3 +1454,202 @@ fn test_record_new_with_create() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_before() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Modify test1.txt; test2 only creates test2.txt so there's no conflict.
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 463e306] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 7623e3c create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 77bd569 update test1.txt
+        |
+        @ 7623e3c (> test) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_with_new() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // There are uncommitted changes, but --new leaves them uncommitted.
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit", "--new", "--before"],
+            &GitRunOptions {
+                env: [("TEST_RECORD_NEW_FAKE_COMMIT_TIME", "true")]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> update-ref refs/heads/test c3e40a88947f6e183deea74f942f78d3fd1eb1e1
+        branchless: running command: <git-executable> checkout test --
+        M	test1.txt
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 58e7d1c create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        M	test1.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o aa6c7c3 empty commit
+        |
+        @ 58e7d1c (> test) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_rewrite_public_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // HEAD (test2) is on master, which is a public branch — should warn.
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master 463e306] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        You are trying to rewrite 1 public commit, such as: 96d1c37 create test2.txt
+        It is generally not advised to rewrite public commits, because your
+        collaborators will have difficulty merging your changes.
+        To proceed anyways, run: git move -f . --onto 77bd569 update test1.txt
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d create test1.txt
+        |\
+        | o 77bd569 update test1.txt
+        |
+        @ 96d1c37 (> master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_merge_conflict() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    // test2 modifies the same file we'll commit with --before → merge conflict.
+    git.commit_file_with_contents("test1", 2, "test2 contents\n")?;
+
+    git.write_file_txt("test1", "new before contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 6e9fea0] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) 5e6b0c6 create test1.txt
+        To resolve merge conflicts, run: git move -m -x HEAD~ --onto HEAD
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 2b1ae10 update test1.txt
+        |
+        @ 5e6b0c6 (> test) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
