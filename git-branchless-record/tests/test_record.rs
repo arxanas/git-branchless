@@ -526,7 +526,8 @@ fn test_record_new() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout f25fe40ff47319c8b8c61a32c03f2c3558aacadd --
+        branchless: running command: <git-executable> update-ref refs/heads/master f25fe40ff47319c8b8c61a32c03f2c3558aacadd
+        branchless: running command: <git-executable> checkout master --
         M	test1.txt
         "###);
 
@@ -542,9 +543,7 @@ fn test_record_new() -> eyre::Result<()> {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d (master) create test1.txt
-        |
-        @ f25fe40 empty commit 1
+        @ f25fe40 (> master) empty commit 1
         "###);
     }
 
@@ -561,7 +560,8 @@ fn test_record_new() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 46ba0c4efce07dc705498e7b79f7116d4e9ef7a3 --
+        branchless: running command: <git-executable> update-ref refs/heads/master 46ba0c4efce07dc705498e7b79f7116d4e9ef7a3
+        branchless: running command: <git-executable> checkout master --
         M	test1.txt
         "###);
 
@@ -577,11 +577,7 @@ fn test_record_new() -> eyre::Result<()> {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d (master) create test1.txt
-        |
-        o f25fe40 empty commit 1
-        |
-        @ 46ba0c4 empty commit 2
+        @ 46ba0c4 (> master) empty commit 2
         "###);
     }
 
@@ -624,7 +620,8 @@ fn test_record_new_uses_user_name_and_email() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout d4aea9dcdb2ad9ddedc964de9e782aad5a97b864 --
+        branchless: running command: <git-executable> update-ref refs/heads/master d4aea9dcdb2ad9ddedc964de9e782aad5a97b864
+        branchless: running command: <git-executable> checkout master --
         M	test1.txt
         "###);
 
@@ -1360,6 +1357,100 @@ fn test_record_fixup() -> eyre::Result<()> {
     The commit supplied to --fixup must be an ancestor of the commit being created.
     Aborting.
     ");
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_moves_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    {
+        // Switch to a new branch and then create a new commit. The branch
+        // pointer should advance with the new commit.
+        git.run(&["switch", "--create", "test"])?;
+        git.branchless("record", &["-m", "empty commit 1", "--new"])?;
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 1fa4693 (> test) empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_marks_commit_reachable() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+    "###);
+
+    {
+        // Create new commit then switch back to master.
+        git.branchless("record", &["-m", "empty commit 1", "--new"])?;
+        git.run(&["switch", "master"])?;
+
+        // The new commit should still appear in the smartlog even though no
+        // branch points to it.
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+        |
+        o dc158fa empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_with_create() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+    "###);
+
+    {
+        // Create a new commit and a new branch, which should be checked out.
+        git.branchless(
+            "record",
+            &["-m", "empty commit 1", "--new", "--create", "foo"],
+        )?;
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ dc158fa (> foo) empty commit 1
+        "###);
+    }
 
     Ok(())
 }
