@@ -1,6 +1,10 @@
 {
   description = "git-branchless";
 
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
   outputs = { self, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
@@ -29,6 +33,9 @@
           # in nixpkgs, consider first improving the definition there, and then
           # update the `flake.lock` here.
 
+          # Upstream has patch for https://github.com/arxanas/git-branchless/issues/1585 in it, this fails as we have updated already on master
+          postPatch = "";
+
           # in case local overrides might confuse upstream maintainers,
           # we do not list them here:
           meta = (removeAttrs meta [ "maintainers" ]) // {
@@ -54,6 +61,26 @@
           checkFlags = "";
         });
       });
+
+      devShells = foreachSystem (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system}.extend self.overlays.default;
+        in
+        {
+          default = pkgs.mkShell {
+            name = "git-branchless";
+            packages = [
+              pkgs.nixfmt
+              pkgs.cargo
+              pkgs.cargo-insta
+              pkgs.rustc
+              pkgs.rustfmt
+              pkgs.rust-analyzer
+            ];
+          };
+        }
+      );
 
       packages = foreachSystem (system:
         let
