@@ -12,10 +12,10 @@
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::Write;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::DateTime;
-use eyre::OptionExt;
+use eyre::{OptionExt, WrapErr};
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
 use git_branchless_reword::{ResolveFixupCommitError, edit_message, resolve_commit_to_fixup};
@@ -24,8 +24,9 @@ use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_comm
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
-use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
+use lib::core::eventlog::{Event as LogEvent, EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::Pluralize;
+use lib::core::gc::mark_commit_reachable;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
     BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
@@ -34,10 +35,10 @@ use lib::core::rewrite::{
 };
 use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
-    CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-    ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand, WorkingCopyChangesType,
-    WorkingCopySnapshot, process_diff_for_record, summarize_diff_for_temporary_commit,
-    update_index,
+    CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid,
+    ReferenceName, Repo, ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand,
+    WorkingCopyChangesType, WorkingCopySnapshot, process_diff_for_record,
+    summarize_diff_for_temporary_commit, update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -112,6 +113,7 @@ fn record(
             &event_log_db,
             &event_tx_id,
             messages,
+            branch_name,
         )?);
     } else {
         try_exit_code!(create_commit_with_changes(
@@ -454,13 +456,14 @@ fn create_new_commit(
     event_log_db: &EventLogDb,
     event_tx_id: &EventTransactionId,
     messages: Vec<String>,
+    branch_name: Option<String>,
 ) -> EyreExitOr<()> {
     let head_info = repo.get_head_info()?;
-    let current_commit_oid = match head_info {
+    let (current_commit_oid, existing_ref_name) = match head_info {
         ResolvedReferenceInfo {
             oid: Some(oid),
-            reference_name: _,
-        } => oid,
+            reference_name,
+        } => (oid, reference_name),
         ResolvedReferenceInfo {
             oid: None,
             reference_name: _,
@@ -510,9 +513,35 @@ fn create_new_commit(
         vec![&current_commit],
     )?;
 
-    // TODO: move branch if ref_name
-    // TODO: mark commit reachable (will show in sl if descendants, but not if detached)
-    // FIXME: --new --create <branch> doesn't seem to work
+    mark_commit_reachable(repo, new_oid)
+        .wrap_err("Marking commit as reachable for GC purposes.")?;
+    event_log_db.add_events(vec![LogEvent::CommitEvent {
+        timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+        event_tx_id: *event_tx_id,
+        commit_oid: new_oid,
+    }])?;
+
+    let checkout_target = if let Some(name) = branch_name {
+        // --create <branch>: create the new branch at the new commit.
+        try_exit_code!(git_run_info.run(
+            effects,
+            Some(*event_tx_id),
+            &["branch", &name, &new_oid.to_string()],
+        )?);
+        let ref_name = ReferenceName::from(format!("refs/heads/{name}"));
+        CheckoutTarget::Reference(ref_name)
+    } else if let Some(ref_name) = existing_ref_name {
+        // On a named branch: advance it to the new commit, mirroring `git commit`.
+        try_exit_code!(git_run_info.run(
+            effects,
+            Some(*event_tx_id),
+            &["update-ref", ref_name.as_str(), &new_oid.to_string()],
+        )?);
+        CheckoutTarget::Reference(ref_name)
+    } else {
+        // Detached HEAD, no --create: check out by OID.
+        CheckoutTarget::Oid(new_oid)
+    };
 
     try_exit_code!(check_out_commit(
         effects,
@@ -520,12 +549,10 @@ fn create_new_commit(
         repo,
         event_log_db,
         *event_tx_id,
-        Some(CheckoutTarget::Oid(new_oid)),
+        Some(checkout_target),
         &CheckOutCommitOptions {
-            additional_args: vec![],
-            force_detach: false,
-            reset: false,
             render_smartlog: false,
+            ..Default::default()
         },
     )?);
 
