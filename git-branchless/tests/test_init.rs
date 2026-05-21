@@ -651,122 +651,122 @@ fn test_install_man_pages() -> eyre::Result<()> {
     )?;
     let man_page_contents = String::from_utf8_lossy(&man_page_contents);
     insta::assert_snapshot!(man_page_contents, @r###"
-    .ie \n(.g .ds Aq \(aq
-    .el .ds Aq '
-    .TH git-branchless 1  "git-branchless 0.10.0" 
-    .SH NAME
-    git\-branchless \- Branchless workflow for Git
-    .SH SYNOPSIS
-    \fBgit\-branchless\fR [\fB\-C \fR] [\fB\-\-color\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIsubcommands\fR>
-    .SH DESCRIPTION
-    Branchless workflow for Git.
-    .PP
-    See the documentation at https://github.com/arxanas/git\-branchless/wiki.
-    .SH OPTIONS
-    .TP
-    \fB\-C\fR \fI<WORKING_DIRECTORY>\fR
-    Change to the given directory before executing the rest of the program. (The option is called `\-C` for symmetry with Git.)
-    .TP
-    \fB\-\-color\fR \fI<COLOR>\fR
-    Flag to force enable or disable terminal colors
-    .br
+                .ie \n(.g .ds Aq \(aq
+                .el .ds Aq '
+                .TH git-branchless 1  "git-branchless 0.10.0" 
+                .SH NAME
+                git\-branchless \- Branchless workflow for Git
+                .SH SYNOPSIS
+                \fBgit\-branchless\fR [\fB\-C \fR] [\fB\-\-color\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIsubcommands\fR>
+                .SH DESCRIPTION
+                Branchless workflow for Git.
+                .PP
+                See the documentation at https://github.com/arxanas/git\-branchless/wiki.
+                .SH OPTIONS
+                .TP
+                \fB\-C\fR \fI<WORKING_DIRECTORY>\fR
+                Change to the given directory before executing the rest of the program. (The option is called `\-C` for symmetry with Git.)
+                .TP
+                \fB\-\-color\fR \fI<COLOR>\fR
+                Flag to force enable or disable terminal colors
+                .br
 
-    .br
-    \fIPossible values:\fR
-    .RS 14
-    .IP \(bu 2
-    auto: Automatically determine whether to display colors from the terminal and environment variables. This is the default behavior
-    .IP \(bu 2
-    always: Always display terminal colors
-    .IP \(bu 2
-    never: Never display terminal colors
-    .RE
-    .TP
-    \fB\-h\fR, \fB\-\-help\fR
-    Print help (see a summary with \*(Aq\-h\*(Aq)
-    .TP
-    \fB\-V\fR, \fB\-\-version\fR
-    Print version
-    .SH SUBCOMMANDS
-    .TP
-    git\-branchless\-amend(1)
-    Amend the current HEAD commit
-    .TP
-    git\-branchless\-bug\-report(1)
-    Gather information about recent operations to upload as part of a bug report
-    .TP
-    git\-branchless\-difftool(1)
-    Use the partial commit selector UI as a Git\-compatible difftool; see git\-difftool(1) for more information on Git difftools
-    .TP
-    git\-branchless\-gc(1)
-    Run internal garbage collection
-    .TP
-    git\-branchless\-hide(1)
-    Hide the provided commits from the smartlog
-    .TP
-    git\-branchless\-init(1)
-    Initialize the branchless workflow for this repository
-    .TP
-    git\-branchless\-install\-man\-pages(1)
-    Install git\-branchless\*(Aqs man\-pages to the given path
-    .TP
-    git\-branchless\-move(1)
-    Move a subtree of commits from one location to another
-    .TP
-    git\-branchless\-next(1)
-    Move to a later commit in the current stack
-    .TP
-    git\-branchless\-prev(1)
-    Move to an earlier commit in the current stack
-    .TP
-    git\-branchless\-query(1)
-    Query the commit graph using the "revset" language and print matching commits
-    .TP
-    git\-branchless\-repair(1)
-    Restore internal invariants by reconciling the internal operation log with the state of the Git repository
-    .TP
-    git\-branchless\-restack(1)
-    Fix up commits abandoned by a previous rewrite operation
-    .TP
-    git\-branchless\-record(1)
-    Create a commit by interactively selecting which changes to include
-    .TP
-    git\-branchless\-reword(1)
-    Reword commits
-    .TP
-    git\-branchless\-smartlog(1)
-    `smartlog` command
-    .TP
-    git\-branchless\-split(1)
-    Split commits
-    .TP
-    git\-branchless\-submit(1)
-    Push commits to a remote
-    .TP
-    git\-branchless\-switch(1)
-    Switch to the provided branch or commit
-    .TP
-    git\-branchless\-sync(1)
-    Move any local commit stacks on top of the main branch
-    .TP
-    git\-branchless\-test(1)
-    Run a command on each commit in a given set and aggregate the results
-    .TP
-    git\-branchless\-undo(1)
-    Browse or return to a previous state of the repository
-    .TP
-    git\-branchless\-unhide(1)
-    Unhide previously\-hidden commits from the smartlog
-    .TP
-    git\-branchless\-wrap(1)
-    Wrap a Git command inside a branchless transaction
-    .TP
-    git\-branchless\-help(1)
-    Print this message or the help of the given subcommand(s)
-    .SH VERSION
-    v0.10.0
-    .SH AUTHORS
-    Waleed Khan <me@waleedkhan.name>
-    "###);
+                .br
+                \fIPossible values:\fR
+                .RS 14
+                .IP \(bu 2
+                auto: Automatically determine whether to display colors from the terminal and environment variables. This is the default behavior
+                .IP \(bu 2
+                always: Always display terminal colors
+                .IP \(bu 2
+                never: Never display terminal colors
+                .RE
+                .TP
+                \fB\-h\fR, \fB\-\-help\fR
+                Print help (see a summary with \*(Aq\-h\*(Aq)
+                .TP
+                \fB\-V\fR, \fB\-\-version\fR
+                Print version
+                .SH SUBCOMMANDS
+                .TP
+                git\-branchless\-amend(1)
+                Amend the current HEAD commit
+                .TP
+                git\-branchless\-bug\-report(1)
+                Gather information about recent operations to upload as part of a bug report
+                .TP
+                git\-branchless\-difftool(1)
+                Use the partial commit selector UI as a Git\-compatible difftool; see git\-difftool(1) for more information on Git difftools
+                .TP
+                git\-branchless\-gc(1)
+                Run internal garbage collection
+                .TP
+                git\-branchless\-hide(1)
+                Hide the provided commits from the smartlog
+                .TP
+                git\-branchless\-init(1)
+                Initialize the branchless workflow for this repository
+                .TP
+                git\-branchless\-install\-man\-pages(1)
+                Install git\-branchless\*(Aqs man\-pages to the given path
+                .TP
+                git\-branchless\-move(1)
+                Move a subtree of commits from one location to another
+                .TP
+                git\-branchless\-next(1)
+                Move to a later commit in the current stack
+                .TP
+                git\-branchless\-prev(1)
+                Move to an earlier commit in the current stack
+                .TP
+                git\-branchless\-query(1)
+                Query the commit graph using the "revset" language and print matching commits
+                .TP
+                git\-branchless\-repair(1)
+                Restore internal invariants by reconciling the internal operation log with the state of the Git repository
+                .TP
+                git\-branchless\-restack(1)
+                Fix up commits abandoned by a previous rewrite operation
+                .TP
+                git\-branchless\-record(1)
+                Create a commit by interactively selecting which changes to include
+                .TP
+                git\-branchless\-reword(1)
+                Reword commits
+                .TP
+                git\-branchless\-smartlog(1)
+                `smartlog` command
+                .TP
+                git\-branchless\-split(1)
+                Split commits
+                .TP
+                git\-branchless\-submit(1)
+                Push commits to a remote
+                .TP
+                git\-branchless\-switch(1)
+                Switch to the provided branch or commit
+                .TP
+                git\-branchless\-sync(1)
+                Move any local commit stacks on top of the main branch
+                .TP
+                git\-branchless\-test(1)
+                Run a command on each commit in a given set and aggregate the results
+                .TP
+                git\-branchless\-undo(1)
+                Browse or return to a previous state of the repository
+                .TP
+                git\-branchless\-unhide(1)
+                Unhide previously\-hidden commits from the smartlog
+                .TP
+                git\-branchless\-wrap(1)
+                Wrap a Git command inside a branchless transaction
+                .TP
+                git\-branchless\-help(1)
+                Print this message or the help of the given subcommand(s)
+                .SH VERSION
+                v0.10.0
+                .SH AUTHORS
+                Waleed Khan <me@waleedkhan.name>
+                "###);
     Ok(())
 }
