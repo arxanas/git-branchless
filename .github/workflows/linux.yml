@@ -18,7 +18,12 @@ jobs:
       matrix:
         # Use a tag from https://github.com/git/git/tags
         # Make sure to update `git-version` in the `run-tests` step as well.
-        git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
+        git-version: [
+          "v2.24.3", # Apr 2020
+          "v2.29.2", # Oct 2020
+          "v2.33.1", # Oct 2021
+          "v2.37.3", # Aug 2022
+        ]
 
     steps:
       - uses: actions/checkout@v6
@@ -58,7 +63,12 @@ jobs:
 
     strategy:
       matrix:
-        git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
+        git-version: [
+          "v2.24.3", # Apr 2020
+          "v2.29.2", # Oct 2020
+          "v2.33.1", # Oct 2021
+          "v2.37.3", # Aug 2022
+        ]
 
     steps:
       - uses: actions/checkout@v6
