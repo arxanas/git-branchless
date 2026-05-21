@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 name = "git-branchless-record"
 repository = "https://github.com/arxanas/git-branchless"
-version = "0.10.0"
+version = "0.11.0"
 
 [dependencies]
 cursive = { version = "0.21.1", default-features = false, features = [

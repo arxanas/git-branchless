@@ -27,6 +27,7 @@
             { meta, ... }:
             {
               name = "git-branchless";
+              version = "0.11.0";
               src = self;
               cargoDeps = final.rustPlatform.importCargoLock {
                 lockFile = ./Cargo.lock;
