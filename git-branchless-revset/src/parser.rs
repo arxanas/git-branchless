@@ -673,7 +673,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo!"), @r###"
         Ok(
             FunctionCall(
-                "sole",
+                "exactly",
                 [
                     FunctionCall(
                         "children",
@@ -682,6 +682,9 @@ mod tests {
                                 "foo",
                             ),
                         ],
+                    ),
+                    Name(
+                        "1",
                     ),
                 ],
             ),
@@ -694,7 +697,7 @@ mod tests {
                 "union",
                 [
                     FunctionCall(
-                        "sole",
+                        "exactly",
                         [
                             FunctionCall(
                                 "children",
@@ -704,16 +707,19 @@ mod tests {
                                     ),
                                 ],
                             ),
+                            Name(
+                                "1",
+                            ),
                         ],
                     ),
                     FunctionCall(
-                        "sole",
+                        "exactly",
                         [
                             FunctionCall(
                                 "children",
                                 [
                                     FunctionCall(
-                                        "sole",
+                                        "exactly",
                                         [
                                             FunctionCall(
                                                 "children",
@@ -723,9 +729,15 @@ mod tests {
                                                     ),
                                                 ],
                                             ),
+                                            Name(
+                                                "1",
+                                            ),
                                         ],
                                     ),
                                 ],
+                            ),
+                            Name(
+                                "1",
                             ),
                         ],
                     ),

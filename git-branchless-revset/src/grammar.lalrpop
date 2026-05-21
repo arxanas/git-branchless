@@ -46,7 +46,7 @@ Expr4: Expr<'input> = {
     <lhs:Expr4> "~"            => Expr::FunctionCall(Cow::Borrowed("ancestors.nth"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
     <lhs:Expr4> "~" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("ancestors.nth"), vec![lhs, Expr::Name(rhs)]),
 
-    <lhs:Expr4> "!"            => Expr::FunctionCall(Cow::Borrowed("sole"),  vec![Expr::FunctionCall(Cow::Borrowed("children"), vec![lhs])]),
+    <lhs:Expr4> "!"            => Expr::FunctionCall(Cow::Borrowed("exactly"),  vec![Expr::FunctionCall(Cow::Borrowed("children"), vec![lhs]), Expr::Name(Cow::Borrowed("1"))]),
 
     <Expr5>
 }
