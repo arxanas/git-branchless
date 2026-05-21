@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [v0.11.1] - 2026-05-21
+
+### Changed
+
+- (#1672): `scm-bisect` has been updated (was missed in v0.11.0)
+
 ## [v0.11.0] - 2026-05-21
 
 ### Added
