@@ -1481,7 +1481,7 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
 name = "git-branchless"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bstr",
  "bugreport",
@@ -1526,7 +1526,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-hook"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "console",
  "eyre",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-init"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "console",
  "eyre",
@@ -1556,7 +1556,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-invoke"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "clap",
  "color-eyre",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-lib"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1615,7 +1615,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-move"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "eyre",
  "git-branchless-lib",
@@ -1629,7 +1629,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-navigation"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "cursive",
  "eyre",
@@ -1645,7 +1645,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-opts"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "clap",
  "clap_mangen",
@@ -1656,7 +1656,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-query"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "eyre",
  "git-branchless-invoke",
@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-record"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
@@ -1690,7 +1690,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-revset"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bstr",
  "chrono",
@@ -1716,7 +1716,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-reword"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bstr",
  "chrono",
@@ -1734,7 +1734,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-smartlog"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "cursive_core 0.4.6",
  "eyre",
@@ -1749,7 +1749,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-submit"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "clap",
  "cursive_core 0.4.6",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-test"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bstr",
  "clap",
@@ -1805,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-undo"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
@@ -3595,7 +3595,7 @@ checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
 
 [[package]]
 name = "scm-bisect"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "indexmap",
  "insta",
