@@ -842,7 +842,7 @@ pub struct GlobalArgs {
 ///
 /// See the documentation at https://github.com/arxanas/git-branchless/wiki.
 #[derive(Debug, Parser)]
-#[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
+#[clap(name = "git-branchless", version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 pub struct Opts {
     /// Global arguments.
     #[clap(flatten)]
