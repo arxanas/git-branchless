@@ -377,6 +377,52 @@ impl NodeDescriptor for BranchesDescriptor<'_> {
     }
 }
 
+/// Display linked worktrees which currently have a commit checked out.
+#[derive(Debug)]
+pub struct WorktreeDescriptor<'a> {
+    worktree_snapshot: &'a crate::core::worktree::WorktreeSnapshot,
+}
+
+impl<'a> WorktreeDescriptor<'a> {
+    /// Constructor.
+    pub fn new(
+        worktree_snapshot: &'a crate::core::worktree::WorktreeSnapshot,
+    ) -> eyre::Result<Self> {
+        Ok(Self { worktree_snapshot })
+    }
+}
+
+impl NodeDescriptor for WorktreeDescriptor<'_> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
+        if self.worktree_snapshot.entries.len() <= 1 {
+            return Ok(None);
+        }
+
+        let worktrees: Vec<String> = self
+            .worktree_snapshot
+            .find_by_head_oid(object.get_oid())
+            .into_iter()
+            .map(|entry| {
+                let icon = if entry.is_current { "ᐅ" } else { "⎇" }.to_string();
+                format!("{icon} {}", entry.display_name())
+            })
+            .collect();
+
+        if worktrees.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(StyledString::styled(
+                format!("({})", worktrees.join(", ")),
+                BaseColor::Blue.light(),
+            )))
+        }
+    }
+}
+
 /// Display the associated Phabricator revision for a given commit.
 #[derive(Debug)]
 pub struct DifferentialRevisionDescriptor<'a> {

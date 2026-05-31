@@ -277,9 +277,15 @@ fn test_worktree_working_copy_path() -> eyre::Result<()> {
     let GitWorktreeWrapper { temp_dir, worktree } = make_git_worktree(&git, "new-worktree")?;
     {
         let stdout = worktree.smartlog()?;
+        let repo_name = git
+            .repo_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap();
+        let stdout = stdout.replace(repo_name, "<repo-name>");
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d (master) create test1.txt
+        @ 62fc20d (master) (⎇ <repo-name>, ᐅ new-worktree) create test1.txt
         "###);
     }
 

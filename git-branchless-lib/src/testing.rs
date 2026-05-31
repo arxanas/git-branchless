@@ -112,6 +112,12 @@ impl Git {
             .to_str()
             .ok_or_else(|| eyre::eyre!("Could not convert repo path to string"))?;
         let output = output.replace(repo_path, "<repo-path>");
+        lazy_static! {
+            static ref TEMPFILE_NAME_RE: Regex = Regex::new(r"\.tmp[[:alnum:]]+").unwrap();
+        }
+        let output = TEMPFILE_NAME_RE
+            .replace_all(&output, "<repo-name>")
+            .into_owned();
 
         lazy_static! {
             // Simulate clearing the terminal line by searching for the
