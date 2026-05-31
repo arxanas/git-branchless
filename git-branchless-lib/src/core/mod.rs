@@ -12,3 +12,4 @@ pub mod repo_ext;
 pub mod rewrite;
 pub mod task;
 pub mod untracked_file_cache;
+pub mod worktree;

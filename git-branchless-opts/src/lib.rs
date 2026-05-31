@@ -380,6 +380,10 @@ pub struct SmartlogArgs {
     #[clap(long)]
     pub exact: bool,
 
+    /// Show linked worktrees in the smartlog.
+    #[clap(long)]
+    pub worktrees: bool,
+
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,

@@ -20,7 +20,7 @@ use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{Revset, SmartlogArgs};
 use lib::core::config::{
     Hint, get_hint_enabled, get_hint_string, get_smartlog_default_revset, get_smartlog_reverse,
-    print_hint_suppression_notice,
+    get_smartlog_show_worktrees, print_hint_suppression_notice,
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
@@ -34,8 +34,9 @@ use lib::core::formatting::Pluralize;
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
-    RelativeTimeDescriptor,
+    RelativeTimeDescriptor, WorktreeDescriptor,
 };
+use lib::core::worktree::get_linked_worktrees;
 use lib::git::{GitRunInfo, Repo};
 
 pub use graph::{SmartlogGraph, make_smartlog_graph};
@@ -753,6 +754,9 @@ mod render {
 
         /// Normally HEAD and the main branch are included. Set this to exclude them.
         pub exact: bool,
+
+        /// Include linked worktrees in the smartlog output.
+        pub worktrees: bool,
     }
 }
 
@@ -769,6 +773,7 @@ pub fn smartlog(
         resolve_revset_options,
         reverse,
         exact,
+        worktrees,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -798,6 +803,21 @@ pub fn smartlog(
         event_cursor,
         &references_snapshot,
     )?;
+    let show_worktrees = event_id.is_none() && (worktrees || get_smartlog_show_worktrees(&repo)?);
+    let worktree_snapshot = if show_worktrees {
+        get_linked_worktrees(git_run_info, &repo)?
+    } else {
+        Default::default()
+    };
+    let worktree_head_oids = worktree_snapshot.active_head_oids();
+    if !worktree_head_oids.is_empty() {
+        dag.sync_from_oids(
+            effects,
+            &repo,
+            CommitSet::empty(),
+            worktree_head_oids.iter().copied().collect(),
+        )?;
+    }
 
     let revset = match revset {
         Some(revset) => revset,
@@ -814,6 +834,11 @@ pub fn smartlog(
                 return Ok(Err(ExitCode(1)));
             }
         };
+    let commits = if show_worktrees && !exact {
+        commits.union(&worktree_snapshot.active_head_oids().into_iter().collect())
+    } else {
+        commits
+    };
 
     let graph = make_smartlog_graph(
         effects,
@@ -854,6 +879,7 @@ pub fn smartlog(
                 &references_snapshot,
                 &Redactor::Disabled,
             )?,
+            &mut WorktreeDescriptor::new(&worktree_snapshot)?,
             &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
             &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
@@ -926,6 +952,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
         resolve_revset_options,
         reverse,
         exact,
+        worktrees,
     } = args;
 
     smartlog(
@@ -937,6 +964,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
             resolve_revset_options,
             reverse,
             exact,
+            worktrees,
         },
     )
 }

@@ -115,6 +115,13 @@ pub fn get_smartlog_reverse(repo: &Repo) -> eyre::Result<bool> {
         .get_or("branchless.smartlog.reverse", false)
 }
 
+/// Whether to show linked worktrees in the smartlog by default.
+#[instrument]
+pub fn get_smartlog_show_worktrees(repo: &Repo) -> eyre::Result<bool> {
+    repo.get_readonly_config()?
+        .get_or("branchless.smartlog.showWorktrees", false)
+}
+
 /// Get the default comment character.
 #[instrument]
 pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {
