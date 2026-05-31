@@ -43,7 +43,23 @@ pub const TEST_ABORT_EXIT_CODE: i32 = 127;
 
 /// Convert a command string into a string that's safe to use as a filename.
 pub fn make_test_command_slug(command: String) -> String {
-    command.replace(['/', ' ', '\n'], "__")
+    // The slug is used as a directory name, so replace every character that is
+    // invalid in a path component on any supported platform. Windows forbids
+    // `<>:"/\|?*` and ASCII control characters (`/` is also a path separator on
+    // Unix); spaces are replaced for readability. Without this, `git test -x`
+    // commands containing e.g. pipes or redirects fail to create their cache
+    // directory on Windows. See
+    // https://github.com/arxanas/git-branchless/issues/1629.
+    command.replace(
+        |c: char| {
+            c.is_control()
+                || matches!(
+                    c,
+                    '/' | '\\' | '<' | '>' | ':' | '"' | '|' | '?' | '*' | ' '
+                )
+        },
+        "__",
+    )
 }
 
 /// A version of `NonZeroOid` that can be serialized and deserialized.
@@ -136,4 +152,46 @@ pub fn get_test_worktrees_dir(repo: &Repo) -> Result<PathBuf, RepoError> {
 /// Get the path to the file where the latest test command is stored.
 pub fn get_latest_test_command_path(repo: &Repo) -> Result<PathBuf, RepoError> {
     Ok(get_test_dir(repo)?.join("latest-command"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_test_command_slug_replaces_path_invalid_chars() {
+        // The slug is used as a directory name, so it must not contain
+        // characters that are invalid in a path component on any supported
+        // platform. Windows forbids `<>:"/\|?*` and control characters; before
+        // #1629 these passed through unchanged and broke `git test`'s cache
+        // directory creation. This asserts the slug's output contract, so it
+        // fails on every platform (not just Windows).
+        let slug = make_test_command_slug("echo <a> | tee \"f:i*l?e\" > /x\\y".to_string());
+        for invalid in ['/', '\\', '<', '>', ':', '"', '|', '?', '*'] {
+            assert!(
+                !slug.contains(invalid),
+                "slug {slug:?} still contains path-invalid char {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_make_test_command_slug_replaces_control_chars() {
+        // Control characters (including the newline handled before #1629) are
+        // invalid in Windows paths and must not survive into the slug.
+        let slug = make_test_command_slug("a\nb\tc\rd".to_string());
+        assert!(
+            !slug.chars().any(|c| c.is_control()),
+            "slug {slug:?} still contains a control character"
+        );
+    }
+
+    #[test]
+    fn test_make_test_command_slug_preserves_simple_command() {
+        // An ordinary command keeps a human-readable, unchanged slug.
+        assert_eq!(
+            make_test_command_slug("cargo test".to_string()),
+            "cargo__test"
+        );
+    }
 }
