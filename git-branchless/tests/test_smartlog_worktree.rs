@@ -72,6 +72,26 @@ fn test_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_navigation_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    let _worktree = make_git_worktree(&git, "side")?;
+
+    git.run(&["config", "branchless.smartlog.showWorktrees", "true"])?;
+    let (stdout, _stderr) = git.branchless("prev", &[])?;
+    insta::assert_snapshot!(stdout, @r###"
+    branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --
+    @ f777ecc (ᐅ <repo-name>) create initial.txt
+    |
+    O 62fc20d (master) (⎇ side) create test1.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
 fn test_smartlog_shows_attached_linked_worktree_outside_default_selection() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
@@ -90,6 +110,43 @@ fn test_smartlog_shows_attached_linked_worktree_outside_default_selection() -> e
     O 62fc20d (topic) (⎇ topic-wt) create test1.txt
     |
     @ 96d1c37 (> master) (ᐅ <repo-name>) create test2.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_move_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    let worktree_wrapper = make_git_worktree(&git, "topic-wt")?;
+    let worktree = worktree_wrapper.worktree;
+    git.run(&["checkout", "master"])?;
+    worktree.run(&["config", "branchless.smartlog.showWorktrees", "true"])?;
+
+    let (stdout, _stderr) = worktree.branchless("move", &["-s", "@", "-d", "master"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    Attempting rebase in-memory...
+    [1/1] Committed as: 4838e49 create test3.txt
+    branchless: processing 1 rewritten commit
+    branchless: running command: <git-executable> checkout 4838e49b08954becdd17c0900c1179c2c654c627 --
+    :
+    O 62fc20d (master) (⎇ <repo-name>) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    |
+    @ 4838e49 (ᐅ topic-wt) create test3.txt
+    In-memory rebase succeeded.
     "###);
 
     Ok(())
