@@ -134,6 +134,12 @@ pub struct Glyphs {
     /// Character used to point to the currently-checked-out branch.
     pub branch_arrow: &'static str,
 
+    /// Character used to point to the current worktree.
+    pub worktree_current: &'static str,
+
+    /// Character used to point to a linked worktree.
+    pub worktree_linked: &'static str,
+
     /// Bullet-point character for a list of newline-separated items.
     pub bullet_point: &'static str,
 
@@ -185,6 +191,8 @@ impl Glyphs {
             commit_merge: "&",
             commit_merge_rev: "&",
             branch_arrow: ">",
+            worktree_current: ">",
+            worktree_linked: "wt",
             bullet_point: "-",
             cycle_arrow: ">",
             cycle_horizontal_line: "-",
@@ -215,6 +223,8 @@ impl Glyphs {
             commit_main_obsolete: "✕",
             commit_main_obsolete_head: "❖",
             branch_arrow: "ᐅ",
+            worktree_current: "ᐅ",
+            worktree_linked: "⎇",
             bullet_point: "•",
             cycle_arrow: "ᐅ",
             cycle_horizontal_line: "─",
