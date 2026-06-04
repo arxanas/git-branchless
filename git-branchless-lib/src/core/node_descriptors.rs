@@ -395,7 +395,7 @@ impl<'a> WorktreeDescriptor<'a> {
 impl NodeDescriptor for WorktreeDescriptor<'_> {
     fn describe_node(
         &mut self,
-        _glyphs: &Glyphs,
+        glyphs: &Glyphs,
         object: &NodeObject,
     ) -> eyre::Result<Option<StyledString>> {
         if self.worktree_snapshot.entries.len() <= 1 {
@@ -407,7 +407,11 @@ impl NodeDescriptor for WorktreeDescriptor<'_> {
             .find_by_head_oid(object.get_oid())
             .into_iter()
             .map(|entry| {
-                let icon = if entry.is_current { "ᐅ" } else { "⎇" }.to_string();
+                let icon = if entry.is_current {
+                    glyphs.worktree_current
+                } else {
+                    glyphs.worktree_linked
+                };
                 format!("{icon} {}", entry.display_name())
             })
             .collect();
