@@ -285,7 +285,7 @@ fn test_worktree_working_copy_path() -> eyre::Result<()> {
         let stdout = stdout.replace(repo_name, "<repo-name>");
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d (master) (⎇ <repo-name>, ᐅ new-worktree) create test1.txt
+        @ 62fc20d (master) create test1.txt
         "###);
     }
 
