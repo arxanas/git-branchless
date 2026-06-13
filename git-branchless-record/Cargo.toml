@@ -7,6 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.11.1"
 
 [dependencies]
+chrono = { workspace = true }
 cursive = { version = "0.21.1", default-features = false, features = [
     "crossterm-backend",
 ] }
