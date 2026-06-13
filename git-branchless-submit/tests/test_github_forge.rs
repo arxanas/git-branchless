@@ -70,6 +70,92 @@ fn rebase_and_merge(remote_repo: &Git, branch_name: &str) -> eyre::Result<()> {
 }
 
 #[test]
+fn test_github_forge_uses_commit_message_body_for_pull_request_body() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _temp_dir,
+        original_repo: remote_repo,
+        cloned_repo: local_repo,
+    } = make_git_with_remote_repo()?;
+    if remote_repo.get_version()? < MIN_VERSION {
+        return Ok(());
+    }
+
+    remote_repo.init_repo()?;
+    remote_repo.clone_repo_into(&local_repo, &[])?;
+
+    local_repo.detach_head()?;
+    local_repo.write_file_txt("test1", "test1 contents\n")?;
+    local_repo.run(&["add", "."])?;
+    local_repo.run_with_options(
+        &[
+            "commit",
+            "-m",
+            "Summarize bridge behavior",
+            "-m",
+            "Explain why the collision model has to change.\n\nInclude the follow-up notes.",
+        ],
+        &GitRunOptions {
+            time: 1,
+            ..Default::default()
+        },
+    )?;
+
+    {
+        let (stdout, _stderr) = local_repo.branchless_with_options(
+            "submit",
+            &["--create", "--forge", "github"],
+            &GitRunOptions {
+                env: mock_env(&remote_repo),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> push --set-upstream origin mock-github-username/summarize-bridge-behavior
+        branch 'mock-github-username/summarize-bridge-behavior' set up to track 'origin/mock-github-username/summarize-bridge-behavior'.
+        Updating pull request (title, body) for commit 09180d7 Summarize bridge behavior
+        branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/summarize-bridge-behavior
+        Submitted 1 commit: mock-github-username/summarize-bridge-behavior
+        "###);
+    }
+    {
+        let state = dump_state(&local_repo, &remote_repo)?;
+        insta::assert_snapshot!(state, @r###"
+        Local state:
+        O f777ecc (master) create initial.txt
+        |
+        @ 09180d7 (mock-github-username/summarize-bridge-behavior) Summarize bridge behavior
+
+
+        Remote state:
+        @ f777ecc (> master) create initial.txt
+        |
+        o 09180d7 (mock-github-username/summarize-bridge-behavior) Summarize bridge behavior
+
+
+        Pull request info:
+        {
+          "pull_request_index": 1,
+          "pull_requests": {
+            "mock-github-username/summarize-bridge-behavior": {
+              "number": 1,
+              "url": "https://example.com/mock-github-username/mock-github-repo/pulls/1",
+              "headRefName": "mock-github-username/summarize-bridge-behavior",
+              "headRefOid": "09180d7e58d6f28c46a11d4e25ca0fec879d62d0",
+              "baseRefName": "master",
+              "closed": false,
+              "isDraft": false,
+              "title": "[1/1] Summarize bridge behavior",
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\nExplain why the collision model has to change.\n\nInclude the follow-up notes.\n\n"
+            }
+          }
+        }
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_github_forge_reorder_commits() -> eyre::Result<()> {
     let GitWrapperWithRemoteRepo {
         temp_dir: _temp_dir,
@@ -139,7 +225,7 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[1/2] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test1.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             },
             "mock-github-username/create-test2-txt": {
               "number": 2,
@@ -150,7 +236,7 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[2/2] create test2.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test2.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             }
           }
         }
@@ -210,7 +296,7 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[2/2] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test1.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n"
             },
             "mock-github-username/create-test2-txt": {
               "number": 2,
@@ -221,7 +307,7 @@ fn test_github_forge_reorder_commits() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[1/2] create test2.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test2.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n"
             }
           }
         }
@@ -302,7 +388,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[1/2] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test1.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             },
             "mock-github-username/create-test2-txt": {
               "number": 2,
@@ -313,7 +399,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[2/2] create test2.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test2.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             }
           }
         }
@@ -392,7 +478,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
               "closed": true,
               "isDraft": false,
               "title": "[1/2] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test1.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             },
             "mock-github-username/create-test2-txt": {
               "number": 2,
@@ -403,7 +489,7 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[1/1] create test2.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test2.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n"
             }
           }
         }
@@ -493,7 +579,7 @@ fn test_github_forge_no_include_unsubmitted_commits_in_stack() -> eyre::Result<(
               "closed": false,
               "isDraft": false,
               "title": "[1/1] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test1.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n"
             }
           }
         }
@@ -587,7 +673,7 @@ fn test_github_forge_multiple_commits_in_pull_request() -> eyre::Result<()> {
               "closed": false,
               "isDraft": false,
               "title": "[1/1] create test3.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test3.txt\n\n"
+              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n"
             }
           }
         }
