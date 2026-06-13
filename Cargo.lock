@@ -1673,6 +1673,7 @@ dependencies = [
 name = "git-branchless-record"
 version = "0.11.1"
 dependencies = [
+ "chrono",
  "cursive",
  "cursive_buffered_backend",
  "eyre",
