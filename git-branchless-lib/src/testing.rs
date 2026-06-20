@@ -16,7 +16,7 @@ use crate::core::config::env_vars::{
     should_use_separate_command_binary,
 };
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
-use crate::util::get_sh;
+use crate::util::{get_from_path, get_sh};
 use color_eyre::Help;
 use eyre::Context;
 use itertools::Itertools;
@@ -46,6 +46,18 @@ fn try_find_cargo_bin(name: &str) -> Option<PathBuf> {
     let bin_path =
         find_cargo_target_profile_dir()?.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     bin_path.exists().then_some(bin_path)
+}
+
+/// Look up the path where Git shell scripts (e.g. `git-submodule`) might want
+/// to invoke standard Unix utilities.
+///
+/// We add the directory containing the shell binary to the search path, but on
+/// macOS, `sh` lives in `/bin` but tools like `sed` and `basename` live in
+/// `/usr/bin`, so we need to add `/usr/bin` to the search path as well.
+fn get_shell_utils_dir() -> Option<PathBuf> {
+    let basename_path = get_from_path("basename")?;
+    let basename_dir = basename_path.parent()?;
+    Some(basename_dir.to_path_buf())
 }
 
 const DUMMY_NAME: &str = "Testy McTestface";
@@ -188,6 +200,7 @@ impl Git {
             .expect("Unable to find git-branchless target directory");
         let bash = get_sh().expect("bash missing?");
         let bash_path = bash.parent().unwrap();
+        let shell_utils_dir = get_shell_utils_dir().expect("shell utils dir missing?");
         std::env::join_paths(vec![
             // For Git to be able to launch `git-branchless`.
             branchless_path.as_os_str(),
@@ -195,6 +208,8 @@ impl Git {
             self.git_exec_path.as_os_str(),
             // For branchless to manually invoke bash when needed.
             bash_path.as_os_str(),
+            // For Git shell scripts to invoke standard Unix utilities.
+            shell_utils_dir.as_os_str(),
         ])
         .expect("joining paths")
     }
