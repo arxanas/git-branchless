@@ -62,7 +62,7 @@ fn get_shell_utils_dir() -> Option<PathBuf> {
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
-const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
+const DUMMY_DATE: &str = "Thu, 29 Oct 2020 12:34:56";
 
 /// Wrapper around the Git executable, for testing.
 #[derive(Clone, Debug)]
@@ -218,7 +218,7 @@ impl Git {
     pub fn get_base_env(&self, time: isize) -> Vec<(OsString, OsString)> {
         // Required for determinism, as these values will be baked into the commit
         // hash.
-        let date: OsString = format!("{DUMMY_DATE} -{time:0>2}").into();
+        let date: OsString = format!("{DUMMY_DATE} -{time:0>2}00").into();
 
         // Fake "editor" which accepts the default contents of any commit
         // messages. Usually, we can set this with `git commit -m`, but we have
@@ -228,15 +228,24 @@ impl Git {
         // ":" is understood by `git` to skip editing.
         let git_editor = OsString::from(":");
 
+        // Set timezone to avoid snapshot conflicts between local machines in
+        // different timezones, and CI. This may only affect places where we
+        // create wholely new commits, eg `record --new`.
+        let git_timezone = OsString::from("UTC");
+
         let new_path = self.get_path_for_env();
         let envs = vec![
             ("GIT_CONFIG_NOSYSTEM", OsString::from("1")),
+            // Note that git also supports a GIT_TEST_DATE_NOW env var, which
+            // may come in useful in the future:
+            // https://github.com/git/git/blob/7bcaabddcf68bd0702697da5904c3b68c52f94cf/date.c#L128
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
             ("GIT_EXEC_PATH", self.git_exec_path.as_os_str().into()),
             ("LC_ALL", "C".into()),
             ("PATH", new_path),
+            ("TZ", git_timezone),
             (TEST_GIT, self.path_to_git.as_os_str().into()),
             (
                 TEST_SEPARATE_COMMAND_BINARIES,

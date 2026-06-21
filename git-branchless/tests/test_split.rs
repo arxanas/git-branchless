@@ -239,6 +239,73 @@ fn test_split_deleted_file() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_split_renamed_file() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.commit_file("test1", 1)?;
+
+    git.run(&["mv", "test1.txt", "test1-renamed.txt"])?;
+    git.write_file_txt("test2", "new contents")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "first commit"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |
+            @ d5713a5 first commit
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt => test1-renamed.txt | 0
+            test2.txt                      | 1 +
+            2 files changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("split", &["HEAD", "test1-renamed.txt"])?;
+        insta::assert_snapshot!(&stdout, @r###"
+            branchless: running command: <git-executable> checkout 495b4c09b4cc1755847ba0fd42c903f9c7eecc00 --
+            Nothing to restack.
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |
+            @ 495b4c0 first commit
+            |
+            o ca4a140 temp(split): test1-renamed.txt (0)
+        "###);
+    }
+
+    {
+        git.branchless("next", &[])?;
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test2.txt | 1 +
+            1 file changed, 1 insertion(+)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
+        insta::assert_snapshot!(&stdout, @"
+            test1.txt => test1-renamed.txt | 0
+            1 file changed, 0 insertions(+), 0 deletions(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_split_multiple_files() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
@@ -1596,6 +1663,243 @@ fn test_split_does_not_unhide_obsolete_children() -> eyre::Result<()> {
             test3.txt | 1 +
             2 files changed, 2 insertions(+), 1 deletion(-)
         ");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_split_hunk_by_line_number() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    // Create a file with enough lines to produce two separate diff hunks.
+    git.write_file(
+        "test.txt",
+        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "initial file"])?;
+
+    // Modify line 1 and line 10 — far enough apart to be separate diff hunks.
+    git.write_file(
+        "test.txt",
+        "MODIFIED line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nMODIFIED line 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "modify two hunks"])?;
+
+    // Split: extract only the hunk touching new-file line 1 (line-1 change).
+    git.branchless("split", &["HEAD", "test.txt:1"])?;
+    git.branchless("next", &[])?;
+
+    // The remainder (HEAD~) should keep the line-10 change only; line 1 is
+    // reverted to its original value.
+    let (stdout, _stderr) = git.run(&["show", "HEAD~:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        MODIFIED line 10
+    "###);
+
+    // The extracted commit (HEAD) re-introduces only the line-1 change on top
+    // of the remainder, so the file reaches full-target state.
+    let (stdout, _stderr) = git.run(&["show", "HEAD:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        MODIFIED line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        MODIFIED line 10
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_split_hunk_line_range() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    // Create a file with enough lines to produce three separate diff hunks.
+    git.write_file(
+        "test.txt",
+        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "initial file"])?;
+
+    // Modify lines 1, 10 and 20 — far enough apart to be separate diff hunks.
+    git.write_file(
+        "test.txt",
+        "MODIFIED line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nMODIFIED line 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nMODIFIED line 20\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "modify three hunks"])?;
+
+    // Extract the first and second hunk using an explicit range.
+    git.branchless("split", &["HEAD", "test.txt:1-10"])?;
+    git.branchless("next", &[])?;
+
+    // Remainder: line 20 kept, lines 1 and 10 reverted to original.
+    let (stdout, _stderr) = git.run(&["show", "HEAD~:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        line 10
+        line 11
+        line 12
+        line 13
+        line 14
+        line 15
+        line 16
+        line 17
+        line 18
+        line 19
+        MODIFIED line 20
+    "###);
+
+    // Extracted: changed lines 1 and 10 re-introduced on top of the remainder.
+    let (stdout, _stderr) = git.run(&["show", "HEAD:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        MODIFIED line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        MODIFIED line 10
+        line 11
+        line 12
+        line 13
+        line 14
+        line 15
+        line 16
+        line 17
+        line 18
+        line 19
+        MODIFIED line 20
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_split_hunk_insert_before() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file(
+        "test.txt",
+        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "initial file"])?;
+
+    git.write_file(
+        "test.txt",
+        "MODIFIED line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nMODIFIED line 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "modify two hunks"])?;
+
+    // InsertBefore: extract the line-1 hunk as a new parent of the current commit.
+    git.branchless("split", &["HEAD", "--before", "test.txt:1"])?;
+
+    // HEAD~ is the extracted commit: only the line-1 change applied to the
+    // original parent.
+    let (stdout, _stderr) = git.run(&["show", "HEAD~:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        MODIFIED line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        line 10
+    "###);
+
+    // HEAD is the rebased original commit: the line-10 change is applied on
+    // top of HEAD~, reaching full-target state.
+    let (stdout, _stderr) = git.run(&["show", "HEAD:test.txt"])?;
+    insta::assert_snapshot!(&stdout, @r###"
+        MODIFIED line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        line 9
+        MODIFIED line 10
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_split_hunk_no_match_error() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.write_file(
+        "test.txt",
+        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "initial file"])?;
+
+    // Only modify line 1.
+    git.write_file(
+        "test.txt",
+        "MODIFIED line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+    )?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "modify line 1"])?;
+
+    // Attempt to extract from a line that has no change.
+    {
+        let (_stdout, stderr) = git.branchless_with_options(
+            "split",
+            &["HEAD", "test.txt:5"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(&stderr, @r###"
+            Aborting: no changed hunks found overlapping line 5 in 'test.txt'.
+        "###);
     }
 
     Ok(())

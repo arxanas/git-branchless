@@ -504,6 +504,197 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_record_new() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+
+    {
+        // --new w/ changes in the working copy
+        git.write_file_txt("test1", "new test1 contents\n")?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit 1", "--new"],
+            &GitRunOptions {
+                time: 2,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> update-ref refs/heads/master f25fe40ff47319c8b8c61a32c03f2c3558aacadd
+        branchless: running command: <git-executable> checkout master --
+        M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit f25fe40ff47319c8b8c61a32c03f2c3558aacadd
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 14:34:56 2020 +0000
+
+            empty commit 1
+        "###);
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ f25fe40 (> master) empty commit 1
+        "###);
+    }
+
+    {
+        // --new w/ changes in the index
+        git.run(&["add", "test1.txt"])?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit 2", "--new"],
+            &GitRunOptions {
+                time: 2,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> update-ref refs/heads/master 46ba0c4efce07dc705498e7b79f7116d4e9ef7a3
+        branchless: running command: <git-executable> checkout master --
+        M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 46ba0c4efce07dc705498e7b79f7116d4e9ef7a3
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 14:34:56 2020 +0000
+
+            empty commit 2
+        "###);
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 46ba0c4 (> master) empty commit 2
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_uses_user_name_and_email() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+            commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            Author: Testy McTestface <test@example.com>
+            Date:   Thu Oct 29 12:34:56 2020 -0100
+
+                create test1.txt
+
+            test1.txt
+        "###);
+    }
+
+    {
+        git.run(&["config", "user.name", "Uncreative User Name"])?;
+        git.run(&["config", "user.email", "boring@example.com"])?;
+        git.write_file_txt("test1", "new test1 contents\n")?;
+
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit 1", "--new"],
+            &GitRunOptions {
+                time: 2,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> update-ref refs/heads/master d4aea9dcdb2ad9ddedc964de9e782aad5a97b864
+        branchless: running command: <git-executable> checkout master --
+        M	test1.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(_stderr+&stdout, @r###"
+        commit d4aea9dcdb2ad9ddedc964de9e782aad5a97b864
+        Author: Uncreative User Name <boring@example.com>
+        Date:   Thu Oct 29 14:34:56 2020 +0000
+
+            empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_insert() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["switch", "--create", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
+
+    let (stdout, _stderr) = git.branchless_with_options(
+        "record",
+        &["-m", "empty commit", "--new", "--insert"],
+        &GitRunOptions {
+            time: 2,
+            ..Default::default()
+        },
+    )?;
+    insta::assert_snapshot!(stdout, @r###"
+    branchless: running command: <git-executable> checkout 1eee4c0fe5759bd57e95d3b45dd0907fab18b399 --
+    M	test1.txt
+    Attempting rebase in-memory...
+    [1/1] Committed as: b8be95f create test2.txt
+    branchless: processing 1 update: branch test
+    branchless: processing 1 rewritten commit
+    In-memory rebase succeeded.
+    "###);
+
+    let (stdout, _stderr) = git.run(&["show"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    commit 1eee4c0fe5759bd57e95d3b45dd0907fab18b399
+    Author: Testy McTestface <test@example.com>
+    Date:   Thu Oct 29 14:34:56 2020 +0000
+
+        empty commit
+    "###);
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 1eee4c0 empty commit
+    |
+    o b8be95f (test) create test2.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
 fn test_record_detach() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -1166,6 +1357,439 @@ fn test_record_fixup() -> eyre::Result<()> {
     The commit supplied to --fixup must be an ancestor of the commit being created.
     Aborting.
     ");
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_moves_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    {
+        // Switch to a new branch and then create a new commit. The branch
+        // pointer should advance with the new commit.
+        git.run(&["switch", "--create", "test"])?;
+        git.branchless("record", &["-m", "empty commit 1", "--new"])?;
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 1fa4693 (> test) empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_marks_commit_reachable() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+    "###);
+
+    {
+        // Create new commit then switch back to master.
+        git.branchless("record", &["-m", "empty commit 1", "--new"])?;
+        git.run(&["switch", "master"])?;
+
+        // The new commit should still appear in the smartlog even though no
+        // branch points to it.
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+        |
+        o dc158fa empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_new_with_create() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+    "###);
+
+    {
+        // Create a new commit and a new branch, which should be checked out.
+        git.branchless(
+            "record",
+            &["-m", "empty commit 1", "--new", "--create", "foo"],
+        )?;
+
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ dc158fa (> foo) empty commit 1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Modify test1.txt; test2 only creates test2.txt so there's no conflict.
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 463e306] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 7623e3c create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 77bd569 update test1.txt
+        |
+        @ 7623e3c (> test) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_with_new() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // There are uncommitted changes, but --new leaves them uncommitted.
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-m", "empty commit", "--new", "--before"],
+            &GitRunOptions {
+                env: [("TEST_RECORD_NEW_FAKE_COMMIT_TIME", "true")]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> update-ref refs/heads/test c3e40a88947f6e183deea74f942f78d3fd1eb1e1
+        branchless: running command: <git-executable> checkout test --
+        M	test1.txt
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 58e7d1c create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        M	test1.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o aa6c7c3 empty commit
+        |
+        @ 58e7d1c (> test) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_rewrite_public_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // HEAD (test2) is on master, which is a public branch — should warn.
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.write_file_txt("test1", "updated test1 contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master 463e306] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        You are trying to rewrite 1 public commit, such as: 96d1c37 create test2.txt
+        It is generally not advised to rewrite public commits, because your
+        collaborators will have difficulty merging your changes.
+        To proceed anyways, run: git move -f . --onto 77bd569 update test1.txt
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d create test1.txt
+        |\
+        | o 77bd569 update test1.txt
+        |
+        @ 96d1c37 (> master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_merge_conflict() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    // test2 modifies the same file we'll commit with --before → merge conflict.
+    git.commit_file_with_contents("test1", 2, "test2 contents\n")?;
+
+    git.write_file_txt("test1", "new before contents\n")?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 6e9fea0] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) 5e6b0c6 create test1.txt
+        To resolve merge conflicts, run: git move -m -x HEAD~ --onto HEAD
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 2b1ae10 update test1.txt
+        |
+        @ 5e6b0c6 (> test) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_staged_and_unstaged() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Stage a change to test1.txt — this should end up in the inserted commit.
+    git.write_file_txt("test1", "staged contents\n")?;
+    git.run(&["add", "test1.txt"])?;
+
+    // Leave an unstaged change to test2.txt — this should stay in the working copy.
+    git.write_file_txt("test2", "unstaged contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless("record", &["-m", "stage test1"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 02b4735] stage test1
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        "###);
+    }
+
+    // The inserted commit (HEAD~) should contain only the staged test1.txt change.
+    {
+        let (stdout, _stderr) = git.run(&["show", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 02b473536b573bdfd6ad7b0f224f167672bdf974
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            stage test1
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..4480ae4 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +staged contents
+        "###);
+    }
+
+    // The unstaged test2.txt change should still be in the working copy.
+    {
+        let (stdout, _stderr) = git.run(&["diff"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        index 4e512d2..e66716d 100644
+        --- a/test2.txt
+        +++ b/test2.txt
+        @@ -1 +1 @@
+        -test2 contents
+        +unstaged contents
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_before_staged_and_unstaged() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    // Set up: initial <- test1 (A) <- test2 (B = HEAD on `test` branch)
+    git.run(&["checkout", "-B", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Stage a change to test1.txt — this should end up in the inserted commit.
+    git.write_file_txt("test1", "staged contents\n")?;
+    git.run(&["add", "test1.txt"])?;
+
+    // Leave an unstaged change to test2.txt — this should stay in the working copy.
+    git.write_file_txt("test2", "unstaged contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.branchless("record", &["-m", "stage test1", "--before"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [test 02b4735] stage test1
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> reset --soft HEAD~
+        Attempting rebase in-memory...
+        [1/1] Committed as: 24a7c74 create test2.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout test --
+        M	test2.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    // The inserted commit (HEAD~) should contain only the staged test1.txt change.
+    {
+        let (stdout, _stderr) = git.run(&["show", "HEAD~"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit f3aa5fda4f220b2ca8d204f46134582f14d4761f
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            stage test1
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..4480ae4 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +staged contents
+        "###);
+    }
+
+    // The unstaged test2.txt change should still be in the working copy.
+    {
+        let (stdout, _stderr) = git.run(&["diff"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        index 4e512d2..e66716d 100644
+        --- a/test2.txt
+        +++ b/test2.txt
+        @@ -1 +1 @@
+        -test2 contents
+        +unstaged contents
+        "###);
+    }
 
     Ok(())
 }
