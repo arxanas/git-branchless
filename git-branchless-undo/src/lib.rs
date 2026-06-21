@@ -45,6 +45,7 @@ use lib::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
+use lib::core::worktree::get_linked_worktrees;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 
 fn render_cursor_smartlog(
@@ -784,6 +785,70 @@ fn extract_checkout_target(
     Ok((checkout_target, new_events))
 }
 
+fn infer_checkout_target_for_moved_head_ref(
+    head_info: &ResolvedReferenceInfo,
+    events: &[&Event],
+) -> Option<UndoCheckoutTarget> {
+    let head_ref_name = head_info.reference_name.as_ref()?;
+    let new_oid = events.iter().rev().find_map(|event| match event {
+        Event::RefUpdateEvent {
+            ref_name,
+            old_oid: _,
+            new_oid: MaybeZeroOid::NonZero(new_oid),
+            ..
+        } if ref_name == head_ref_name => Some(*new_oid),
+        _ => None,
+    })?;
+    Some(UndoCheckoutTarget {
+        target: CheckoutTarget::Oid(new_oid),
+        options: CheckOutCommitOptions {
+            additional_args: vec!["--detach".into()],
+            force_detach: false,
+            reset: false,
+            render_smartlog: true,
+        },
+    })
+}
+
+fn check_for_branches_active_in_other_worktrees(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    events: &[&Event],
+) -> EyreExitOr<()> {
+    let worktree_snapshot = get_linked_worktrees(git_run_info, repo)?;
+    for event in events {
+        let Event::RefUpdateEvent {
+            ref_name,
+            old_oid: _,
+            new_oid: _,
+            ..
+        } = event
+        else {
+            continue;
+        };
+
+        let CategorizedReferenceName::LocalBranch { .. } = CategorizedReferenceName::new(ref_name)
+        else {
+            continue;
+        };
+
+        if let Some(entry) = worktree_snapshot.find_by_branch(ref_name) {
+            if !entry.is_current {
+                let branch_name = CategorizedReferenceName::new(ref_name).render_suffix();
+                writeln!(
+                    effects.get_error_stream(),
+                    "Branch '{}' is active in another worktree at '{}'. Refusing to undo it.",
+                    branch_name,
+                    entry.path.to_string_lossy()
+                )?;
+                return Ok(Err(ExitCode(1)));
+            }
+        }
+    }
+    Ok(Ok(()))
+}
+
 #[instrument(skip(in_))]
 fn undo_events(
     in_: &mut impl Read,
@@ -862,6 +927,14 @@ fn undo_events(
     .to_string();
 
     let (checkout_target, filtered_events) = extract_checkout_target(&inverse_events)?;
+    let checkout_target = checkout_target
+        .or_else(|| infer_checkout_target_for_moved_head_ref(&head_info, &filtered_events));
+    try_exit_code!(check_for_branches_active_in_other_worktrees(
+        effects,
+        git_run_info,
+        repo,
+        &filtered_events,
+    )?);
     if checkout_target.is_some() {
         repo.detach_head(&head_info)?;
     }
@@ -1051,6 +1124,46 @@ mod tests {
     use super::*;
 
     use lib::core::eventlog::testing::new_event_transaction_id;
+    use lib::git::{NonZeroOid, ReferenceName};
+
+    #[test]
+    fn test_infer_checkout_target_for_moved_head_ref_uses_final_ref_update() -> eyre::Result<()> {
+        let first_oid: NonZeroOid = "1111111111111111111111111111111111111111".parse()?;
+        let final_oid: NonZeroOid = "2222222222222222222222222222222222222222".parse()?;
+        let head_ref_name = ReferenceName::from("refs/heads/master");
+        let head_info = ResolvedReferenceInfo {
+            oid: Some(first_oid),
+            reference_name: Some(head_ref_name.clone()),
+        };
+        let events = [
+            Event::RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId::Id(1),
+                ref_name: head_ref_name.clone(),
+                old_oid: MaybeZeroOid::NonZero(final_oid),
+                new_oid: MaybeZeroOid::NonZero(first_oid),
+                message: None,
+            },
+            Event::RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId::Id(2),
+                ref_name: head_ref_name,
+                old_oid: MaybeZeroOid::NonZero(first_oid),
+                new_oid: MaybeZeroOid::NonZero(final_oid),
+                message: None,
+            },
+        ];
+        let event_refs: Vec<_> = events.iter().collect();
+
+        let checkout_target =
+            infer_checkout_target_for_moved_head_ref(&head_info, &event_refs).unwrap();
+        match checkout_target.target {
+            CheckoutTarget::Oid(oid) => assert_eq!(oid, final_oid),
+            target => panic!("unexpected checkout target: {target:?}"),
+        }
+
+        Ok(())
+    }
 
     #[test]
     fn test_optimize_inverse_events() -> eyre::Result<()> {

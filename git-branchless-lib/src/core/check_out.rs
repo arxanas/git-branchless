@@ -22,6 +22,7 @@ use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
 use super::repo_ext::{RepoExt, RepoReferencesSnapshot};
+use super::worktree::get_linked_worktrees;
 
 /// An entity to check out.
 #[derive(Clone, Debug)]
@@ -67,6 +68,7 @@ impl Default for CheckOutCommitOptions {
 }
 
 fn maybe_get_branch_name(
+    git_run_info: &GitRunInfo,
     current_target: Option<String>,
     oid: Option<NonZeroOid>,
     repo: &Repo,
@@ -94,6 +96,10 @@ fn maybe_get_branch_name(
         Some(oid) => match branch_oid_to_names.get(&oid) {
             Some(branch_names) => match branch_names.iter().exactly_one() {
                 Ok(branch_name) => {
+                    let worktree_snapshot = get_linked_worktrees(git_run_info, repo)?;
+                    if worktree_snapshot.find_by_branch(branch_name).is_some() {
+                        return Ok(current_target);
+                    }
                     // To remove the `refs/heads/` prefix
                     let name = CategorizedReferenceName::new(branch_name);
                     Ok(Some(name.render_suffix()))
@@ -140,7 +146,7 @@ pub fn check_out_commit(
     }
 
     let target = if get_auto_switch_branches(repo)? && !reset && !force_detach {
-        maybe_get_branch_name(target, oid, repo)?
+        maybe_get_branch_name(git_run_info, target, oid, repo)?
     } else {
         target
     };

@@ -1,4 +1,6 @@
-use lib::testing::{GitInitOptions, GitRunOptions, make_git, remove_rebase_lines};
+use lib::testing::{
+    GitInitOptions, GitRunOptions, make_git, make_git_worktree, remove_rebase_lines,
+};
 
 #[test]
 fn test_restack_amended_commit() -> eyre::Result<()> {
@@ -579,6 +581,45 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         @ 59e7581 (> foo, master) create test2.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_restack_refuses_branch_active_in_other_worktree() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "foo"])?;
+
+    let worktree_wrapper = make_git_worktree(&git, "foo-wt")?;
+    let worktree = worktree_wrapper.worktree;
+    worktree.run(&["checkout", "foo"])?;
+
+    git.run(&["checkout", "HEAD^"])?;
+    git.run(&["commit", "--amend", "-m", "test1 amended"])?;
+    git.run(&["checkout", "master"])?;
+
+    let (stdout, stderr) = git.run_with_options(
+        &["restack", "-f", "all()"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    assert!(
+        stdout.contains("Attempting rebase in-memory..."),
+        "stdout was: {stdout}"
+    );
+    assert!(
+        stderr.contains("Branch 'foo' is active in another worktree"),
+        "stderr was: {stderr}"
+    );
+    assert!(stderr.contains("foo-wt"), "stderr was: {stderr}");
+    let (current_branch, _stderr) = git.run(&["branch", "--show-current"])?;
+    assert_eq!(current_branch.trim(), "master");
 
     Ok(())
 }
