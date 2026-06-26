@@ -19,7 +19,7 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ 024c35c amend test1.txt
@@ -32,13 +32,13 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -51,7 +51,7 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         o 8cd7de6 create test2.txt
         |
         o b9a0491 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -96,7 +96,7 @@ fn test_restack_reparent() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("restack", &["--reparent"])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/2] Committed as: 5acd93e create test2.txt
         [2/2] Committed as: 7a9000d create test3.txt
@@ -162,7 +162,7 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
         let stdout = remove_rebase_lines(stdout);
 
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -175,7 +175,7 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
         o 8e9bbde create test2.txt
         |
         o 9dc6dd0 create test3.txt
-        "###)
+        ")
     }
 
     Ok(())
@@ -195,13 +195,13 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("restack", &[])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No abandoned commits to restack.
         branchless: processing 1 update: branch master
         Finished restacking branches.
         :
         @ 662b451 (master) amend test1.txt v2
-        "###);
+        ");
     }
 
     Ok(())
@@ -226,18 +226,18 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         // FIXME: there is no topological relationship between the new initial commit and `master`,
         // so they shouldn't be connected in the smartlog.
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ 9a9f929 new initial commit
         :
         O 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) =
             git.branchless("restack", &["--on-disk", "--force-rewrite", "all()"])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -246,7 +246,7 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         @ 9a9f929 new initial commit
         |
         O 6d85943 (master) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -272,7 +272,7 @@ fn test_restack_amended_master() -> eyre::Result<()> {
         let (stdout, _stderr) =
             git.branchless("restack", &["--on-disk", "--force-rewrite", "all()"])?;
         let stdout = remove_rebase_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -282,7 +282,7 @@ fn test_restack_amended_master() -> eyre::Result<()> {
         @ ae94dc2 amended test1
         |
         O 51452b5 (master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -311,12 +311,12 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
         - (1 conflicting file) 96d1c37 create test2.txt
         To resolve merge conflicts, retry this operation with the --merge option.
-        "###);
+        ");
     }
 
     {
@@ -330,7 +330,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
         )?;
         let stdout = remove_rebase_lines(stdout);
 
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         Failed to merge in-memory, trying again on-disk...
         branchless: running command: <git-executable> diff --quiet
@@ -339,7 +339,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
         CONFLICT (add/add): Merge conflict in test2.txt
         Error: Could not restack commits (exit code 1).
         You can resolve the error and try running `git restack` again.
-        "###);
+        ");
     }
 
     Ok(())
@@ -368,7 +368,7 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -383,7 +383,7 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
         o 8e06b96 test3 amended
         |
         o f5644e3 create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -414,7 +414,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d (master) create test1.txt
         |\
@@ -432,12 +432,12 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         hint: there are 2 abandoned commits in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("restack", &["--on-disk", &test2_oid.to_string()])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @r"
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
@@ -465,8 +465,8 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         Successfully rebased and updated detached HEAD.
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -487,7 +487,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        "###);
+        ");
     }
 
     Ok(())
@@ -512,14 +512,14 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
     git.branchless("init", &[])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
         |
         o 96d1c37 (foo) create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     // Only abandon `test3` now that it's been observed by the DAG.
@@ -528,24 +528,24 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "Updated test2"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
         |
         @ f4229de (> foo) Updated test2
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("restack", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No abandoned commits to restack.
         No abandoned branches to restack.
         :
         O 62fc20d (master) create test1.txt
         |
         @ f4229de (> foo) Updated test2
-        "###);
+        ");
     }
 
     Ok(())
@@ -566,7 +566,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("restack", &["-f", "all()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
         branchless: processing 2 updates: branch foo, branch master
@@ -577,7 +577,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         No abandoned branches to restack.
         :
         @ 59e7581 (> foo, master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -599,7 +599,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("restack", &["-f", "all()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
         branchless: processing 2 updates: branch foo, branch master
@@ -610,13 +610,13 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         No abandoned branches to restack.
         :
         @ 59e7581 (> foo, master) create test2.txt
-        "###);
+        ");
     }
 
     git.run(&["reset", "--hard", &test2_oid.to_string()])?;
     {
         let (stdout, _stderr) = git.run(&["sl"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         : x 62fc20d (rewritten as 14042005) create test1.txt
@@ -624,7 +624,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         : % 96d1c37 (rewritten as 59e75818) (> foo) create test2.txt
         :
         O 59e7581 (master) create test2.txt
-        "###);
+        ");
     }
 
     {
@@ -635,13 +635,13 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         // of all descendant commits just because a branch pointed to one of
         // those descendants.
         let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No abandoned commits to restack.
         branchless: processing 1 update: branch foo
         Finished restacking branches.
         :
         @ 59e7581 (> foo, master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())

@@ -10,10 +10,10 @@ fn test_smartlog_hides_linked_worktrees_by_default() -> eyre::Result<()> {
     let _worktree = make_git_worktree(&git, "side")?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (> master) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -27,10 +27,10 @@ fn test_smartlog_shows_detached_linked_worktree() -> eyre::Result<()> {
     let _worktree = make_git_worktree(&git, "side")?;
 
     let (stdout, _stderr) = git.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (> master) (> <repo-name>, wt side) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -45,10 +45,10 @@ fn test_smartlog_shows_current_and_home_worktree_annotations() -> eyre::Result<(
     let worktree = worktree_wrapper.worktree;
 
     let (stdout, _stderr) = worktree.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (master) (wt <repo-name>, > topic-wt) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -63,10 +63,10 @@ fn test_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
 
     git.run(&["config", "branchless.smartlog.showWorktrees", "true"])?;
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (> master) (> <repo-name>, wt side) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -81,12 +81,12 @@ fn test_navigation_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
 
     git.run(&["config", "branchless.smartlog.showWorktrees", "true"])?;
     let (stdout, _stderr) = git.branchless("prev", &[])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --
     @ f777ecc (> <repo-name>) create initial.txt
     |
     O 62fc20d (master) (wt side) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -105,12 +105,12 @@ fn test_smartlog_shows_attached_linked_worktree_outside_default_selection() -> e
 
     git.run(&["config", "branchless.smartlog.defaultRevset", "none()"])?;
     let (stdout, _stderr) = git.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     O 62fc20d (topic) (wt topic-wt) create test1.txt
     |
     @ 96d1c37 (> master) (> <repo-name>) create test2.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -135,7 +135,7 @@ fn test_move_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
     worktree.run(&["config", "branchless.smartlog.showWorktrees", "true"])?;
 
     let (stdout, _stderr) = worktree.branchless("move", &["-s", "@", "-d", "master"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @r"
     Attempting rebase in-memory...
     [1/1] Committed as: 4838e49 create test3.txt
     branchless: processing 1 rewritten commit
@@ -147,7 +147,7 @@ fn test_move_smartlog_shows_worktrees_from_config() -> eyre::Result<()> {
     |
     @ 4838e49 (> topic-wt) create test3.txt
     In-memory rebase succeeded.
-    "###);
+    ");
 
     Ok(())
 }
@@ -177,11 +177,11 @@ fn test_smartlog_syncs_detached_linked_worktree_head_not_in_dag() -> eyre::Resul
     ])?;
 
     let (stdout, _stderr) = git.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     o b1ee011 (wt outside-wt) outside
     :
     @ 62fc20d (> master) (> <repo-name>) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -196,10 +196,10 @@ fn test_smartlog_ignores_prunable_worktree() -> eyre::Result<()> {
     std::fs::remove_dir_all(&worktree_wrapper.worktree.repo_path)?;
 
     let (stdout, _stderr) = git.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (> master) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -269,10 +269,10 @@ fn test_smartlog_disambiguates_duplicate_worktree_names() -> eyre::Result<()> {
     ])?;
 
     let (stdout, _stderr) = git.branchless("smartlog", &["--worktrees"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     :
     @ 62fc20d (> master) (> <repo-name>, wt bugfix/topic, wt feature/topic) create test1.txt
-    "###);
+    ");
 
     Ok(())
 }

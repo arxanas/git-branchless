@@ -79,17 +79,17 @@ fn test_plan_moving_subtree_again_overrides_previous_move() -> eyre::Result<()> 
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        o 96d1c37 create test2.txt
-        |\
-        | @ 8556cef create test4.txt
-        |
-        o 70deb1e create test3.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | @ 8556cef create test4.txt
+    |
+    o 70deb1e create test3.txt
+    ");
 
     Ok(())
 }
@@ -111,17 +111,17 @@ fn test_plan_moving_subtree_within_moved_subtree() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | @ 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | @ 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    ");
 
     Ok(())
 }
@@ -143,17 +143,17 @@ fn test_plan_moving_subtree_within_moved_subtree_in_other_order() -> eyre::Resul
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | @ 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | @ 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    ");
 
     Ok(())
 }
@@ -175,17 +175,17 @@ fn test_plan_moving_commit_again_overrides_previous_move() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        o 96d1c37 create test2.txt
-        |\
-        | @ 8556cef create test4.txt
-        |
-        o 70deb1e create test3.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | @ 8556cef create test4.txt
+    |
+    o 70deb1e create test3.txt
+    ");
 
     Ok(())
 }
@@ -211,21 +211,21 @@ fn test_plan_moving_nonconsecutive_commits() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 4ec3989 create test5.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        o 8556cef create test4.txt
-        |
-        @ 0a34830 create test6.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 4ec3989 create test5.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 8556cef create test4.txt
+    |
+    @ 0a34830 create test6.txt
+    ");
 
     Ok(())
 }
@@ -248,19 +248,19 @@ fn test_plan_moving_consecutive_commits() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        @ f26f28e create test5.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ f26f28e create test5.txt
+    ");
 
     Ok(())
 }
@@ -283,19 +283,19 @@ fn test_plan_moving_consecutive_commits_in_other_order() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        @ f26f28e create test5.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ f26f28e create test5.txt
+    ");
 
     Ok(())
 }
@@ -314,19 +314,19 @@ fn test_plan_moving_commit_and_one_child_leaves_other_child() -> eyre::Result<()
     git.commit_file("test5", 5)?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        o 70deb1e create test3.txt
-        |\
-        | o 355e173 create test4.txt
-        |
-        @ 9ea1b36 create test5.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |\
+    | o 355e173 create test4.txt
+    |
+    @ 9ea1b36 create test5.txt
+    ");
 
     create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
         builder.move_commit(test3_oid, test1_oid)?;
@@ -335,19 +335,19 @@ fn test_plan_moving_commit_and_one_child_leaves_other_child() -> eyre::Result<()
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        @ f26f28e create test5.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ f26f28e create test5.txt
+    ");
 
     Ok(())
 }
@@ -370,19 +370,19 @@ fn test_plan_moving_commit_add_then_giving_it_a_child() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o ad2c2fc create test3.txt
-        | |
-        | @ ee4aebf create test5.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        o 8556cef create test4.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o ad2c2fc create test3.txt
+    | |
+    | @ ee4aebf create test5.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 8556cef create test4.txt
+    ");
 
     Ok(())
 }
@@ -406,21 +406,21 @@ fn test_plan_moving_range_again_overrides_previous_move() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        o 96d1c37 create test2.txt
-        |\
-        | o 8556cef create test4.txt
-        | |
-        | o 566236a create test5.txt
-        |
-        o 70deb1e create test3.txt
-        |
-        @ 35928ae create test6.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | o 8556cef create test4.txt
+    | |
+    | o 566236a create test5.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    @ 35928ae create test6.txt
+    ");
 
     Ok(())
 }
@@ -451,21 +451,21 @@ fn test_plan_moving_range_and_then_partial_beginning_range_again() -> eyre::Resu
     //
     // NOTE See also the next test for the other case: where the end of the
     // range is moved again. That *does* feel correct.
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o ad2c2fc create test3.txt
-        | |
-        | o 2b45b52 create test4.txt
-        |
-        o 96d1c37 create test2.txt
-        |\
-        | @ 99a62a3 create test6.txt
-        |
-        o f26f28e create test5.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o ad2c2fc create test3.txt
+    | |
+    | o 2b45b52 create test4.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | @ 99a62a3 create test6.txt
+    |
+    o f26f28e create test5.txt
+    ");
 
     Ok(())
 }
@@ -489,21 +489,21 @@ fn test_plan_moving_range_and_then_partial_ending_range_again() -> eyre::Result<
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        | |
-        | o 3d57d30 create test5.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        @ 99a62a3 create test6.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    | |
+    | o 3d57d30 create test5.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ 99a62a3 create test6.txt
+    ");
 
     Ok(())
 }
@@ -526,19 +526,19 @@ fn test_plan_moving_subtree_and_commit_within_subtree() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        |\
-        | o ad2c2fc create test3.txt
-        | |
-        | @ ee4aebf create test5.txt
-        |
-        o 96d1c37 create test2.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    |\
+    | o ad2c2fc create test3.txt
+    | |
+    | @ ee4aebf create test5.txt
+    |
+    o 96d1c37 create test2.txt
+    ");
 
     Ok(())
 }
@@ -561,19 +561,19 @@ fn test_plan_moving_subtree_and_then_its_parent_commit() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | o 8e71a64 create test4.txt
-        | |
-        | @ 3d57d30 create test5.txt
-        |\
-        | o ad2c2fc create test3.txt
-        |
-        o 96d1c37 create test2.txt
-        "###);
+    insta::assert_snapshot!(stdout, @r"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |\
+    | o 8e71a64 create test4.txt
+    | |
+    | @ 3d57d30 create test5.txt
+    |\
+    | o ad2c2fc create test3.txt
+    |
+    o 96d1c37 create test2.txt
+    ");
 
     Ok(())
 }
@@ -596,19 +596,19 @@ fn test_plan_moving_subtree_to_descendant_of_itself() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        o 96d1c37 create test2.txt
-        |
-        @ f26f28e create test5.txt
-        |
-        o 2b42d9c create test3.txt
-        |
-        o c533a65 create test4.txt
-        "###);
+    insta::assert_snapshot!(stdout, @"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    @ f26f28e create test5.txt
+    |
+    o 2b42d9c create test3.txt
+    |
+    o c533a65 create test4.txt
+    ");
 
     Ok(())
 }
@@ -633,7 +633,7 @@ fn test_plan_moving_subtree_with_merge_commit() -> eyre::Result<()> {
     })?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @r"
     O f777ecc (master) create initial.txt
     |
     o 62fc20d create test1.txt
@@ -650,7 +650,7 @@ fn test_plan_moving_subtree_with_merge_commit() -> eyre::Result<()> {
     | & (merge) 355e173 create test4.txt
     |/
     o 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
-    "###);
+    ");
 
     Ok(())
 }
@@ -670,13 +670,13 @@ fn test_plan_fixup_child_into_parent() -> eyre::Result<()> {
     })?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        @ 64da0f2 create test2.txt
-        "###);
+    insta::assert_snapshot!(stdout, @"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 64da0f2 create test2.txt
+    ");
 
     Ok(())
 }
@@ -696,13 +696,13 @@ fn test_plan_fixup_parent_into_child() -> eyre::Result<()> {
     })?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
-    insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        @ 1f599a2 create test3.txt
-        "###);
+    insta::assert_snapshot!(stdout, @"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 1f599a2 create test3.txt
+    ");
 
     Ok(())
 }

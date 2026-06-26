@@ -35,7 +35,7 @@ fn test_bug_report() -> eyre::Result<()> {
         };
         let stdout = stdout.trim();
 
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         Hooks directory: `<repo-path>/.git/hooks`
 
         <details>
@@ -163,7 +163,7 @@ fn test_bug_report() -> eyre::Result<()> {
         ```
 
         </details>
-        "###);
+        "#);
     }
 
     Ok(())

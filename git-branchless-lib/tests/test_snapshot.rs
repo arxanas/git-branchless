@@ -40,17 +40,17 @@ fn test_has_conflicts() -> eyre::Result<()> {
         &head_info,
         Some(event_tx_id),
     )?;
-    insta::assert_debug_snapshot!(status, @r###"
-        [
-            StatusEntry {
-                index_status: Unmerged,
-                working_copy_status: Added,
-                working_copy_file_mode: Blob,
-                path: "test2.txt",
-                orig_path: None,
-            },
-        ]
-        "###);
+    insta::assert_debug_snapshot!(status, @r#"
+    [
+        StatusEntry {
+            index_status: Unmerged,
+            working_copy_status: Added,
+            working_copy_file_mode: Blob,
+            path: "test2.txt",
+            orig_path: None,
+        },
+    ]
+    "#);
     assert_eq!(
         snapshot.get_working_copy_changes_type()?,
         WorkingCopyChangesType::Conflicts

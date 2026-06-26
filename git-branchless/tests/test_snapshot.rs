@@ -21,7 +21,7 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch master
         Changes to be committed:
           (use "git restore --staged <file>..." to unstage)
@@ -49,40 +49,39 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +test1 new contents
-        "###);
+        "#);
     }
 
     let original_status = {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         1 .M N... 100644 100644 100644 7432a8fff25da8f35a9960893ad6155d1d150d39 7432a8fff25da8f35a9960893ad6155d1d150d39 test1.txt
         1 M. N... 100644 100644 100644 4e512d2fd80b9630225ca53f211aeff0544f8b36 4480ae41d60ff497031ec9d48870ed9604477173 test2.txt
-        "###);
+        ");
         stdout
     };
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         On branch master
         nothing to commit, working tree clean
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -90,8 +89,8 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: branch master
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 96d1c37 create test2.txt
         branchless: running command: <git-executable> checkout f7ec40d081d7fa358f5e283ebf42f06a1508084c --
@@ -101,13 +100,13 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         M	test2.txt
         branchless: running command: <git-executable> update-ref refs/heads/master 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch master
         Changes to be committed:
           (use "git restore --staged <file>..." to unstage)
@@ -135,16 +134,16 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +test1 new contents
-        "###);
+        "#);
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         1 .M N... 100644 100644 100644 7432a8fff25da8f35a9960893ad6155d1d150d39 7432a8fff25da8f35a9960893ad6155d1d150d39 test1.txt
         1 M. N... 100644 100644 100644 4e512d2fd80b9630225ca53f211aeff0544f8b36 4480ae41d60ff497031ec9d48870ed9604477173 test2.txt
-        "###);
+        ");
         assert_eq!(original_status, stdout);
     }
 
@@ -168,17 +167,16 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
     let original_status = {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         1 .D N... 100644 100644 000000 7432a8fff25da8f35a9960893ad6155d1d150d39 7432a8fff25da8f35a9960893ad6155d1d150d39 test1.txt
         1 D. N... 100644 000000 000000 4e512d2fd80b9630225ca53f211aeff0544f8b36 0000000000000000000000000000000000000000 test2.txt
-        "###);
+        ");
         stdout
     };
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -192,7 +190,7 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -200,8 +198,8 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: branch master
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 96d1c37 create test2.txt
         branchless: running command: <git-executable> checkout 1935fedb3b0232849e52e44225b2e5bbe9de0ff7 --
@@ -211,16 +209,16 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         D	test2.txt
         branchless: running command: <git-executable> update-ref refs/heads/master 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         1 .D N... 100644 100644 000000 7432a8fff25da8f35a9960893ad6155d1d150d39 7432a8fff25da8f35a9960893ad6155d1d150d39 test1.txt
         1 D. N... 100644 000000 000000 4e512d2fd80b9630225ca53f211aeff0544f8b36 0000000000000000000000000000000000000000 test2.txt
-        "###);
+        ");
         assert_eq!(original_status, stdout);
     }
 
@@ -242,16 +240,15 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         1 D. N... 100644 000000 000000 7432a8fff25da8f35a9960893ad6155d1d150d39 0000000000000000000000000000000000000000 test1.txt
         ? test1.txt
-        "###);
+        ");
     }
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -265,7 +262,7 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -273,8 +270,8 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: branch master
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 62fc20d create test1.txt
         branchless: running command: <git-executable> checkout eb8b9eecf747c1aa08bb9dd0cbda15b9a90082af --
@@ -283,14 +280,13 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         D	test1.txt
         branchless: running command: <git-executable> update-ref refs/heads/master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @"1 D. N... 100644 000000 000000 7432a8fff25da8f35a9960893ad6155d1d150d39 0000000000000000000000000000000000000000 test1.txt
-");
+        insta::assert_snapshot!(stdout, @"1 D. N... 100644 000000 000000 7432a8fff25da8f35a9960893ad6155d1d150d39 0000000000000000000000000000000000000000 test1.txt");
     }
 
     Ok(())
@@ -309,8 +305,7 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -335,19 +330,19 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
         branchless: processing 1 update: ref HEAD
         error: The following untracked working tree files would be overwritten by checkout:
         	test1.txt
         Please move or remove them before you switch branches.
         Aborting
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at f777ecc create initial.txt
         branchless: running command: <git-executable> checkout cd8605eef8b78e22427fa3846f1a23f95e88aa7e --
-        "###);
+        ");
     }
 
     Ok(())
@@ -384,7 +379,7 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch change
         You have unmerged paths.
           (fix conflicts and run "git commit")
@@ -396,42 +391,41 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
 
         * Unmerged path test2.txt
         no changes added to commit (use "git add" and/or "git commit -a")
-        "###);
+        "#);
     }
 
     let snapshot_oid = {
         let (stdout, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(stdout.trim())?
     };
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         On branch change
         nothing to commit, working tree clean
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 588fac3 delete test2.txt
         branchless: running command: <git-executable> checkout 1ea5d7118ef363f3e4ed0ed6c250dd01b91bff2a --
         branchless: running command: <git-executable> reset 588fac31cba846f7278a95e1361c45118be90c6c --
         branchless: running command: <git-executable> update-ref refs/heads/change 588fac31cba846f7278a95e1361c45118be90c6c
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/change
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch change
         Unmerged paths:
           (use "git restore --staged <file>..." to unstage)
@@ -440,7 +434,7 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
 
         * Unmerged path test2.txt
         no changes added to commit (use "git add" and/or "git commit -a")
-        "###);
+        "#);
     }
 
     Ok(())
@@ -462,50 +456,48 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch master
 
         No commits yet
 
         nothing to commit (create/copy files and use "git add" to track)
-        "###);
+        "#);
     }
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
-        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
-");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
     git.commit_file("test1", 1)?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @"@ 6118a39 (> master) create test1.txt
-");
+        insta::assert_snapshot!(stdout, @"@ 6118a39 (> master) create test1.txt");
     }
 
     {
         let (stdout, _stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
         HEAD is now at 6118a39 create test1.txt
         branchless: running command: <git-executable> checkout 20939f1f30f51ffaa6569d218cd7a50f24c956cf --
         branchless: running command: <git-executable> update-ref refs/heads/master 0000000000000000000000000000000000000000
         branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         On branch master
 
         No commits yet
 
         nothing to commit (create/copy files and use "git add" to track)
-        "###);
+        "#);
     }
 
     Ok(())

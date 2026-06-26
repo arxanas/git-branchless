@@ -29,7 +29,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         .cloned()
         .map(redact_event_timestamp)
         .collect();
-    insta::assert_debug_snapshot!(events, @r###"
+    insta::assert_debug_snapshot!(events, @r#"
     [
         RefUpdateEvent {
             timestamp: 0.0,
@@ -149,7 +149,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             message: None,
         },
     ]
-    "###);
+    "#);
 
     Ok(())
 }

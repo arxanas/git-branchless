@@ -21,11 +21,11 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processed commit: 9e8dbe9 amend test1
         branchless: processing 1 rewritten commit
-        "###);
+        ");
     }
 
     git.commit_file("test2", 2)?;
@@ -34,7 +34,7 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1 again"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: c1e22fd amend test1 again
         branchless: processing 1 rewritten commit
@@ -46,7 +46,7 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
         hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
-        "###);
+        ");
     }
 
     Ok(())
@@ -67,7 +67,7 @@ fn test_abandoned_branch_message() -> eyre::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 9e8dbe9 amend test1
         branchless: processing 1 rewritten commit
@@ -79,7 +79,7 @@ fn test_abandoned_branch_message() -> eyre::Result<()> {
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
         hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
-        "###);
+        ");
     }
 
     Ok(())
@@ -105,12 +105,12 @@ fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master", "--autosquash"])?;
         if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
             branchless: processing 3 rewritten commits
             Successfully rebased and updated detached HEAD.
-            "###);
+            ");
         }
     }
 
@@ -135,7 +135,7 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["rebase", "master", "HEAD^"])?;
         if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 rewritten commit
             branchless: This operation abandoned 1 commit!
@@ -147,7 +147,7 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
             branchless:   - git undo: undo the operation
             hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
             Successfully rebased and updated detached HEAD.
-            "###);
+            ");
         }
     }
 
@@ -167,8 +167,7 @@ fn test_interactive_rebase_noop() -> eyre::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master"])?;
         if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.
-");
+            insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.");
         }
     }
 
@@ -210,10 +209,10 @@ fn test_pre_auto_gc() -> eyre::Result<()> {
         stdout,
         stderr
     );
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     branchless: collecting garbage
     branchless: 0 dangling references deleted
-    "###);
+    ");
 
     Ok(())
 }
@@ -242,7 +241,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         .cloned()
         .map(redact_event_timestamp)
         .collect();
-    insta::assert_debug_snapshot!(events, @r###"
+    insta::assert_debug_snapshot!(events, @r#"
     [
         RefUpdateEvent {
             timestamp: 0.0,
@@ -338,7 +337,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             commit_oid: NonZeroOid(91a5ccb4feefba38b0ffa4911c5c3f6c225f662e),
         },
     ]
-    "###);
+    "#);
 
     Ok(())
 }
@@ -355,32 +354,30 @@ fn test_git_am_recorded() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["am", "0001-create-test1.txt.patch"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        Applying: create test1.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"Applying: create test1.txt");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ 047b7ad create test1.txt
         |
         o 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     git.run(&["reset", "--hard", "HEAD^"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         @ f777ecc (master) create initial.txt
         |\
         | o 047b7ad create test1.txt
         |
         o 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -405,11 +402,11 @@ fn test_symbolic_transaction_ref() -> eyre::Result<()> {
         // An upcoming version post-2.45.x introduces symbolic transaction refs;
         // before the commit that introduces the fix along with this test,
         // they were not properly handled.
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: branch newbranch
         Switched to a new branch 'newbranch'
         branchless: processing checkout
-        "###);
+        ");
     }
 
     Ok(())
@@ -445,11 +442,11 @@ fn test_git_rebase_multiple_fixup_does_not_strand_commits() -> eyre::Result<()> 
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 8777bab create test1.txt
-        "###);
+        ");
     }
 
     Ok(())

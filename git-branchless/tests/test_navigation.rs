@@ -13,12 +13,12 @@ fn test_prev() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("prev", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --
         @ f777ecc create initial.txt
         |
         O 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     {
@@ -30,18 +30,17 @@ fn test_prev() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @"No more parent commits to go to after traversing 0 parents.
-");
+        insta::assert_snapshot!(stdout, @"No more parent commits to go to after traversing 0 parents.");
         insta::assert_snapshot!(stderr, @"");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc create initial.txt
         |
         O 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -57,12 +56,12 @@ fn test_prev_multiple() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --
         @ f777ecc create initial.txt
         :
         O 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -80,14 +79,14 @@ fn test_next_multiple() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("next", &["2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -117,18 +116,18 @@ fn test_next_ambiguous() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Found multiple possible child commits to go to after traversing 0 children:
           - 62fc20d create test1.txt (oldest)
           - fe65c1f create test2.txt
           - 98b9119 create test3.txt (newest)
         (Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous commits)
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("next", &["--oldest"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         O f777ecc (master) create initial.txt
         |\
@@ -137,13 +136,13 @@ fn test_next_ambiguous() -> eyre::Result<()> {
         | o fe65c1f create test2.txt
         |
         o 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     git.run(&["checkout", "master"])?;
     {
         let (stdout, _stderr) = git.branchless("next", &["--newest"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b --
         O f777ecc (master) create initial.txt
         |\
@@ -152,7 +151,7 @@ fn test_next_ambiguous() -> eyre::Result<()> {
         | o fe65c1f create test2.txt
         |
         @ 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -189,7 +188,7 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -197,7 +196,7 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
         | @ fe65c1f create test2.txt
         |
         o 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -216,13 +215,13 @@ fn test_next_on_master() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("next", &["2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f --
         :
         O 96d1c37 (master) create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -241,7 +240,7 @@ fn test_next_on_master2() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("next", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f --
         :
         O 62fc20d (master) create test1.txt
@@ -249,7 +248,7 @@ fn test_next_on_master2() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -268,14 +267,14 @@ fn test_next_no_more_children() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("next", &["3"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No more child commits to go to after traversing 2 children.
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f --
         :
         O 96d1c37 (master) create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -308,7 +307,7 @@ fn test_switch_pty() -> eyre::Result<()> {
     )?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ 62fc20d create test1.txt
@@ -316,7 +315,7 @@ fn test_switch_pty() -> eyre::Result<()> {
         | o 96d1c37 create test2.txt
         |
         o 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     run_in_pty(
@@ -333,7 +332,7 @@ fn test_switch_pty() -> eyre::Result<()> {
     )?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -341,7 +340,7 @@ fn test_switch_pty() -> eyre::Result<()> {
         | o 96d1c37 create test2.txt
         |
         @ 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -368,13 +367,13 @@ fn test_switch_abort() -> eyre::Result<()> {
     )?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 142901d create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -393,7 +392,7 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["-a"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         O f777ecc (master) create initial.txt
         |
@@ -402,12 +401,12 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         o 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("next", &["-a"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f --
         O f777ecc (master) create initial.txt
         |
@@ -416,7 +415,7 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -438,7 +437,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["-b", "2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout foo --
         O f777ecc (master) create initial.txt
         |
@@ -451,10 +450,10 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         o 355e173 (bar) create test4.txt
         |
         o f81d55c create test5.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.branchless("prev", &["-a", "-b"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout foo --
         O f777ecc (master) create initial.txt
         |
@@ -467,10 +466,10 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         o 355e173 (bar) create test4.txt
         |
         o f81d55c create test5.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.branchless("prev", &["-b"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout master --
         @ f777ecc (> master) create initial.txt
         |
@@ -483,12 +482,12 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         o 355e173 (bar) create test4.txt
         |
         o f81d55c create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("next", &["-b", "2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout bar --
         O f777ecc (master) create initial.txt
         |
@@ -501,12 +500,12 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         @ 355e173 (> bar) create test4.txt
         |
         o f81d55c create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("next", &["-a", "-b"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout bar --
         O f777ecc (master) create initial.txt
         |
@@ -519,7 +518,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         @ 355e173 (> bar) create test4.txt
         |
         o f81d55c create test5.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -538,14 +537,14 @@ fn test_traverse_branches_ambiguous() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["--all", "--branch"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d (bar, foo) create test1.txt
         |
         o 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -572,10 +571,10 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --
         Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
-        "###);
+        ");
     }
 
     Ok(())
@@ -606,14 +605,14 @@ fn test_switch_pty_branch() -> eyre::Result<()> {
     )?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         @ 62fc20d (> master) create test1.txt
         |\
         | o 96d1c37 create test2.txt
         |
         o 4838e49 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -640,13 +639,13 @@ fn test_switch_pty_initial_query() -> eyre::Result<()> {
     )?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
         |
         o 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -671,22 +670,22 @@ fn test_navigation_merge() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --
         Failed to check out commit: 25497cb08387d7d20aa741398b73ce7f924afdb5
-        "###);
-        insta::assert_snapshot!(stderr, @r###"
+        ");
+        insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         error: Your local changes to the following files would be overwritten by checkout:
         	conflicting.txt
         Please commit your changes or stash them before you switch branches.
         Aborting
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["--merge"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --merge --
         M	conflicting.txt
         O f777ecc (master) create initial.txt
@@ -694,12 +693,12 @@ fn test_navigation_merge() -> eyre::Result<()> {
         @ 25497cb create conflicting.txt
         |
         o 6dd5091 create conflicting.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["diff"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         diff --cc conflicting.txt
         index 3bd1f0e,72594ed..0000000
         --- a/conflicting.txt
@@ -711,7 +710,7 @@ fn test_navigation_merge() -> eyre::Result<()> {
         ++=======
         + qux
         ++>>>>>>> local
-        "###);
+        ");
     }
 
     Ok(())
@@ -736,29 +735,29 @@ fn test_navigation_force() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --
         Failed to check out commit: 25497cb08387d7d20aa741398b73ce7f924afdb5
-        "###);
-        insta::assert_snapshot!(stderr, @r###"
+        ");
+        insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         error: Your local changes to the following files would be overwritten by checkout:
         	conflicting.txt
         Please commit your changes or stash them before you switch branches.
         Aborting
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("prev", &["--force"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --force --
         O f777ecc (master) create initial.txt
         |
         @ 25497cb create conflicting.txt
         |
         o 6dd5091 create conflicting.txt
-        "###);
+        ");
     }
 
     {
@@ -781,24 +780,24 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
         {
             let (stdout, _stderr) = git.branchless("switch", &["-c", "foo", "HEAD^"])?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @"
             branchless: running command: <git-executable> checkout HEAD^ -b foo --
             :
             @ 62fc20d (> foo) create test1.txt
             |
             O 96d1c37 (master) create test2.txt
-            "###);
+            ");
         }
 
         {
             let (stdout, _stderr) = git.branchless("switch", &["-c", "bar"])?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @"
             branchless: running command: <git-executable> checkout foo -b bar --
             :
             @ 62fc20d (> bar, foo) create test1.txt
             |
             O 96d1c37 (master) create test2.txt
-            "###);
+            ");
         }
     }
 
@@ -808,13 +807,13 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
             git.commit_file_with_contents("test1", 3, "new contents")?;
             git.write_file_txt("test1", "conflicting\n")?;
             let (stdout, _stderr) = git.branchless("switch", &["-f", "HEAD~2"])?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @"
             branchless: running command: <git-executable> checkout HEAD~2 --force --
             :
             @ 62fc20d create test1.txt
             :
             O 5b738c1 (master) create test1.txt
-            "###);
+            ");
         }
     }
 
@@ -822,14 +821,14 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         git.commit_file_with_contents("test1", 3, "new contents")?;
         git.write_file_txt("test1", "conflicting\n")?;
         let (stdout, _stderr) = git.branchless("switch", &["-m", "HEAD~2"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout HEAD~2 --merge --
         M	test1.txt
         :
         @ 62fc20d create test1.txt
         :
         O 5b738c1 (master) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -842,10 +841,10 @@ fn test_navigation_switch_target_only() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("switch", &["master"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout master --
         @ f777ecc (> master) create initial.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -863,20 +862,20 @@ fn test_navigation_switch_revset() -> eyre::Result<()> {
     {
         {
             let (stdout, _stderr) = git.branchless("smartlog", &[])?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @"
             @ f777ecc (master) create initial.txt
             |
             o 62fc20d create test1.txt
-            "###);
+            ");
         }
 
         let (stdout, _stderr) = git.branchless("switch", &["descendants(master)"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     git.run(&["checkout", "HEAD~"])?;
@@ -886,13 +885,13 @@ fn test_navigation_switch_revset() -> eyre::Result<()> {
     {
         {
             let (stdout, _stderr) = git.branchless("smartlog", &[])?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r"
             @ f777ecc (master) create initial.txt
             |\
             | o 62fc20d create test1.txt
             |
             o fe65c1f create test2.txt
-            "###);
+            ");
         }
 
         let (_stdout, stderr) = git.branchless_with_options(
@@ -903,36 +902,36 @@ fn test_navigation_switch_revset() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Cannot switch to target: expected 'descendants(master)' to contain 1 head, but found 2.
         Target should be a commit or a set of commits with exactly 1 head. Aborting.
-        "###);
+        ");
     }
 
     {
         // switching back to "last checkout"
         let (stdout, _stderr) = git.branchless("switch", &["@{-1}"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout @{-1} --
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     {
         // switching back to "last checkout"
         let (stdout, _stderr) = git.branchless("switch", &["-"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout - --
         @ f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         o fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     {
@@ -940,34 +939,34 @@ fn test_navigation_switch_revset() -> eyre::Result<()> {
         // branch, if any
 
         let (stdout, _stderr) = git.branchless("switch", &["master"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout master --
         @ f777ecc (> master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         o fe65c1f create test2.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.branchless("switch", &["@{-2}"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout @{-2} --
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.branchless("switch", &["-"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         branchless: running command: <git-executable> checkout - --
         @ f777ecc (> master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         o fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -999,13 +998,13 @@ fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d (> test1) create test1.txt
         |
         o 96d1c37 (test2) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -1043,13 +1042,13 @@ fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d (test1) create test1.txt
         |
         o 96d1c37 (test2) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -1065,35 +1064,35 @@ fn test_switch_detach() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("switch", &["-d"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout master --detach --
         :
         O 62fc20d (foo) create test1.txt
         |
         @ 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("switch", &["-d", "foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout foo --detach --
         :
         @ 62fc20d (foo) create test1.txt
         |
         O 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("switch", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout foo --
         :
         @ 62fc20d (> foo) create test1.txt
         |
         O 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())

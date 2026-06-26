@@ -60,20 +60,20 @@ fn test_cherry_pick_fast() -> eyre::Result<()> {
         },
     )?;
 
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 367f91ddd5df2d1c18742ce3f09b4944944cac3a,
-            },
-        }
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 367f91ddd5df2d1c18742ce3f09b4944944cac3a,
+        },
+    }
+    ");
 
-    insta::assert_debug_snapshot!(tree.get_entry_paths_for_testing(), @r###"
-        [
-            "initial.txt",
-            "test1.txt",
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree.get_entry_paths_for_testing(), @r#"
+    [
+        "initial.txt",
+        "test1.txt",
+    ]
+    "#);
 
     Ok(())
 }
@@ -91,21 +91,21 @@ fn test_amend_fast_from_index() -> eyre::Result<()> {
     let initial_commit = repo.find_commit_or_fail(initial_oid)?;
 
     let tree = initial_commit.get_tree()?;
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
-            },
-        }
-        "###);
-    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r###"
-        [
-            (
-                "initial.txt",
-                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
-            ),
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+        },
+    }
+    ");
+    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r#"
+    [
+        (
+            "initial.txt",
+            "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+        ),
+    ]
+    "#);
 
     let tree = repo.amend_fast(
         &initial_commit,
@@ -114,21 +114,21 @@ fn test_amend_fast_from_index() -> eyre::Result<()> {
         },
     )?;
 
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
-            },
-        }
-        "###);
-    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r###"
-        [
-            (
-                "initial.txt",
-                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
-            ),
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+        },
+    }
+    ");
+    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r#"
+    [
+        (
+            "initial.txt",
+            "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+        ),
+    ]
+    "#);
 
     git.run(&["add", "initial.txt"])?;
     let tree = repo.amend_fast(
@@ -138,21 +138,21 @@ fn test_amend_fast_from_index() -> eyre::Result<()> {
         },
     )?;
 
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
-            },
-        }
-        "###);
-    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r###"
-        [
-            (
-                "initial.txt",
-                "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
-            ),
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
+        },
+    }
+    ");
+    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r#"
+    [
+        (
+            "initial.txt",
+            "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
+        ),
+    ]
+    "#);
 
     Ok(())
 }
@@ -181,21 +181,21 @@ fn test_amend_fast_from_working_tree() -> eyre::Result<()> {
         },
     )?;
 
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
-            },
-        }
-        "###);
-    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r###"
-        [
-            (
-                "initial.txt",
-                "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
-            ),
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
+        },
+    }
+    ");
+    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r#"
+    [
+        (
+            "initial.txt",
+            "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
+        ),
+    ]
+    "#);
 
     git.write_file_txt("file2", "another file")?;
     git.write_file_txt("initial", "updated contents again")?;
@@ -211,25 +211,25 @@ fn test_amend_fast_from_working_tree() -> eyre::Result<()> {
             }],
         },
     )?;
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 1a9fbbecd825881c3e79f0fb194a1c1e1104fe0f,
-            },
-        }
-        "###);
-    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r###"
-        [
-            (
-                "file2.txt",
-                "cdcb28483da7783a8b505a074c50632a5481a69b",
-            ),
-            (
-                "initial.txt",
-                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
-            ),
-        ]
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 1a9fbbecd825881c3e79f0fb194a1c1e1104fe0f,
+        },
+    }
+    ");
+    insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @r#"
+    [
+        (
+            "file2.txt",
+            "cdcb28483da7783a8b505a074c50632a5481a69b",
+        ),
+        (
+            "initial.txt",
+            "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+        ),
+    ]
+    "#);
 
     git.delete_file("initial")?;
     let tree = repo.amend_fast(
@@ -244,13 +244,13 @@ fn test_amend_fast_from_working_tree() -> eyre::Result<()> {
             }],
         },
     )?;
-    insta::assert_debug_snapshot!(tree, @r###"
-        Tree {
-            inner: Tree {
-                id: 4b825dc642cb6eb9a060e54bf8d69288fbee4904,
-            },
-        }
-        "###);
+    insta::assert_debug_snapshot!(tree, @"
+    Tree {
+        inner: Tree {
+            id: 4b825dc642cb6eb9a060e54bf8d69288fbee4904,
+        },
+    }
+    ");
     insta::assert_debug_snapshot!(tree.get_entries_for_testing(), @"[]");
 
     Ok(())
@@ -263,7 +263,7 @@ fn test_branch_debug() -> eyre::Result<()> {
 
     let repo = git.get_repo()?;
     let branch = repo.find_branch("master", BranchType::Local)?.unwrap();
-    insta::assert_debug_snapshot!(branch, @r###"<Branch name="master">"###);
+    insta::assert_debug_snapshot!(branch, @r#"<Branch name="master">"#);
 
     Ok(())
 }
@@ -283,10 +283,10 @@ fn test_worktree_working_copy_path() -> eyre::Result<()> {
             .and_then(|name| name.to_str())
             .unwrap();
         let stdout = stdout.replace(repo_name, "<repo-name>");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     fn canonicalize(path: Option<PathBuf>) -> PathBuf {

@@ -27,18 +27,18 @@ fn test_hook_working_dir() -> eyre::Result<()> {
     {
         // Trigger the `post-rewrite` hook that we wrote above.
         let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
-        insta::assert_snapshot!(stderr, @r###"
-            branchless: processing 2 updates: branch master, ref HEAD
-            branchless: processed commit: f23bf8f foo
-            Check if test1.txt exists
-            test1.txt exists
-            "###);
-        insta::assert_snapshot!(stdout, @r###"
-                [master f23bf8f] foo
-                 Date: Thu Oct 29 12:34:56 2020 -0100
-                 1 file changed, 1 insertion(+)
-                 create mode 100644 test1.txt
-                "###);
+        insta::assert_snapshot!(stderr, @"
+        branchless: processing 2 updates: branch master, ref HEAD
+        branchless: processed commit: f23bf8f foo
+        Check if test1.txt exists
+        test1.txt exists
+        ");
+        insta::assert_snapshot!(stdout, @"
+        [master f23bf8f] foo
+         Date: Thu Oct 29 12:34:56 2020 -0100
+         1 file changed, 1 insertion(+)
+         create mode 100644 test1.txt
+        ");
     }
 
     Ok(())

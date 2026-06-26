@@ -174,7 +174,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
         ]
         "###);
     } else if git_version < GitVersion(2, 35, 0) {
-        insta::assert_debug_snapshot!(events, @r###"
+        insta::assert_debug_snapshot!(events, @r#"
         [
             RefUpdateEvent {
                 timestamp: 0.0,
@@ -311,7 +311,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 message: None,
             },
         ]
-        "###);
+        "#);
     }
 
     Ok(())

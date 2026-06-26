@@ -61,7 +61,7 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
     let event_tx_ids: Vec<EventTransactionId> =
         events.iter().map(|event| event.get_event_tx_id()).collect();
     if git.supports_reference_transactions()? {
-        insta::assert_debug_snapshot!(event_tx_ids, @r###"
+        insta::assert_debug_snapshot!(event_tx_ids, @"
         [
             Id(
                 1,
@@ -76,9 +76,9 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
                 3,
             ),
         ]
-        "###);
+        ");
     } else {
-        insta::assert_debug_snapshot!(event_tx_ids, @r###"
+        insta::assert_debug_snapshot!(event_tx_ids, @"
         [
             Id(
                 1,
@@ -87,7 +87,7 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
                 2,
             ),
         ]
-        "###);
+        ");
     }
     Ok(())
 }

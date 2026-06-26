@@ -18,9 +18,7 @@ fn test_git_is_not_a_wrapper() -> eyre::Result<()> {
 as the HOME environment variable is not set. \
 Check that the Git executable is not being wrapped in a shell script.",
             )?;
-        insta::assert_snapshot!(stderr, @r###"
-        fatal: $HOME not set
-        "###);
+        insta::assert_snapshot!(stderr, @"fatal: $HOME not set");
     }
     Ok(())
 }

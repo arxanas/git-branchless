@@ -1073,7 +1073,7 @@ mod tests {
                 message: None,
             },
         ];
-        insta::assert_debug_snapshot!(extract_checkout_target(&input)?, @r###"
+        insta::assert_debug_snapshot!(extract_checkout_target(&input)?, @r#"
         (
             Some(
                 UndoCheckoutTarget {
@@ -1092,7 +1092,7 @@ mod tests {
             ),
             [],
         )
-        "###);
+        "#);
         Ok(())
     }
 }
