@@ -56,13 +56,13 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
 
         {
             let stdout = git.smartlog()?;
-            insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        @ 96d1c37 create test2.txt
-        "###);
+            insta::assert_snapshot!(stdout, @"
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |
+            @ 96d1c37 create test2.txt
+            ");
         }
     }
 
@@ -93,21 +93,19 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
                 })
                 .collect();
 
-            insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @"
             Executing: exit 1
             warning: execution failed: exit 1
             You can fix the problem, and then run
 
               git rebase --continue
-
-
-            "###);
+            ");
             insta::assert_snapshot!(stdout, @"");
         }
 
         {
             let (stdout, stderr) = git.run(&["rebase", "--continue"])?;
-            insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @"
             branchless: processing 1 rewritten commit
             branchless: This operation abandoned 1 commit!
             branchless: Consider running one of the following:
@@ -118,7 +116,7 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
             branchless:   - git undo: undo the operation
             hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
             Successfully rebased and updated detached HEAD.
-            "###);
+            ");
             insta::assert_snapshot!(stdout, @"");
         }
 
@@ -128,7 +126,7 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
 
         {
             let stdout = git.smartlog()?;
-            insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r"
             O f777ecc (master) create initial.txt
             |\
             | o 047b7ad create test1.txt
@@ -139,7 +137,7 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
             hint: there is 1 abandoned commit in your commit graph
             hint: to fix this, run: git restack
             hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-            "###);
+            ");
         }
     }
 
@@ -166,64 +164,62 @@ fn test_hooks_in_worktree() -> eyre::Result<()> {
     {
         let (stdout, stderr) =
             worktree.run(&["commit", "--allow-empty", "-m", "new empty commit"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 1bed0d8 new empty commit
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
-        [detached HEAD 1bed0d8] new empty commit
-        "###);
+        ");
+        insta::assert_snapshot!(stdout, @"[detached HEAD 1bed0d8] new empty commit");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
         |
         o 1bed0d8 new empty commit
-        "###);
+        ");
     }
     {
         let stdout = worktree.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
         |
         @ 1bed0d8 new empty commit
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) =
             worktree.run(&["commit", "--amend", "--allow-empty", "--message", "amended"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: cc4313e amended
         branchless: processing 1 rewritten commit
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD cc4313e] amended
          Date: Thu Oct 29 12:34:56 2020 +0000
-        "###);
+        ");
     }
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
         |
         o cc4313e amended
-        "###);
+        ");
     }
     {
         let stdout = worktree.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
         |
         @ cc4313e amended
-        "###);
+        ");
     }
 
     Ok(())

@@ -20,7 +20,7 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -28,24 +28,23 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
         @ 96d1c37 create test2.txt
         |
         o 70deb1e <garbage collected>
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("repair", &["--no-dry-run"])?;
-        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit: 70deb1e28791d8e7dd5a1f0c871a51b91282562f
-");
+        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit: 70deb1e28791d8e7dd5a1f0c871a51b91282562f");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -71,8 +70,7 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("repair", &["--no-dry-run"])?;
-        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken branch: foo
-");
+        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken branch: foo");
     }
 
     {
@@ -80,10 +78,10 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
         git.commit_file("test2", 2)?;
 
         let (stdout, _stderr) = git.branchless("smartlog", &["--event-id=-1"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 96d1c37 (> master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())

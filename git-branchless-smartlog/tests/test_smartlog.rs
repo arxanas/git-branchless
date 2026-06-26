@@ -8,8 +8,7 @@ fn test_init_smartlog() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
-");
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt");
     }
 
     Ok(())
@@ -25,11 +24,11 @@ fn test_show_reachable_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 3df4b93 (> initial-branch) create test.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -48,13 +47,13 @@ fn test_tree() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         @ fe65c1f (> initial) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -74,13 +73,13 @@ fn test_rebase() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d (test1) create test1.txt
         |
         @ f8d9985 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -97,10 +96,10 @@ fn test_sequential_master_commits() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 70deb1e (> master) create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -127,7 +126,7 @@ fn test_merge_commit() -> eyre::Result<()> {
     {
         // Rendering here is arbitrary and open to change.
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d (test1) create test1.txt
@@ -140,7 +139,7 @@ fn test_merge_commit() -> eyre::Result<()> {
         | & (merge) 62fc20d (test1) create test1.txt
         |/
         @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
-        "###);
+        ");
     }
 
     git.run(&["checkout", "-b", "test4", "master"])?;
@@ -150,7 +149,7 @@ fn test_merge_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d (test1) create test1.txt
@@ -172,7 +171,7 @@ fn test_merge_commit() -> eyre::Result<()> {
         | & (merge) fa4e4e1 (test2and3) Merge branch 'test1' into test2and3
         |/
         @ 36a25e8 (> test4) Merge branch 'test2and3' into test4
-        "###);
+        ");
     }
 
     Ok(())
@@ -198,7 +197,7 @@ fn test_merge_commit_reverse_order() -> eyre::Result<()> {
     )?;
 
     let (stdout, _) = git.branchless("smartlog", &[])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @r"
     @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
     |\
     | & (merge) 62fc20d (test1) create test1.txt
@@ -211,7 +210,7 @@ fn test_merge_commit_reverse_order() -> eyre::Result<()> {
     | o 62fc20d (test1) create test1.txt
     |/
     O f777ecc (master) create initial.txt
-    "###);
+    ");
 
     Ok(())
 }
@@ -239,13 +238,13 @@ fn test_rebase_conflict() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 88646b5 (branch1) create test.txt
         |
         @ 4549af3 (> branch2) create test.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -266,7 +265,7 @@ fn test_non_adjacent_commits() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         : o 62fc20d create test1.txt
@@ -274,7 +273,7 @@ fn test_non_adjacent_commits() -> eyre::Result<()> {
         O 0206717 (master) create test3.txt
         |
         @ 8e62740 create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -296,7 +295,7 @@ fn test_non_adjacent_commits2() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         : o 62fc20d create test1.txt
@@ -306,7 +305,7 @@ fn test_non_adjacent_commits2() -> eyre::Result<()> {
         O 2b633ed (master) create test4.txt
         |
         @ 1393298 create test5.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -330,7 +329,7 @@ fn test_non_adjacent_commits3() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
@@ -341,7 +340,7 @@ fn test_non_adjacent_commits3() -> eyre::Result<()> {
         : o a248207 create test4.txt
         :
         @ 500c9b3 (> master) create test6.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -360,12 +359,12 @@ fn test_custom_main_branch() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (main) create test1.txt
         |
         @ 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -385,7 +384,7 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ 2ebe095 test1 version 2
@@ -396,7 +395,7 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        "###);
+        ");
     }
 
     Ok(())
@@ -414,10 +413,10 @@ fn test_smartlog_orphaned_root() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.branchless("smartlog", &[])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -440,7 +439,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
 
     let hint_command = {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ ae94dc2 amended test1
@@ -451,7 +450,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        "###);
+        ");
         extract_hint_command(&stdout)
     };
 
@@ -459,7 +458,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ ae94dc2 amended test1
@@ -467,7 +466,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
         x 62fc20d (rewritten as ae94dc2a) create test1.txt
         |
         o 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -488,13 +487,13 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | % 62fc20d (rewritten as ae94dc2a) create test1.txt
         |
         O ae94dc2 (master) amended test1
-        "###);
+        ");
     }
 
     Ok(())
@@ -518,7 +517,7 @@ fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     let (stdout, _) = git.branchless("smartlog", &[])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     o 96d1c37 create test2.txt
     |
     x 62fc20d (rewritten as ae94dc2a) create test1.txt
@@ -529,7 +528,7 @@ fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
     hint: there is 1 abandoned commit in your commit graph
     hint: to fix this, run: git restack
     hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-    "###);
+    ");
 
     Ok(())
 }
@@ -549,12 +548,12 @@ fn test_smartlog_sparse() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &["none()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 0206717 (master) create test3.txt
         |
         @ 8e62740 create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -576,7 +575,7 @@ fn test_smartlog_sparse_branch() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &[&test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         : # 1 omitted commit
@@ -586,7 +585,7 @@ fn test_smartlog_sparse_branch() -> eyre::Result<()> {
         O 2b633ed (master) create test4.txt
         |
         @ 1393298 create test5.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -609,7 +608,7 @@ fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &[&test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | # 1 omitted commit
@@ -623,7 +622,7 @@ fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
         # 1 omitted commit
         :
         @ 68975e5 create test6.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -641,12 +640,12 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &["none()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
         :
         # 1 omitted descendant commit
-        "###);
+        ");
     }
 
     Ok(())
@@ -663,13 +662,13 @@ fn test_smartlog_hidden() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &["--hidden"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | @ ae94dc2 amended test1
         |
         x 62fc20d (rewritten as ae94dc2a) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -690,7 +689,7 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
 
     {
         let (stdout, _stderr) = git.branchless("smartlog", &["heads(draft())"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -700,7 +699,7 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
         # 1 omitted commit
         :
         @ 2b633ed create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -718,7 +717,7 @@ fn test_default_smartlog_revset() -> eyre::Result<()> {
 
     {
         let smartlog = git.smartlog()?;
-        insta::assert_snapshot!(smartlog, @r###"
+        insta::assert_snapshot!(smartlog, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -726,20 +725,20 @@ fn test_default_smartlog_revset() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     git.run(&["config", "branchless.smartlog.defaultRevset", "none()"])?;
 
     {
         let smartlog = git.smartlog()?;
-        insta::assert_snapshot!(smartlog, @r###"
+        insta::assert_snapshot!(smartlog, @"
         O f777ecc (master) create initial.txt
         :
         # 2 omitted commits
         :
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -764,7 +763,7 @@ fn test_exact() -> eyre::Result<()> {
     {
         // Here '--exact' doesn't change anything because draft() covers all these commits
         let (stdout, _stderr) = git.branchless("smartlog", &["--exact"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
@@ -777,7 +776,7 @@ fn test_exact() -> eyre::Result<()> {
         O ea7aa06 (master) create test5.txt
         |
         o da42aeb create test6.txt
-        "###);
+        ");
     }
 
     {
@@ -789,18 +788,18 @@ fn test_exact() -> eyre::Result<()> {
     {
         // Show one commit - no master or HEAD
         let (stdout, _stderr) = git.branchless("smartlog", &["--exact", "70deb1e"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         o 70deb1e create test3.txt
         :
         # 1 omitted descendant commit
-        "###);
+        ");
     }
 
     {
         // Show head commits and their common ancestor, which is not main.
         let (stdout, _stderr) = git.branchless("smartlog", &["--exact", "heads(draft())"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
@@ -809,7 +808,7 @@ fn test_exact() -> eyre::Result<()> {
         : o 355e173 create test4.txt
         :
         o da42aeb create test6.txt
-        "###);
+        ");
     }
 
     Ok(())

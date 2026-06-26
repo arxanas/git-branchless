@@ -12,19 +12,19 @@ fn test_query() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.branchless("query", &[".^::"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         96d1c37 create test2.txt
         70deb1e create test3.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("query", &[".^::", "--raw"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         96d1c37a3d4363611c49f7e52186e189a04c531f
         70deb1e28791d8e7dd5a1f0c871a51b91282562f
-        "###);
+        ");
     }
 
     Ok(())
@@ -44,10 +44,10 @@ fn test_query_parse_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @r#"
         Parse error for expression 'foo(': parse error: Unrecognized EOF found at 4
         Expected one of a commit/branch/tag, a string literal, "(", ")", "..", ":" or "::"
-        "###);
+        "#);
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -72,8 +72,7 @@ fn test_query_eval_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo': no commit, branch, or reference with the name 'foo' could be found
-");
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo': no commit, branch, or reference with the name 'foo' could be found");
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -86,9 +85,7 @@ fn test_query_eval_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
-        Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: all, ancestors, ancestors.nth, author.date, author.email, author.name, branches, children, committer.date, committer.email, committer.name, current, descendants, difference, draft, exactly, heads, intersection, main, merges, message, none, not, only, parents, parents.nth, paths.changed, public, range, roots, siblings, stack, tests.failed, tests.fixable, tests.passed, union
-        "###);
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: all, ancestors, ancestors.nth, author.date, author.email, author.name, branches, children, committer.date, committer.email, committer.name, current, descendants, difference, draft, exactly, heads, intersection, main, merges, message, none, not, only, parents, parents.nth, paths.changed, public, range, roots, siblings, stack, tests.failed, tests.fixable, tests.passed, union");
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -107,9 +104,7 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.branchless("query", &["HEAD~2"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        62fc20d create test1.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"62fc20d create test1.txt");
     }
 
     {
@@ -121,8 +116,7 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo-@': no commit, branch, or reference with the name 'foo-@' could be found
-");
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo-@': no commit, branch, or reference with the name 'foo-@' could be found");
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -141,8 +135,7 @@ fn test_query_branches() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("query", &["-b", "."])?;
-        insta::assert_snapshot!(stdout, @"master
-");
+        insta::assert_snapshot!(stdout, @"master");
     }
 
     {
@@ -159,18 +152,18 @@ fn test_query_branches() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("query", &["-b", "::."])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         foo
         master
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("query", &["branches()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         62fc20d create test1.txt
         70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -191,19 +184,17 @@ fn test_query_hidden_commits() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.branchless("query", &[&format!("{test2_oid}::")])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         96d1c37 create test2.txt
         70deb1e create test3.txt
-        "###);
+        ");
     }
 
     git.run(&["checkout", "-B", "master"])?;
     {
         let (stdout, stderr) = git.branchless("query", &[&format!("{test2_oid}::")])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        96d1c37 create test2.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"96d1c37 create test2.txt");
     }
 
     Ok(())

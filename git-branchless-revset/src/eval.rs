@@ -415,7 +415,7 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("all"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -468,16 +468,16 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("none"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
         }
 
         {
@@ -488,7 +488,7 @@ mod tests {
                     Expr::Name(Cow::Owned(test2_oid.to_string())),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -505,7 +505,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -516,11 +516,11 @@ mod tests {
                     Expr::Name(Cow::Owned(test2_oid.to_string())),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
 
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("intersection"),
@@ -529,7 +529,7 @@ mod tests {
                     Expr::Name(Cow::Owned(test1_oid.to_string())),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -540,7 +540,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -551,7 +551,7 @@ mod tests {
                     Expr::Name(Cow::Owned(test2_oid.to_string())),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -562,7 +562,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
 
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("difference"),
@@ -571,11 +571,11 @@ mod tests {
                     Expr::Name(Cow::Owned(test1_oid.to_string())),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
         }
 
         {
@@ -583,7 +583,7 @@ mod tests {
                 Cow::Borrowed("siblings"),
                 vec![Expr::Name(Cow::Owned(test2_oid.to_string()))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -594,12 +594,12 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("stack"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -622,12 +622,12 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("main"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -638,12 +638,12 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("public"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -666,7 +666,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -674,7 +674,7 @@ mod tests {
                 Cow::Borrowed("stack"),
                 vec![Expr::Name(Cow::Owned(test2_oid.to_string()))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -691,12 +691,12 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("draft"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -731,7 +731,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -739,7 +739,7 @@ mod tests {
                 Cow::Borrowed("not"),
                 vec![Expr::FunctionCall(Cow::Borrowed("draft"), vec![])],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -762,7 +762,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -773,7 +773,7 @@ mod tests {
                     Expr::Name(Cow::Borrowed("1")),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -784,7 +784,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -795,7 +795,7 @@ mod tests {
                     Expr::Name(Cow::Borrowed("2")),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -806,7 +806,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -814,7 +814,7 @@ mod tests {
                 Cow::Borrowed("message"),
                 vec![Expr::Name(Cow::Borrowed("test4"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -825,7 +825,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -833,7 +833,7 @@ mod tests {
                 Cow::Borrowed("message"),
                 vec![Expr::Name(Cow::Borrowed("exact:create test4.txt"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -844,7 +844,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -852,7 +852,7 @@ mod tests {
                 Cow::Borrowed("message"),
                 vec![Expr::Name(Cow::Borrowed("regex:^create test4.txt$"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -863,7 +863,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -871,7 +871,7 @@ mod tests {
                 Cow::Borrowed("paths.changed"),
                 vec![Expr::Name(Cow::Borrowed("glob:test[1-3].txt"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -894,7 +894,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -905,7 +905,7 @@ mod tests {
                     Expr::Name(Cow::Borrowed("3")),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -928,7 +928,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -939,7 +939,7 @@ mod tests {
                     Expr::Name(Cow::Borrowed("2")),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Err(
                 UnexpectedSetLength {
                     expr: "stack()",
@@ -947,7 +947,7 @@ mod tests {
                     actual_len: 3,
                 },
             )
-            "###);
+            "#);
         }
 
         Ok(())
@@ -1018,7 +1018,7 @@ mod tests {
                 Cow::Borrowed("author.name"),
                 vec![Expr::Name(Cow::Borrowed("Foo"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1029,7 +1029,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1037,7 +1037,7 @@ mod tests {
                 Cow::Borrowed("author.email"),
                 vec![Expr::Name(Cow::Borrowed("foo"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1048,7 +1048,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1056,7 +1056,7 @@ mod tests {
                 Cow::Borrowed("author.date"),
                 vec![Expr::Name(Cow::Borrowed("before:today"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1079,7 +1079,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1087,11 +1087,11 @@ mod tests {
                 Cow::Borrowed("author.date"),
                 vec![Expr::Name(Cow::Borrowed("after:yesterday"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
         }
 
         {
@@ -1099,7 +1099,7 @@ mod tests {
                 Cow::Borrowed("committer.name"),
                 vec![Expr::Name(Cow::Borrowed("Foo"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1110,7 +1110,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1118,7 +1118,7 @@ mod tests {
                 Cow::Borrowed("committer.email"),
                 vec![Expr::Name(Cow::Borrowed("foo"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1129,7 +1129,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1137,7 +1137,7 @@ mod tests {
                 Cow::Borrowed("committer.date"),
                 vec![Expr::Name(Cow::Borrowed("before:today"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1160,7 +1160,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1168,11 +1168,11 @@ mod tests {
                 Cow::Borrowed("committer.date"),
                 vec![Expr::Name(Cow::Borrowed("after:yesterday"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
         }
 
         Ok(())
@@ -1221,11 +1221,11 @@ mod tests {
                     Expr::Name(Cow::Borrowed(original_test4_oid)),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @"
             Ok(
                 [],
             )
-            "###);
+            ");
 
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("current"),
@@ -1237,7 +1237,7 @@ mod tests {
                     ],
                 )],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1254,7 +1254,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
         Ok(())
     }
@@ -1288,7 +1288,7 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("merges"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1305,13 +1305,13 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
 
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("not"),
                 vec![Expr::FunctionCall(Cow::Borrowed("merges"), vec![])],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1334,7 +1334,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
         Ok(())
     }
@@ -1367,7 +1367,7 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(Cow::Borrowed("branches"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1390,13 +1390,13 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
 
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("branches"),
                 vec![Expr::Name(Cow::Borrowed("glob:test*"))],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1413,7 +1413,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
         Ok(())
     }
@@ -1454,7 +1454,7 @@ mod tests {
                 Cow::Borrowed("simpleAlias"),
                 vec![Expr::FunctionCall(Cow::Borrowed("stack"), vec![])],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1465,7 +1465,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1479,7 +1479,7 @@ mod tests {
                 Cow::Borrowed("complexAlias"),
                 vec![Expr::FunctionCall(Cow::Borrowed("stack"), vec![])],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Ok(
                 [
                     Commit {
@@ -1490,7 +1490,7 @@ mod tests {
                     },
                 ],
             )
-            "###);
+            "#);
         }
 
         {
@@ -1504,11 +1504,11 @@ mod tests {
                     ..Default::default()
                 },
             )?;
-            insta::assert_snapshot!(_stderr, @r###"
+            insta::assert_snapshot!(_stderr, @r#"
             Evaluation error for expression 'parseError()': failed to parse alias expression 'foo('
             parse error: Unrecognized EOF found at 4
             Expected one of a commit/branch/tag, a string literal, "(", ")", "..", ":" or "::"
-            "###);
+            "#);
         }
 
         {
@@ -1541,13 +1541,13 @@ mod tests {
                     Expr::FunctionCall(Cow::Borrowed("nonsense"), vec![]),
                 ],
             );
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r#"
             Err(
                 UnboundName {
                     name: "$2",
                 },
             )
-            "###);
+            "#);
         }
 
         Ok(())

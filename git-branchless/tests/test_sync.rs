@@ -27,7 +27,7 @@ fn test_sync_basic() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -39,20 +39,20 @@ fn test_sync_basic() -> eyre::Result<()> {
         | o 2b633ed create test4.txt
         |
         @ 117e086 (> master) create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("sync", &[])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
         branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/2] Committed as: 87c7a36 create test1.txt
         [2/2] Committed as: 8ee4f26 create test2.txt
@@ -66,12 +66,12 @@ fn test_sync_basic() -> eyre::Result<()> {
         In-memory rebase succeeded.
         Synced 62fc20d create test1.txt
         Synced 2b633ed create test4.txt
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         @ 117e086 (> master) create test5.txt
         |\
@@ -80,7 +80,7 @@ fn test_sync_basic() -> eyre::Result<()> {
         | o 8ee4f26 create test2.txt
         |
         o d7e7e6c create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -104,8 +104,7 @@ fn test_sync_up_to_date() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.branchless("sync", &[])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @"Not moving up-to-date stack at 70deb1e create test3.txt
-");
+        insta::assert_snapshot!(stdout, @"Not moving up-to-date stack at 70deb1e create test3.txt");
     }
 
     Ok(())
@@ -142,7 +141,7 @@ fn test_sync_pull() -> eyre::Result<()> {
 
     {
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 96d1c37 (master) create test2.txt
         |
@@ -151,13 +150,13 @@ fn test_sync_pull() -> eyre::Result<()> {
         o 355e173 create test4.txt
         |
         @ 6ac5566 create test6.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> fetch --all
         Fast-forwarding branch master to f81d55c create test5.txt
         Attempting rebase in-memory...
@@ -166,27 +165,27 @@ fn test_sync_pull() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout 2831fb5864ee099dc3e448a38dcb3c8527149510 --
         In-memory rebase succeeded.
         Synced 6ac5566 create test6.txt
-        "###);
+        ");
     }
 
     {
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O f81d55c (master) create test5.txt
         |
         @ 2831fb5 create test6.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> fetch --all
         Not updating branch master at f81d55c create test5.txt
         Not moving up-to-date stack at 2831fb5 create test6.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -216,7 +215,7 @@ fn test_sync_reparent() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -228,19 +227,19 @@ fn test_sync_reparent() -> eyre::Result<()> {
         | o 2b633ed create test4.txt
         |
         @ 117e086 (> master) create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("sync", &["--reparent"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
         branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
-        "###);
+        ");
         insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/2] Committed as: 9343a7d create test1.txt
@@ -275,7 +274,7 @@ fn test_sync_reparent() -> eyre::Result<()> {
     {
         // the reparented test1 will effectively undo test3 & test5
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "9343a7d"])?;
-        insta::assert_snapshot!(&stdout, @r"
+        insta::assert_snapshot!(&stdout, @"
         test1.txt | 1 +
         test3.txt | 1 -
         test5.txt | 1 -
@@ -284,7 +283,7 @@ fn test_sync_reparent() -> eyre::Result<()> {
 
         // similar the reparented test4 will effectively undo test5
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "e8f8c47"])?;
-        insta::assert_snapshot!(&stdout, @r"
+        insta::assert_snapshot!(&stdout, @"
         test4.txt | 1 +
         test5.txt | 1 -
         2 files changed, 1 insertion(+), 1 deletion(-)
@@ -315,7 +314,7 @@ fn test_sync_stack_from_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 96d1c37 create test2.txt
         |\
@@ -326,12 +325,12 @@ fn test_sync_stack_from_commit() -> eyre::Result<()> {
         | o f57e36f (bar) create test4.txt
         |
         @ d2e18e3 (> master) create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("sync", &["foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         [1/2] Committed as: 8e521a1 create test3.txt
         [2/2] Committed as: 11bfd99 create test3-1.txt
@@ -340,12 +339,12 @@ fn test_sync_stack_from_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout master --
         In-memory rebase succeeded.
         Synced 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 96d1c37 create test2.txt
         |\
@@ -356,7 +355,7 @@ fn test_sync_stack_from_commit() -> eyre::Result<()> {
         o 8e521a1 create test3.txt
         |
         o 11bfd99 (foo) create test3-1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -389,16 +388,16 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
 
     {
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ d2e18e3 (> master) create test5.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["-p"])?;
         let stdout = remove_nondeterministic_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> fetch --all
         Syncing branch master
         Attempting rebase in-memory...
@@ -410,15 +409,15 @@ fn test_sync_divergent_main_branch() -> eyre::Result<()> {
           (use "git push" to publish your local commits)
         In-memory rebase succeeded.
         Synced d2e18e3 create test5.txt
-        "###);
+        "#);
     }
 
     {
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ f81d55c (> master) create test5.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -459,7 +458,7 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.branchless("sync", &["-p", "--on-disk"])?;
         let stdout = remove_nondeterministic_lines(stdout);
         let stderr = remove_nondeterministic_lines(stderr);
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: processing 1 update: ref HEAD
         Executing: git branchless hook-skip-upstream-applied-commit 6ffd720862b7ae71cbe30d66ed27ea8579e24b0f
         Executing: git branchless hook-register-extra-post-rewrite-hook
@@ -471,8 +470,8 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         :
         @ 96d1c37 (> master) create test2.txt
         Successfully rebased and updated detached HEAD.
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> fetch --all
         Syncing branch master
         branchless: running command: <git-executable> diff --quiet
@@ -480,15 +479,15 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 6ffd720 updated commit message
         Synced 6ffd720 updated commit message
-        "###);
+        ");
     }
 
     {
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 96d1c37 (> master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -514,7 +513,7 @@ fn test_sync_merge_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -529,17 +528,17 @@ fn test_sync_merge_commit() -> eyre::Result<()> {
         | o 5cedb02 Merge branch 'foo' into HEAD
         |
         @ 8f7aef5 (> master) create test4.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("sync", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Attempting rebase in-memory...
         Attempting rebase in-memory...
         Can't rebase merge commit in-memory: 62fc20d create test1.txt
         Can't rebase merge commit in-memory: 98b9119 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -570,21 +569,21 @@ fn test_sync_checked_out_main_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = cloned_repo.branchless("sync", &["--pull"])?;
         let stdout: String = remove_nondeterministic_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
-            branchless: running command: <git-executable> fetch --all
-            Fast-forwarding branch master to 96d1c37 create test2.txt
-            branchless: running command: <git-executable> rebase 96d1c37a3d4363611c49f7e52186e189a04c531f
-            "###);
+        insta::assert_snapshot!(stdout, @"
+        branchless: running command: <git-executable> fetch --all
+        Fast-forwarding branch master to 96d1c37 create test2.txt
+        branchless: running command: <git-executable> rebase 96d1c37a3d4363611c49f7e52186e189a04c531f
+        ");
     }
 
     {
         let (stdout, _stderr) = cloned_repo.run(&["status"])?;
-        insta::assert_snapshot!(stdout, @r###"
-            On branch master
-            Your branch is up to date with 'origin/master'.
+        insta::assert_snapshot!(stdout, @"
+        On branch master
+        Your branch is up to date with 'origin/master'.
 
-            nothing to commit, working tree clean
-            "###);
+        nothing to commit, working tree clean
+        ");
     }
 
     Ok(())
@@ -621,15 +620,15 @@ fn test_sync_checked_out_main_with_dirty_working_copy() -> eyre::Result<()> {
             },
         )?;
         let stdout: String = remove_nondeterministic_lines(stdout);
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         error: cannot rebase: You have unstaged changes.
         error: Please commit or stash them.
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> fetch --all
         Not updating branch master at 62fc20d create test1.txt
         branchless: running command: <git-executable> rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        "###);
+        ");
     }
 
     Ok(())

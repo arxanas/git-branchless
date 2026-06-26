@@ -38,12 +38,12 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         This operation would modify the working copy, but you have uncommitted changes
         in your working copy which might be overwritten as a result.
         Commit your changes and then try again.
-        "###);
+        ");
     }
     git.run(&["checkout", "--", "."])?;
 
@@ -56,7 +56,7 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -76,18 +76,18 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         Submitted 2 commits: D0002, D0003
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 55af3db D0002 create test1.txt
         |
         @ ccb7fd5 D0003 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -107,13 +107,13 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     {
@@ -131,14 +131,14 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         Previous HEAD position was 96d1c37 create test2.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at ccb7fd5 create test2.txt
         branchless: processing checkout
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         Using command execution strategy: worktree
         Attempting rebase in-memory...
         [1/2] Committed as: 55af3db create test1.txt
@@ -150,18 +150,18 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         Stacking D0003 on top of D0002
         Using command execution strategy: worktree
         Submitted 2 commits: D0002, D0003
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 55af3db D0002 create test1.txt
         |
         @ ccb7fd5 D0003 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -185,7 +185,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -205,7 +205,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         Submitted 2 commits: D0002, D0003
-        "###);
+        ");
     }
 
     {
@@ -217,7 +217,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -225,7 +225,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
-        "###);
+        ");
     }
 
     Ok(())

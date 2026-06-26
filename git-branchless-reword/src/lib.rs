@@ -751,14 +751,14 @@ mod tests {
                 InitialCommitMessages::Discard,
                 &[head_commit.clone()],
                 |message| {
-                    insta::assert_snapshot!(message.trim(), @r###"
+                    insta::assert_snapshot!(message.trim(), @"
                     # Original message:
                     # create test1.txt
 
                     # Rewording: Please enter the commit message to apply to this 1 commit.
                     # Lines starting with '#' will be ignored, and an empty message aborts
                     # rewording.
-                    "###);
+                    ");
                     Ok(message.to_string())
                 },
             )?;
@@ -779,7 +779,7 @@ This is a template!
                 InitialCommitMessages::Discard,
                 &[head_commit],
                 |message| {
-                    insta::assert_snapshot!(message.trim(), @r###"
+                    insta::assert_snapshot!(message.trim(), @"
                     This is a template!
 
                     # Original message:
@@ -788,7 +788,7 @@ This is a template!
                     # Rewording: Please enter the commit message to apply to this 1 commit.
                     # Lines starting with '#' will be ignored, and an empty message aborts
                     # rewording.
-                    "###);
+                    ");
                     Ok(message.to_string())
                 },
             )?;
@@ -815,7 +815,7 @@ This is a template!
                 InitialCommitMessages::Messages([].to_vec()),
                 &[test1_commit.clone(), test2_commit.clone()],
                 |message| {
-                    insta::assert_snapshot!(message.trim(), @r###"
+                    insta::assert_snapshot!(message.trim(), @"
                     ++ reword 62fc20d
                     create test1.txt
 
@@ -825,7 +825,7 @@ This is a template!
                     # Rewording: Please enter the commit messages to apply to these 2 commits.
                     # Lines starting with '#' will be ignored, and an empty message aborts
                     # rewording.
-                    "###);
+                    ");
                     Ok(message.to_string())
                 },
             )?;
@@ -861,21 +861,23 @@ This is a template!
 
             // Convert the messages HashMap into the sorted map for testing
             let messages: BTreeMap<_, _> = result.messages.iter().collect();
-            insta::assert_debug_snapshot!(messages, @r###"
-                {
-                    NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
-                    NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f): "create test2.txt\n",
-                }"###
+            insta::assert_debug_snapshot!(messages, @r#"
+            {
+                NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
+                NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f): "create test2.txt\n",
+            }
+            "#
             );
 
             // clear the messages map b/c its contents have already been tested
             result.messages.clear();
-            insta::assert_debug_snapshot!(result, @r###"
-                ParseMessageResult {
-                    duplicates: [],
-                    messages: {},
-                    unexpected: [],
-                }"###
+            insta::assert_debug_snapshot!(result, @"
+            ParseMessageResult {
+                duplicates: [],
+                messages: {},
+                unexpected: [],
+            }
+            "
             );
         };
 
@@ -908,18 +910,19 @@ This is a template!
                 '#',
             )?;
 
-            insta::assert_debug_snapshot!(result, @r###"
-                ParseMessageResult {
-                    duplicates: [
-                        "62fc20d",
-                    ],
-                    messages: {
-                        NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
-                    },
-                    unexpected: [
-                        "abc123",
-                    ],
-                }"###
+            insta::assert_debug_snapshot!(result, @r#"
+            ParseMessageResult {
+                duplicates: [
+                    "62fc20d",
+                ],
+                messages: {
+                    NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
+                },
+                unexpected: [
+                    "abc123",
+                ],
+            }
+            "#
             );
         };
 

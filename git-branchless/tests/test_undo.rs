@@ -101,7 +101,7 @@ fn test_undo_help() -> eyre::Result<()> {
                 CursiveTestingEvent::Event('q'.into()),
             ],
         )?;
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │O f777ecc (master) create initial.txt                                                                                 │
         │                                                                                                                      │
@@ -126,7 +126,7 @@ fn test_undo_help() -> eyre::Result<()> {
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │There are no previous available events.                                                                               │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
+        ");
     }
 
     Ok(())
@@ -157,14 +157,14 @@ fn test_undo_navigate() -> eyre::Result<()> {
                 CursiveTestingEvent::Event(Key::Enter.into()),
             ],
         )?;
-        insta::assert_debug_snapshot!(event_cursor, @r###"
-            Some(
-                EventCursor {
-                    event_id: 6,
-                },
-            )
-            "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        insta::assert_debug_snapshot!(event_cursor, @"
+        Some(
+            EventCursor {
+                event_id: 6,
+            },
+        )
+        ");
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
         │@ 96d1c37 (master) create test2.txt                                                                                   │
@@ -189,8 +189,8 @@ fn test_undo_navigate() -> eyre::Result<()> {
         │2. Move branch master from 62fc20d create test1.txt                                                                   │
         │                        to 96d1c37 create test2.txt                                                                   │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        ");
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
         │@ 96d1c37 (master) create test2.txt                                                                                   │
@@ -215,7 +215,7 @@ fn test_undo_navigate() -> eyre::Result<()> {
         │1. Commit 96d1c37 create test2.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
+        ");
     };
 
     Ok(())
@@ -247,7 +247,7 @@ fn test_go_to_event() -> eyre::Result<()> {
         ],
     )?;
 
-    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
     │@ 96d1c37 (master) create test2.txt                                                                                   │
@@ -272,8 +272,8 @@ fn test_go_to_event() -> eyre::Result<()> {
     │1. Commit 96d1c37 create test2.txt                                                                                    │
     │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-    "###);
-    insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+    ");
+    insta::assert_snapshot!(screen_to_string(&screenshot2), @"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
     │@ 62fc20d create test1.txt                                                                                            │
@@ -298,7 +298,7 @@ fn test_go_to_event() -> eyre::Result<()> {
     │1. Check out from f777ecc create initial.txt                                                                          │
     │               to 62fc20d create test1.txt                                                                            │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-    "###);
+    ");
 
     Ok(())
 }
@@ -321,11 +321,11 @@ fn test_undo_hide() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     let event_cursor = run_select_past_event(
@@ -336,37 +336,37 @@ fn test_undo_hide() -> eyre::Result<()> {
             CursiveTestingEvent::Event('y'.into()),
         ],
     )?;
-    insta::assert_debug_snapshot!(event_cursor, @r###"
-        Some(
-            EventCursor {
-                event_id: 9,
-            },
-        )
-        "###);
+    insta::assert_debug_snapshot!(event_cursor, @"
+    Some(
+        EventCursor {
+            event_id: 9,
+        },
+    )
+    ");
     let event_cursor = event_cursor.unwrap();
 
     {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Create branch test1 at 62fc20d create test1.txt
 
         2. Unhide commit 62fc20d create test1.txt
 
         Confirm? [yN] Applied 2 inverse events.
-        "###);
+        ");
         assert_eq!(exit_code, 0);
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d (test1) create test1.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -393,18 +393,18 @@ fn test_undo_move_refs() -> eyre::Result<()> {
             CursiveTestingEvent::Event('y'.into()),
         ],
     )?;
-    insta::assert_debug_snapshot!(event_cursor, @r###"
-        Some(
-            EventCursor {
-                event_id: 3,
-            },
-        )
-        "###);
+    insta::assert_debug_snapshot!(event_cursor, @"
+    Some(
+        EventCursor {
+            event_id: 3,
+        },
+    )
+    ");
     let event_cursor = event_cursor.unwrap();
 
     {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Hide commit 96d1c37 create test2.txt
 
@@ -414,16 +414,16 @@ fn test_undo_move_refs() -> eyre::Result<()> {
                        to 62fc20d create test1.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         Applied 3 inverse events.
-        "###);
+        ");
         assert_eq!(exit_code, 0);
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -455,7 +455,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
     )?;
 
     if git.supports_reference_transactions()? {
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │O f777ecc (master) create initial.txt                                                                                 │
         │|                                                                                                                     │
@@ -480,8 +480,8 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │1. Hide commit 62fc20d create test1.txt                                                                               │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        ");
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │O f777ecc (master) create initial.txt                                                                                 │
         │|                                                                                                                     │
@@ -506,9 +506,9 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
+        ");
     } else {
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │O f777ecc (master) create initial.txt                                                                                 │
         │|                                                                                                                     │
@@ -533,8 +533,8 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │1. Hide commit 62fc20d create test1.txt                                                                               │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        ");
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │O f777ecc (master) create initial.txt                                                                                 │
         │|                                                                                                                     │
@@ -559,7 +559,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
+        ");
     }
 
     Ok(())
@@ -594,7 +594,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
             CursiveTestingEvent::Event(Key::Enter.into()),
         ],
     )?;
-    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
     │O 62fc20d (master) create test1.txt                                                                                   │
@@ -619,7 +619,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
     │There are no previous available events.                                                                               │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-    "###);
+    ");
 
     // If there are no dirty files in the repository prior to the `undo`,
     // then there should still be no dirty files after the `undo`.
@@ -630,7 +630,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     }
     {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Delete branch bar at 62fc20d create test1.txt
 
@@ -644,7 +644,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
 
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         Applied 5 inverse events.
-        "###);
+        ");
         assert_eq!(exit_code, 0);
     }
     {
@@ -686,7 +686,7 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
             CursiveTestingEvent::Event(Key::Enter.into()),
         ],
     )?;
-    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
     │@ 62fc20d (master) create test1.txt                                                                                   │
@@ -711,7 +711,7 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     │1. Empty event for BISECT_HEAD                                                                                        │
     │   This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57                       │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-    "###);
+    ");
 
     Ok(())
 }
@@ -740,19 +740,19 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("gc", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
-        "###);
+        ");
     }
     git.run(&["gc", "--prune=now"])?;
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (master) create test1.txt
-        "###);
+        ");
     }
 
     let screenshot1 = Default::default();
@@ -767,7 +767,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
             CursiveTestingEvent::Event(Key::Enter.into()),
         ],
     )?;
-    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
     │O 62fc20d (master) create test1.txt                                                                                   │
@@ -792,12 +792,12 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     │1. Hide commit <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>                                       │
     │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-    "###);
+    ");
 
     let event_cursor = event_cursor.unwrap();
     {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Move branch master from 62fc20d create test1.txt
                                 to 62fc20d create test1.txt
@@ -807,7 +807,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
                        to <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>
         Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach --
         Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
-        "###);
+        ");
         assert!(exit_code > 0);
     }
 
@@ -838,7 +838,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
             },
         )?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Rewrite commit 9ed8f9a bad message
                       as 96d1c37 create test2.txt
@@ -849,15 +849,15 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         4. Check out from 9ed8f9a bad message
                        to 96d1c37 create test2.txt
         Confirm? [yN] Aborted.
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 9ed8f9a (> master) bad message
-        "###);
+        ");
     }
 
     {
@@ -870,7 +870,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
             },
         )?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Rewrite commit 9ed8f9a bad message
                       as 96d1c37 create test2.txt
@@ -884,15 +884,15 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         :
         @ 96d1c37 (master) create test2.txt
         Applied 4 inverse events.
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -912,12 +912,12 @@ fn test_undo_no_confirm() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("undo", &["--yes"])?;
         let stdout = trim_lines(stdout);
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Will apply these actions:
         1. Hide commit 62fc20d create test1.txt
 
         Applied 1 inverse event.
-        "###);
+        ");
     }
 
     Ok(())

@@ -14,15 +14,15 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
     git.write_file_txt("test1", "contents1\n")?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "-m", "bar"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master 872eae1] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 872eae10daf1e94d0c346540f6d655027c60e7ae
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -38,7 +38,7 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +contents1
-        "###);
+        ");
     }
 
     Ok(())
@@ -73,7 +73,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
     {
         // The above should not have committed anything.
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 -0100
@@ -87,7 +87,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
         +++ b/test1.txt
         @@ -0,0 +1 @@
         +test1 contents
-        "###);
+        ");
     }
 
     {
@@ -107,7 +107,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 914812ae3220add483f11d851dc59f0b5dbdeaa0
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -121,7 +121,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +contents1
-        "###);
+        ");
     }
 
     Ok(())
@@ -143,15 +143,15 @@ fn test_record_staged_changes() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master b437fb4] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit b437fb44ab49995a1b59877960830841ff7a7a23
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -165,7 +165,7 @@ fn test_record_staged_changes() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +new test1 contents
-        "###);
+        ");
     }
 
     Ok(())
@@ -192,8 +192,8 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test1.txt | 1 +
-            1 file changed, 1 insertion(+)
+        test1.txt | 1 +
+        1 file changed, 1 insertion(+)
         ");
     }
 
@@ -203,15 +203,15 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.write_file_txt("test2", "test2 new")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master 36be832] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test1.txt | 2 +-
-            1 file changed, 1 insertion(+), 1 deletion(-)
+        test1.txt | 2 +-
+        1 file changed, 1 insertion(+), 1 deletion(-)
         ");
     }
 
@@ -221,18 +221,18 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         // test2 should still be considered "new" because last run was disabled
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Including 1 new untracked file: test2.txt
         [master 765c01b] foo
          2 files changed, 2 insertions(+), 1 deletion(-)
          create mode 100644 test2.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test1.txt | 2 +-
-            test2.txt | 1 +
-            2 files changed, 2 insertions(+), 1 deletion(-)
+        test1.txt | 2 +-
+        test2.txt | 1 +
+        2 files changed, 2 insertions(+), 1 deletion(-)
         ");
     }
 
@@ -242,19 +242,19 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.write_file_txt("test3", "test3 new")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "skip"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Skipping 1 new untracked file: test3.txt
         hint: this file will remain skipped and will not be automatically reconsidered
         hint: to add it yourself: git add
         hint: disable this hint by running: git config --global branchless.hint.addSkippedFiles false
         [master 371fc94] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test2.txt | 2 +-
-            1 file changed, 1 insertion(+), 1 deletion(-)
+        test2.txt | 2 +-
+        1 file changed, 1 insertion(+), 1 deletion(-)
         ");
     }
 
@@ -273,9 +273,9 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test2.txt | 2 +-
-            test4.txt | 1 +
-            2 files changed, 2 insertions(+), 1 deletion(-)
+        test2.txt | 2 +-
+        test4.txt | 1 +
+        2 files changed, 2 insertions(+), 1 deletion(-)
         ");
     }
 
@@ -286,18 +286,18 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.write_file_txt("test5", "test5 new")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Skipping 1 previously skipped file: test3.txt
         Including 1 new untracked file: test5.txt
         [master af69c1a] foo
          1 file changed, 1 insertion(+)
          create mode 100644 test5.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test5.txt | 1 +
-            1 file changed, 1 insertion(+)
+        test5.txt | 1 +
+        1 file changed, 1 insertion(+)
         ");
     }
 
@@ -308,15 +308,15 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.run(&["add", "test5.txt"])?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master cbc1ddc] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test5.txt | 2 +-
-            1 file changed, 1 insertion(+), 1 deletion(-)
+        test5.txt | 2 +-
+        1 file changed, 1 insertion(+), 1 deletion(-)
         ");
     }
 
@@ -325,15 +325,15 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.write_file_txt("test1", "test1 updated 7")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master c3b6590] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test1.txt | 2 +-
-            1 file changed, 1 insertion(+), 1 deletion(-)
+        test1.txt | 2 +-
+        1 file changed, 1 insertion(+), 1 deletion(-)
         ");
     }
 
@@ -344,20 +344,20 @@ fn test_record_with_new_untracked_files() -> eyre::Result<()> {
         git.write_file_txt("test1", "test1 updated 8")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--untracked", "add"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Skipping 1 previously skipped file: test3.txt
         Including 1 new untracked file: test6.txt
         [master be357c9] foo
          2 files changed, 2 insertions(+), 1 deletion(-)
          create mode 100644 test6.txt
-        "###);
+        ");
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
-        insta::assert_snapshot!(&stdout, @r###"
+        insta::assert_snapshot!(&stdout, @"
         test1.txt | 2 +-
         test6.txt | 1 +
         2 files changed, 2 insertions(+), 1 deletion(-)
-        "###);
+        ");
     }
 
     Ok(())
@@ -377,8 +377,8 @@ fn test_record_with_new_untracked_files_prompt() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test1.txt | 1 +
-            1 file changed, 1 insertion(+)
+        test1.txt | 1 +
+        1 file changed, 1 insertion(+)
         ");
     }
 
@@ -395,8 +395,8 @@ fn test_record_with_new_untracked_files_prompt() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test2.txt | 1 +
-            1 file changed, 1 insertion(+)
+        test2.txt | 1 +
+        1 file changed, 1 insertion(+)
         ");
     }
 
@@ -414,8 +414,8 @@ fn test_record_with_new_untracked_files_prompt() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
         insta::assert_snapshot!(&stdout, @"
-            test2.txt | 3 ++-
-            1 file changed, 2 insertions(+), 1 deletion(-)
+        test2.txt | 3 ++-
+        1 file changed, 2 insertions(+), 1 deletion(-)
         ");
     }
 
@@ -442,11 +442,11 @@ fn test_record_with_new_untracked_files_prompt() -> eyre::Result<()> {
         )?;
 
         let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD"])?;
-        insta::assert_snapshot!(&stdout, @r###"
+        insta::assert_snapshot!(&stdout, @"
         test2.txt | 3 +--
         test4.txt | 1 +
         2 files changed, 2 insertions(+), 2 deletions(-)
-        "###);
+        ");
     }
 
     Ok(())
@@ -475,15 +475,15 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Cannot select changes interactively while there are already staged changes.
         Either commit or unstage your changes and try again. Aborting.
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 -0200
@@ -497,7 +497,7 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
         +++ b/test2.txt
         @@ -0,0 +1 @@
         +test2 contents
-        "###);
+        ");
     }
 
     Ok(())
@@ -520,43 +520,43 @@ fn test_record_detach() -> eyre::Result<()> {
     git.run(&["add", "test1.txt"])?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--detach"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master (root-commit) d41ddf7] foo
          1 file changed, 1 insertion(+)
          create mode 100644 test1.txt
         branchless: running command: <git-executable> update-ref -d refs/heads/master d41ddf7dd8a526054ce1ebbc739f613824cecfef
-        "###);
+        ");
     }
 
     git.commit_file("test1", 1)?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         o d41ddf7 foo
 
         @ 6118a39 (> master) create test1.txt
-        "###);
+        ");
     }
 
     git.write_file_txt("test1", "new test1 contents\n")?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--detach"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master 2e9aec4] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> branch -f master 6118a39b4dd4c986d17da2123d907ac17696cb85
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         o d41ddf7 foo
 
         O 6118a39 (master) create test1.txt
         |
         @ 2e9aec4 foo
-        "###);
+        ");
     }
 
     Ok(())
@@ -575,41 +575,41 @@ fn test_record_stash() -> eyre::Result<()> {
     git.run(&["add", "test1.txt"])?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--stash"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master 4fe46bd] foo
          1 file changed, 1 insertion(+)
          create mode 100644 test1.txt
         branchless: running command: <git-executable> branch -f master f777ecc9b0db5ed372b2615695191a8a17f79f24
         branchless: running command: <git-executable> checkout master --
-        "###);
+        ");
     }
 
     git.commit_file("test1", 1)?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | o 4fe46bd foo
         |
         @ 62fc20d (> master) create test1.txt
-        "###);
+        ");
     }
 
     git.write_file_txt("test1", "new test1 contents\n")?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--stash"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master 9b6164c] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> branch -f master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         branchless: running command: <git-executable> checkout master --
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc create initial.txt
         |\
         | o 4fe46bd foo
@@ -617,7 +617,7 @@ fn test_record_stash() -> eyre::Result<()> {
         @ 62fc20d (> master) create test1.txt
         |
         o 9b6164c foo
-        "###);
+        ");
     }
 
     Ok(())
@@ -638,33 +638,33 @@ fn test_record_stash_detached_head() -> eyre::Result<()> {
         git.commit_file("test1", 1)?;
 
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     {
         git.write_file_txt("test1", "new test1 contents\n")?;
 
         let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--stash"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD 9b6164c] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
         |
         o 9b6164c foo
-        "###);
+        ");
     }
 
     Ok(())
@@ -685,22 +685,22 @@ fn test_record_stash_default_message() -> eyre::Result<()> {
         git.write_file_txt("test1", "new test1 contents\n")?;
 
         let (stdout, _stderr) = git.branchless("record", &["--stash"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [master fd2ffa4] stash: test1.txt (+1/-1)
          1 file changed, 1 insertion(+), 1 deletion(-)
         branchless: running command: <git-executable> branch -f master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         branchless: running command: <git-executable> checkout master --
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 62fc20d (> master) create test1.txt
         |
         o fd2ffa4 stash: test1.txt (+1/-1)
-        "###);
+        ");
     }
 
     Ok(())
@@ -715,22 +715,22 @@ fn test_record_create_branch() -> eyre::Result<()> {
     git.write_file_txt("test1", "new contents\n")?;
     {
         let (stdout, _stderr) = git.branchless("record", &["-c", "foo", "-m", "Update"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> checkout master -b foo --
         M	test1.txt
         [foo 836023f] Update
          1 file changed, 1 insertion(+), 1 deletion(-)
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 62fc20d (master) create test1.txt
         |
         @ 836023f (> foo) Update
-        "###);
+        ");
     }
 
     Ok(())
@@ -750,7 +750,7 @@ fn test_record_insert() -> eyre::Result<()> {
     {
         let (stdout, _stderr) =
             git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD c17ec22] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
         Attempting rebase in-memory...
@@ -758,12 +758,12 @@ fn test_record_insert() -> eyre::Result<()> {
         branchless: processing 1 update: branch foo
         branchless: processing 1 rewritten commit
         In-memory rebase succeeded.
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -771,7 +771,7 @@ fn test_record_insert() -> eyre::Result<()> {
         @ c17ec22 update test1.txt
         |
         o 734e7f6 (foo) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -790,26 +790,26 @@ fn test_record_insert_rewrite_public_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) =
             git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD c17ec22] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
         You are trying to rewrite 1 public commit, such as: 96d1c37 create test2.txt
         It is generally not advised to rewrite public commits, because your
         collaborators will have difficulty merging your changes.
         To proceed anyways, run: git move -f -s 'siblings(.)
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
         | @ c17ec22 update test1.txt
         |
         O 96d1c37 (master) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -829,19 +829,19 @@ fn test_record_insert_merge_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) =
             git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD c36bf7c] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
         - (1 conflicting file) ae32734 create test1.txt
         To resolve merge conflicts, run: git move -m -s 'siblings(.)'
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -849,7 +849,7 @@ fn test_record_insert_merge_conflict() -> eyre::Result<()> {
         | @ c36bf7c update test1.txt
         |
         o ae32734 (foo) create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -870,7 +870,7 @@ fn test_record_insert_obsolete_siblings() -> eyre::Result<()> {
     git.run(&["add", "."])?;
     {
         let (stdout, _stderr) = git.run(&["record", "-I", "-m", "new commit"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         [detached HEAD 1b3a1aa] new commit
          1 file changed, 1 insertion(+)
          create mode 100644 test3.txt
@@ -878,12 +878,12 @@ fn test_record_insert_obsolete_siblings() -> eyre::Result<()> {
         [1/1] Committed as: 9253fc4 updated message
         branchless: processing 1 rewritten commit
         In-memory rebase succeeded.
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -891,7 +891,7 @@ fn test_record_insert_obsolete_siblings() -> eyre::Result<()> {
         @ 1b3a1aa new commit
         |
         o 9253fc4 updated message
-        "###);
+        ");
     }
 
     Ok(())
@@ -909,7 +909,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
     git.branchless("record", &["-m", "update file mode"])?;
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit a0568bf022a0211551dd8e4d3b9db40288633e47
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -919,14 +919,14 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         diff --git a/test1.txt b/test1.txt
         old mode 100644
         new mode 100755
-        "###);
+        ");
     }
 
     // The file mode change was only to the index, so we don't need to revert the
     // file mode on disk. It will already be non-executable on disk.
     {
         let (stdout, _stderr) = git.run(&["status"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         HEAD detached from f777ecc
         Changes not staged for commit:
           (use "git add <file>..." to update what will be committed)
@@ -934,7 +934,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         	modified:   test1.txt
 
         no changes added to commit (use "git add" and/or "git commit -a")
-        "###);
+        "#);
     }
 
     git.write_file_txt("test1", "new contents\n")?;
@@ -955,7 +955,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 6d2873ff3352132d510a9f98a169105529b31974
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -969,11 +969,11 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         @@ -1 +1 @@
         -test1 contents
         +new contents
-        "###);
+        ");
     }
     {
         let (stdout, _stderr) = git.run(&["status"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         HEAD detached from f777ecc
         Changes not staged for commit:
           (use "git add <file>..." to update what will be committed)
@@ -981,7 +981,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         	modified:   test1.txt
 
         no changes added to commit (use "git add" and/or "git commit -a")
-        "###);
+        "#);
     }
 
     let exit_status = run_in_pty(
@@ -997,7 +997,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
     assert!(exit_status.success());
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit dae4fe3e4c7defeba5605f9ae9b018dce8993a8a
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -1007,15 +1007,15 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         diff --git a/test1.txt b/test1.txt
         old mode 100755
         new mode 100644
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["status"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         HEAD detached from f777ecc
         nothing to commit, working tree clean
-        "###);
+        ");
     }
 
     Ok(())
@@ -1047,7 +1047,7 @@ fn test_record_binary_contents() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["show"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 7f10d49c57bba90e7dbeb59282de954bd0a53535
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -1057,7 +1057,7 @@ fn test_record_binary_contents() -> eyre::Result<()> {
         diff --git a/foo b/foo
         index 21317ba..c2575e5 100644
         Binary files a/foo and b/foo differ
-        "###);
+        ");
     }
 
     Ok(())
@@ -1095,12 +1095,12 @@ fn test_record_interactive_commit_message_template() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         O 4ab51ca (master) create test1.txt
         |
         @ 88e5a87 This is a commit template!
-        "###);
+        ");
     }
 
     Ok(())
@@ -1120,7 +1120,7 @@ fn test_record_fixup() -> eyre::Result<()> {
     git.write_file_txt("test1", "update test1\n")?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r"
+    insta::assert_snapshot!(stdout, @"
     O f777ecc (master) create initial.txt
     |
     o 62fc20d create test1.txt
@@ -1131,7 +1131,7 @@ fn test_record_fixup() -> eyre::Result<()> {
     git.branchless("record", &["--fixup", "roots(all())"])?;
 
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r"
+    insta::assert_snapshot!(stdout, @"
     O f777ecc (master) create initial.txt
     |
     o 62fc20d create test1.txt
@@ -1144,7 +1144,7 @@ fn test_record_fixup() -> eyre::Result<()> {
     git.run(&["checkout", &test1_oid.to_string()])?;
     git.write_file_txt("test1", "update test1 again\n")?;
     let stdout = git.smartlog()?;
-    insta::assert_snapshot!(stdout, @r"
+    insta::assert_snapshot!(stdout, @"
     O f777ecc (master) create initial.txt
     |
     @ 62fc20d create test1.txt
@@ -1162,7 +1162,7 @@ fn test_record_fixup() -> eyre::Result<()> {
             ..Default::default()
         },
     )?;
-    insta::assert_snapshot!(stderr, @r"
+    insta::assert_snapshot!(stderr, @"
     The commit supplied to --fixup must be an ancestor of the commit being created.
     Aborting.
     ");

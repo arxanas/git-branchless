@@ -105,5 +105,5 @@ vt100 = "0.15.2"
 # dev-dependencies
 cc = "1.2.61"
 criterion = { version = "0.8.2", features = ["html_reports"] }
-insta = { version = "1.47.2", features = ["filters"] }
+insta = { version = "1.48.0", features = ["filters"] }
 maplit = "1.0.2"

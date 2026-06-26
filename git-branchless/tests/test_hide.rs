@@ -15,30 +15,30 @@ fn test_hide_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("hide", &[&test1_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Hid commit: 62fc20d create test1.txt
         To unhide this 1 commit, run: git undo
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ fe65c1f create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -59,8 +59,7 @@ fn test_hide_bad_commit() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'abc123': no commit, branch, or reference with the name 'abc123' could be found
-");
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'abc123': no commit, branch, or reference with the name 'abc123' could be found");
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -78,11 +77,11 @@ fn test_hide_already_hidden_commit() -> eyre::Result<()> {
     git.branchless("hide", &[&test1_oid.to_string()])?;
     {
         let (stdout, _stderr) = git.branchless("hide", &[&test1_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Hid commit: 62fc20d create test1.txt
         (It was already hidden, so this operation had no effect.)
         To unhide this 1 commit, run: git undo
-        "###);
+        ");
     }
 
     Ok(())
@@ -99,11 +98,11 @@ fn test_hide_current_commit() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         % 3df4b93 (manually hidden) create test.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -125,13 +124,13 @@ fn test_hidden_commit_with_head_as_child() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         x 62fc20d (manually hidden) create test1.txt
         |
         @ 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -153,10 +152,10 @@ fn test_hide_master_commit_with_hidden_children() -> eyre::Result<()> {
     git.branchless("hide", &[&test3_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 20230db (> master) create test5.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -174,29 +173,28 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     git.run(&["checkout", "master"])?;
 
     let (stdout, _stderr) = git.branchless("hide", &["--no-delete-branches", "test", "test^"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
     Abandoned 1 branch: test
     To unhide these 2 commits, run: git undo
-    "###);
+    ");
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         x 62fc20d (manually hidden) create test1.txt
         |
         x 96d1c37 (manually hidden) (test) create test2.txt
-        "###);
+        ");
     }
 
     git.run(&["branch", "-D", "test"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
-");
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt");
     }
 
     Ok(())
@@ -214,19 +212,17 @@ fn test_hide_delete_branches() -> eyre::Result<()> {
     git.run(&["checkout", "master"])?;
 
     let (stdout, _stderr) = git.branchless("hide", &["test", "test^"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
     branchless: processing 1 update: branch test
     Deleted 1 branch: test
     To unhide these 2 commits and restore 1 branch, run: git undo
-    "###);
+    ");
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc (> master) create initial.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt");
     }
 
     git.branchless_with_options(
@@ -240,13 +236,13 @@ fn test_hide_delete_branches() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         o 96d1c37 (test) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -269,30 +265,28 @@ fn test_hide_delete_multiple_branches() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         @ f777ecc (> master) create initial.txt
         |\
         | o 62fc20d (test-def) create test1.txt
         |
         o fe65c1f (test-abc) create test2.txt
-        "###);
+        ");
     }
 
     let (stdout, _stderr) =
         git.branchless("hide", &[&test1_oid.to_string(), &test2_oid.to_string()])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     Hid commit: 62fc20d create test1.txt
     Hid commit: fe65c1f create test2.txt
     branchless: processing 2 updates: branch test-abc, branch test-def
     Deleted 2 branches: test-abc, test-def
     To unhide these 2 commits and restore 2 branches, run: git undo
-    "###);
+    ");
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc (> master) create initial.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt");
     }
 
     Ok(())
@@ -308,22 +302,22 @@ fn test_hide_delete_checked_out_branch() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     let (stdout, _stderr) = git.branchless("hide", &["test"])?;
-    insta::assert_snapshot!(stdout, @r###"
+    insta::assert_snapshot!(stdout, @"
     Hid commit: 96d1c37 create test2.txt
     branchless: processing 1 update: branch test
     Deleted 1 branch: test
     To unhide this 1 commit and restore 1 branch, run: git undo
-    "###);
+    ");
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         % 96d1c37 (manually hidden) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -341,40 +335,40 @@ fn test_unhide() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("unhide", &[&test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Unhid commit: 96d1c37 create test2.txt
         (It was not hidden, so this operation had no effect.)
         To hide this 1 commit, run: git undo
-        "###);
+        ");
     }
 
     git.branchless("hide", &[&test2_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("unhide", &[&test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Unhid commit: 96d1c37 create test2.txt
         To hide this 1 commit, run: git undo
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         o 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -393,7 +387,7 @@ fn test_hide_recursive() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -401,39 +395,39 @@ fn test_hide_recursive() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         o 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("hide", &["-r", &test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Hid commit: 96d1c37 create test2.txt
         Hid commit: 70deb1e create test3.txt
         To unhide these 2 commits, run: git undo
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("unhide", &["-r", &test2_oid.to_string()])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Unhid commit: 96d1c37 create test2.txt
         Unhid commit: 70deb1e create test3.txt
         To hide these 2 commits, run: git undo
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (> master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -441,7 +435,7 @@ fn test_hide_recursive() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         o 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -476,10 +470,10 @@ fn test_smartlog_active_non_head_main_branch_commit() -> eyre::Result<()> {
         cloned_repo.branchless("unhide", &[&test1_oid.to_string()])?;
 
         let stdout = cloned_repo.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         :
         @ 70deb1e (> master) create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -507,14 +501,14 @@ fn test_smartlog_show_hidden_commits() -> eyre::Result<()> {
             ],
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         @ 62fc20d (master) create test1.txt
         |\
         | x cb8137a (manually hidden) amended test2
         |
         x 96d1c37 (rewritten as cb8137ad) create test2.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -552,7 +546,7 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
     // branch, hidden branch and non-branch head are visible; hidden non-branch head is not
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
@@ -567,13 +561,13 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
         | o e8b6a38 create test8.txt
         |
         @ 1b854ed (> master) create test9.txt
-        "###);
+        ");
     }
 
     // just branches (normal and hidden) but no non-branch heads
     {
         let (stdout, _stderr) = git.branchless("smartlog", &["branches()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r"
         :
         O 62fc20d create test1.txt
         |\
@@ -584,7 +578,7 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
         : x a248207 (manually hidden) (branch-4) create test4.txt
         :
         @ 1b854ed (> master) create test9.txt
-        "###);
+        ");
     }
 
     Ok(())

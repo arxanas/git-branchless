@@ -28,11 +28,11 @@ fn test_test() -> eyre::Result<()> {
 
     {
         let (stdout, stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 0206717 (create test3.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -42,7 +42,7 @@ fn test_test() -> eyre::Result<()> {
         ✓ Passed: 0206717 create test3.txt
         Ran command on 2 commits: exit 0
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -54,11 +54,11 @@ fn test_test() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 0206717 (create test3.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -68,7 +68,7 @@ fn test_test() -> eyre::Result<()> {
         X Failed (exit code 1): 0206717 create test3.txt
         Ran command on 2 commits: exit 1
         0 passed, 2 failed, 0 skipped
-        "###);
+        ");
     }
 
     Ok(())
@@ -94,12 +94,12 @@ fn test_test_abort() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
-        "###);
+        ");
     }
 
     {
@@ -111,33 +111,33 @@ fn test_test_abort() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         A rebase operation is already in progress.
         Run git rebase --continue or git rebase --abort to resolve it and proceed.
-        "###);
+        ");
     }
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ fe65c1f create test2.txt
         |
         o 0206717 create test3.txt
-        "###);
+        ");
     }
 
     git.run(&["rebase", "--abort"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o fe65c1f create test2.txt
         |
         @ 0206717 create test3.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -155,7 +155,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -169,12 +169,12 @@ fn test_test_cached_results() -> eyre::Result<()> {
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -188,7 +188,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         hint: there were 3 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -209,7 +209,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", short_command, "-v"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -231,12 +231,12 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         Ran command on 1 commit: bash test.sh 10
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", short_command, "-vv"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -261,12 +261,12 @@ fn test_test_verbosity() -> eyre::Result<()> {
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", long_command, "-v"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -289,12 +289,12 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         Ran command on 1 commit: bash test.sh 15
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", long_command, "-vv"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -324,7 +324,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -341,7 +341,7 @@ fn test_test_show() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", "echo hi", "."])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -350,39 +350,39 @@ fn test_test_show() -> eyre::Result<()> {
         ✓ Passed: 96d1c37 create test2.txt
         Ran command on 1 commit: echo hi
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("test", &["show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No cached test data for 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
         hint: to see more detailed output, re-run with -v/--verbose
         hint: disable this hint by running: git config --global branchless.hint.testShowVerbose false
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("test", &["clean"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Cleaning results for 62fc20d create test1.txt
         Cleaning results for 96d1c37 create test2.txt
         Cleaned 2 cached test results.
-        "###);
+        ");
     }
 
     {
         let (stdout, stderr) = git.branchless("test", &["show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         No cached test data for 62fc20d create test1.txt
         No cached test data for 96d1c37 create test2.txt
         hint: to see more detailed output, re-run with -v/--verbose
         hint: disable this hint by running: git config --global branchless.hint.testShowVerbose false
-        "###);
+        ");
     }
 
     Ok(())
@@ -402,14 +402,14 @@ fn test_test_command_alias() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Could not determine test command to run. No test command was provided with -c/--command or
         -x/--exec, and the configuration value 'branchless.test.alias.default' was not set.
 
         To configure a default test command, run: git config branchless.test.alias.default <command>
         To run a specific test command, run: git test run -x <command>
         To run a specific command alias, run: git test run -c <alias>
-        "###);
+        ");
     }
 
     git.run(&["config", "branchless.test.alias.foo", "echo foo"])?;
@@ -422,7 +422,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         Could not determine test command to run. No test command was provided with -c/--command or
         -x/--exec, and the configuration value 'branchless.test.alias.default' was not set.
 
@@ -432,7 +432,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
 
         These are the currently-configured command aliases:
         - branchless.test.alias.foo = "echo foo"
-        "###);
+        "#);
     }
 
     {
@@ -444,7 +444,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         The test command alias "nonexistent" was not defined.
 
         To create it, run: git config branchless.test.alias.nonexistent <command>
@@ -452,13 +452,13 @@ fn test_test_command_alias() -> eyre::Result<()> {
 
         These are the currently-configured command aliases:
         - branchless.test.alias.foo = "echo foo"
-        "###);
+        "#);
     }
 
     git.run(&["config", "branchless.test.alias.default", "echo default"])?;
     {
         let (stdout, _stderr) = git.branchless("test", &["run"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -467,12 +467,12 @@ fn test_test_command_alias() -> eyre::Result<()> {
         ✓ Passed: f777ecc create initial.txt
         Ran command on 1 commit: echo default
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "-c", "foo"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -481,7 +481,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
         ✓ Passed: f777ecc create initial.txt
         Ran command on 1 commit: echo foo
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -493,7 +493,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         The test command alias "foo bar baz" was not defined.
 
         To create it, run: git config branchless.test.alias.foo bar baz <command>
@@ -502,7 +502,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
         These are the currently-configured command aliases:
         - branchless.test.alias.foo = "echo foo"
         - branchless.test.alias.default = "echo default"
-        "###);
+        "#);
     }
 
     Ok(())
@@ -527,12 +527,12 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         This operation would modify the working copy, but you have uncommitted changes
         in your working copy which might be overwritten as a result.
         Commit your changes and then try again.
-        "###);
+        ");
     }
 
     {
@@ -549,7 +549,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
             ],
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Using command execution strategy: worktree
         ✓ Passed: 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
@@ -558,7 +558,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         <no output>
         Ran command on 1 commit: echo hello
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -575,7 +575,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
             ],
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         Using command execution strategy: worktree
         ✓ Passed (cached): 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
@@ -587,7 +587,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "@"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -623,19 +623,19 @@ echo hello
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         This operation would modify the working copy, but you have uncommitted changes
         in your working copy which might be overwritten as a result.
         Commit your changes and then try again.
-        "###);
+        ");
     }
 
     git.run(&["config", "branchless.test.strategy", "worktree"])?;
     {
         let (stdout, stderr) = git.branchless("test", &["run", "-vv", "@"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Using command execution strategy: worktree
         ✓ Passed: c82ebfa create test2.txt
         Stdout: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash__test.sh/stdout
@@ -644,7 +644,7 @@ echo hello
         <no output>
         Ran command on 1 commit: bash test.sh
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     git.run(&["config", "branchless.test.strategy", "invalid-value"])?;
@@ -658,10 +658,10 @@ echo hello
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         Invalid value for config value branchless.test.strategy: invalid-value
         Expected one of: working-copy, worktree
-        "###);
+        ");
     }
 
     Ok(())
@@ -691,9 +691,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.
-        "###);
+        insta::assert_snapshot!(stdout, @"The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.");
     }
 
     {
@@ -702,7 +700,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
             "test",
             &["run", "--strategy", "working-copy", "--jobs", "1"],
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -712,7 +710,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         ✓ Passed: 96d1c37 create test2.txt
         Ran command on 2 commits: exit 0
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -725,15 +723,13 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.
-        "###);
+        insta::assert_snapshot!(stdout, @"The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.");
     }
 
     {
         let (stdout, stderr) = git.branchless("test", &["run", "--jobs", "2"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         Using command execution strategy: worktree
         ✓ Passed (cached): 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
@@ -742,7 +738,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     {
@@ -750,11 +746,11 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
             "test",
             &["run", "--exec", "true", "--interactive", "--jobs", "1"],
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 96d1c37 (create test2.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -773,7 +769,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         ✓ Passed (interactive): 96d1c37 create test2.txt
         Ran command on 2 commits: true
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -786,20 +782,18 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        The --jobs option cannot be used with the --interactive option.
-        "###);
+        insta::assert_snapshot!(stdout, @"The --jobs option cannot be used with the --interactive option.");
     }
 
     git.run(&["config", "branchless.test.jobs", "2"])?;
 
     {
         let (stdout, stderr) = git.branchless("test", &["run", "--strategy", "working-copy"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 96d1c37 (create test2.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -812,7 +806,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -830,7 +824,7 @@ fn test_test_fix() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -838,7 +832,7 @@ fn test_test_fix() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         @ 70deb1e create test3.txt
-        "###);
+        ");
     }
 
     git.write_file(
@@ -851,7 +845,7 @@ done
     )?;
     {
         let (stdout, _stderr) = git.branchless("test", &["fix", "-x", "bash test.sh"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -873,12 +867,12 @@ done
         62fc20d -> 300cb54 create test1.txt
         96d1c37 -> 2ee3aea create test2.txt
         70deb1e -> 6f48e0a create test3.txt
-        "###);
+        ");
     }
 
     let original_log_output = {
         let (stdout, _stderr) = git.run(&["log", "--patch"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 6f48e0a628753731739619f27107c57f5d0cc1e0
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 -0300
@@ -941,13 +935,13 @@ done
         +++ b/initial.txt
         @@ -0,0 +1 @@
         +initial contents
-        "###);
+        ");
         stdout
     };
 
     let updated_smartlog = {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         o 300cb54 create test1.txt
@@ -955,7 +949,7 @@ done
         o 2ee3aea create test2.txt
         |
         @ 6f48e0a create test3.txt
-        "###);
+        ");
         stdout
     };
 
@@ -963,7 +957,7 @@ done
     // it was idempotent.
     {
         let (stdout, _stderr) = git.branchless("test", &["fix", "-x", "bash test.sh"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -975,7 +969,7 @@ done
         Ran command on 3 commits: bash test.sh
         3 passed, 0 failed, 0 skipped
         No commits to fix.
-        "###);
+        ");
     }
     {
         let (stdout, _stderr) = git.run(&["log", "--patch"])?;
@@ -1022,7 +1016,7 @@ done
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1033,7 +1027,7 @@ done
         X Failed (exit code 1): 70deb1e create test3.txt
         Ran command on 3 commits: bash test.sh
         1 passed, 2 failed, 0 skipped
-        "###);
+        ");
     }
     Ok(())
 }
@@ -1062,7 +1056,7 @@ done
 
     {
         let (stdout, _stderr) = git.run(&["log", "--patch"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit 75e728fb17f6952287302c3e76d88aa737dd99d1
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -1111,12 +1105,12 @@ done
         +++ b/initial.txt
         @@ -0,0 +1 @@
         +initial contents
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["fix", "-x", "bash test.sh"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1135,12 +1129,12 @@ done
         Fixed 2 commits with bash test.sh:
         62fc20d -> 300cb54 create test1.txt
         75e728f -> f15b423 descendant commit
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.run(&["log", "--patch"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         commit f15b423404bbebfe4b09e305e074b525d008f44a
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
@@ -1189,7 +1183,7 @@ done
         +++ b/initial.txt
         @@ -0,0 +1 @@
         +initial contents
-        "###);
+        ");
     }
 
     Ok(())
@@ -1212,9 +1206,7 @@ fn test_test_forbid_on_disk_rebase() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
-        The --on-disk option cannot be provided for fixes. Use the --in-memory option instead.
-        "###);
+        insta::assert_snapshot!(stdout, @"The --on-disk option cannot be provided for fixes. Use the --in-memory option instead.");
     }
 
     Ok(())
@@ -1243,7 +1235,7 @@ fn test_test_search_binary() -> eyre::Result<()> {
                 "! git grep -q 'test4'",
             ],
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1259,7 +1251,7 @@ fn test_test_search_binary() -> eyre::Result<()> {
         - 70deb1e create test3.txt
         First failing commit:
         - 355e173 create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -1273,7 +1265,7 @@ fn test_test_run_none() -> eyre::Result<()> {
     {
         // Shouldn't time out.
         let (stdout, _stderr) = git.branchless("test", &["run", "-x", "true", "none()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1281,7 +1273,7 @@ fn test_test_run_none() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         Ran command on 0 commits: true
         0 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     Ok(())
@@ -1304,7 +1296,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
     {
         let (stdout, _stderr) =
             git.branchless("test", &["run", "--search", "binary", "--exec", "exit 125"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1322,14 +1314,14 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
         There were no failing commits in the provided set.
-        "###);
+        ");
     }
 
     // Confirm that we treat exit code 125 as indeterminate even when cached.
     {
         let (stdout, _stderr) =
             git.branchless("test", &["run", "--search", "binary", "--exec", "exit 125"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1347,7 +1339,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
         There were no failing commits in the provided set.
-        "###);
+        ");
     }
 
     git.write_file(
@@ -1368,7 +1360,7 @@ fi
             "test",
             &["run", "--search", "linear", "--exec", "bash test.sh"],
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1387,7 +1379,7 @@ fi
         Last passing commit:
         - 70deb1e create test3.txt
         There were no failing commits in the provided set.
-        "###);
+        ");
     }
 
     {
@@ -1395,7 +1387,7 @@ fi
             "test",
             &["run", "--search", "binary", "--exec", "bash test.sh"],
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1415,7 +1407,7 @@ fi
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -1443,7 +1435,7 @@ fn test_test_interactive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1462,7 +1454,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         ✓ Passed (interactive): 96d1c37 create test2.txt
         Ran command on 2 commits: true
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -1475,7 +1467,7 @@ fn test_test_interactive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1494,7 +1486,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         X Failed (exit code 1, interactive): 96d1c37 create test2.txt
         Ran command on 2 commits: false
         0 passed, 2 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -1507,11 +1499,11 @@ fn test_test_interactive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 96d1c37 (create test2.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1531,7 +1523,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         ✓ Passed (interactive): 96d1c37 create test2.txt
         Ran command on 2 commits: bash
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
@@ -1544,7 +1536,7 @@ fn test_test_interactive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1556,7 +1548,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())
@@ -1594,11 +1586,11 @@ fi
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 96d1c37 (create test2.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1613,7 +1605,7 @@ fi
         - 62fc20d create test1.txt
         There were no failing commits in the provided set.
         Aborted running commands with exit code 127 at commit: 96d1c37 create test2.txt
-        "###);
+        ");
     }
 
     // Check aborting when results are cached.
@@ -1626,7 +1618,7 @@ fi
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1644,7 +1636,7 @@ fi
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         Aborted running commands with exit code 127 at commit: 96d1c37 create test2.txt
-        "###);
+        "#);
     }
 
     Ok(())
@@ -1666,7 +1658,7 @@ echo "Command is: $BRANCHLESS_TEST_COMMAND"
     {
         let (stdout, _stderr) =
             git.branchless("test", &["run", "--exec", "bash test.sh", "HEAD", "-vv"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1680,7 +1672,7 @@ echo "Command is: $BRANCHLESS_TEST_COMMAND"
         <no output>
         Ran command on 1 commit: bash test.sh
         1 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     Ok(())
@@ -1710,9 +1702,7 @@ fn test_test_revsets() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
-        Evaluation error for expression 'tests.passed()': there was no latest command run with `git test`; try running `git test` first
-        "###);
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'tests.passed()': there was no latest command run with `git test`; try running `git test` first");
         insta::assert_snapshot!(stdout, @"");
     }
 
@@ -1751,11 +1741,11 @@ esac
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @r###"
+        insta::assert_snapshot!(stderr, @"
         Stopped at 355e173 (create test4.txt)
         branchless: processing 1 update: ref HEAD
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
+        ");
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1767,48 +1757,44 @@ esac
         ✓ Passed: 355e173 create test4.txt
         Ran command on 4 commits: bash test.sh
         2 passed, 1 failed, 1 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("query", &["tests.passed()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         62fc20d create test1.txt
         355e173 create test4.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("query", &["tests.failed()"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        96d1c37 create test2.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"96d1c37 create test2.txt");
     }
 
     {
         let (stdout, _stderr) = git.branchless("query", &["tests.fixable()"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        62fc20d create test1.txt
-        "###);
+        insta::assert_snapshot!(stdout, @"62fc20d create test1.txt");
     }
 
     git.branchless("test", &["run", "--exec", "exit 0"])?;
     {
         let (stdout, _stderr) = git.branchless("query", &["tests.passed()"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         62fc20d create test1.txt
         96d1c37 create test2.txt
         70deb1e create test3.txt
         355e173 create test4.txt
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("query", &["tests.passed('bash test.sh')"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         62fc20d create test1.txt
         355e173 create test4.txt
-        "###);
+        ");
     }
 
     Ok(())
@@ -1836,7 +1822,7 @@ fn test_test_no_cache() -> eyre::Result<()> {
     )?;
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "--exec", "bash test.sh"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1846,7 +1832,7 @@ fn test_test_no_cache() -> eyre::Result<()> {
         ✓ Passed: 96d1c37 create test2.txt
         Ran command on 2 commits: bash test.sh
         2 passed, 0 failed, 0 skipped
-        "###);
+        ");
     }
 
     git.write_file(
@@ -1864,7 +1850,7 @@ fn test_test_no_cache() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1874,12 +1860,12 @@ fn test_test_no_cache() -> eyre::Result<()> {
         X Failed (exit code 1): 96d1c37 create test2.txt
         Ran command on 2 commits: bash test.sh
         0 passed, 2 failed, 0 skipped
-        "###);
+        ");
     }
 
     {
         let (stdout, _stderr) = git.branchless("test", &["run", "--exec", "bash test.sh"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @r#"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -1892,7 +1878,7 @@ fn test_test_no_cache() -> eyre::Result<()> {
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        "###);
+        "#);
     }
 
     Ok(())

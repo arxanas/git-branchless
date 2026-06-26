@@ -399,7 +399,7 @@ mod tests {
         let mut search = Search::new(graph, nodes);
 
         search.notify(4, Status::Success).unwrap();
-        insta::assert_debug_snapshot!(search.notify(3, Status::Failure), @r###"
+        insta::assert_debug_snapshot!(search.notify(3, Status::Failure), @"
         Err(
             InconsistentStateTransition {
                 ancestor_node: 3,
@@ -408,9 +408,9 @@ mod tests {
                 descendant_status: Success,
             },
         )
-        "###);
+        ");
 
-        insta::assert_debug_snapshot!(search.notify(4, Status::Indeterminate), @r###"
+        insta::assert_debug_snapshot!(search.notify(4, Status::Indeterminate), @"
         Err(
             IllegalStateTransition {
                 node: 4,
@@ -418,10 +418,10 @@ mod tests {
                 to: Indeterminate,
             },
         )
-        "###);
+        ");
 
         search.notify(5, Status::Failure).unwrap();
-        insta::assert_debug_snapshot!(search.notify(6, Status::Success), @r###"
+        insta::assert_debug_snapshot!(search.notify(6, Status::Success), @"
         Err(
             InconsistentStateTransition {
                 ancestor_node: 5,
@@ -430,7 +430,7 @@ mod tests {
                 descendant_status: Success,
             },
         )
-        "###);
+        ");
     }
 
     #[test]

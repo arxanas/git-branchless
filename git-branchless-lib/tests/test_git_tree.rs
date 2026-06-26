@@ -22,7 +22,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
     let head_commit = repo.find_commit_or_fail(head_oid)?;
     let head_tree = head_commit.get_tree()?;
 
-    insta::assert_debug_snapshot!(head_tree.get_entries_for_testing(), @r###"
+    insta::assert_debug_snapshot!(head_tree.get_entries_for_testing(), @r#"
     [
         (
             "bar",
@@ -41,7 +41,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
             "7c465afc533f95ff7d2c91e18921f94aac8292fc",
         ),
     ]
-    "###);
+    "#);
 
     {
         let hydrated_tree = {
@@ -62,7 +62,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
             })?;
             repo.find_tree(hydrated_tree_oid)?.unwrap()
         };
-        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r###"
+        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r#"
         [
             (
                 "bar",
@@ -81,7 +81,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
                 "7c465afc533f95ff7d2c91e18921f94aac8292fc",
             ),
         ]
-        "###);
+        "#);
     }
 
     {
@@ -93,7 +93,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
             })?;
             repo.find_tree(hydrated_tree_oid)?.unwrap()
         };
-        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r###"
+        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r#"
         [
             (
                 "bar",
@@ -112,7 +112,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
                 "7c465afc533f95ff7d2c91e18921f94aac8292fc",
             ),
         ]
-        "###);
+        "#);
     }
 
     {
@@ -125,7 +125,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
             })?;
             repo.find_tree(hydrated_tree_oid)?.unwrap()
         };
-        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r###"
+        insta::assert_debug_snapshot!(hydrated_tree.get_entries_for_testing(), @r#"
         [
             (
                 "foo.txt",
@@ -140,7 +140,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
                 "7c465afc533f95ff7d2c91e18921f94aac8292fc",
             ),
         ]
-        "###);
+        "#);
     }
 
     {
@@ -150,7 +150,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
             &[Path::new("bar/baz.txt"), Path::new("foo.txt")],
         )?;
         let dehydrated_tree = repo.find_tree(dehydrated_tree_oid)?.unwrap();
-        insta::assert_debug_snapshot!(dehydrated_tree.get_entries_for_testing(), @r###"
+        insta::assert_debug_snapshot!(dehydrated_tree.get_entries_for_testing(), @r#"
         [
             (
                 "bar",
@@ -161,7 +161,7 @@ fn test_hydrate_tree() -> eyre::Result<()> {
                 "19102815663d23f8b75a47e7a01965dcdc96468c",
             ),
         ]
-        "###);
+        "#);
     }
 
     Ok(())
@@ -184,11 +184,11 @@ fn test_detect_path_only_changed_file_mode() -> eyre::Result<()> {
     let rhs_tree = commit.get_tree()?;
     let changed_paths = get_changed_paths_between_trees(&repo, Some(&lhs_tree), Some(&rhs_tree))?;
 
-    insta::assert_debug_snapshot!(changed_paths, @r###"
-        {
-            "initial.txt",
-        }
-        "###);
+    insta::assert_debug_snapshot!(changed_paths, @r#"
+    {
+        "initial.txt",
+    }
+    "#);
 
     Ok(())
 }

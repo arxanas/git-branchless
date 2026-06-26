@@ -21,27 +21,26 @@ fn test_gc() -> eyre::Result<()> {
     git.run(&["gc", "--prune=now"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         @ f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     git.branchless("hide", &["62fc20d2"])?;
     {
         let (stdout, _stderr) = git.branchless("gc", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
-        "###);
+        ");
     }
 
     git.run(&["gc", "--prune=now"])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc (master) create initial.txt
-");
+        insta::assert_snapshot!(stdout, @"@ f777ecc (master) create initial.txt");
     }
 
     {
@@ -76,10 +75,10 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.branchless("gc", &[])?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
-        "###);
+        ");
     }
 
     git.run(&["gc", "--prune=now"])?;
@@ -91,7 +90,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         .into_iter()
         .map(redact_event_timestamp)
         .collect_vec();
-    insta::assert_debug_snapshot!(events, @r###"
+    insta::assert_debug_snapshot!(events, @r#"
     [
         RefUpdateEvent {
             timestamp: 0.0,
@@ -223,7 +222,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             message: None,
         },
     ]
-    "###);
+    "#);
 
     Ok(())
 }
@@ -245,11 +244,11 @@ fn test_gc_no_init() -> eyre::Result<()> {
 
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     git.run(&["checkout", "HEAD~"])?;
@@ -262,11 +261,11 @@ fn test_gc_no_init() -> eyre::Result<()> {
     git.run(&["checkout", &test1_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     git.run(&["checkout", "HEAD~"])?;
@@ -280,11 +279,11 @@ fn test_gc_no_init() -> eyre::Result<()> {
     git.run(&["checkout", &test1_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
-        insta::assert_snapshot!(stdout, @r###"
+        insta::assert_snapshot!(stdout, @"
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d create test1.txt
-        "###);
+        ");
     }
 
     Ok(())
