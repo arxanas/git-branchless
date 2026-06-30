@@ -1,4 +1,4 @@
-use lib::git::{BranchType, ReferenceName};
+use lib::git::{BranchType, GitVersion, ReferenceName};
 use lib::testing::make_git;
 
 #[test]
@@ -57,6 +57,9 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
+    if git.get_version()? < GitVersion(2, 54, 0) {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
@@ -80,7 +83,11 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("smartlog", &["--event-id=-1"])?;
         insta::assert_snapshot!(stdout, @"
         :
-        @ 96d1c37 (> master) create test2.txt
+        @ 62fc20d create test1.txt
+        |
+        O 62fc20d create test1.txt
+        |
+        O 96d1c37 (> master) create test2.txt
         ");
     }
 
