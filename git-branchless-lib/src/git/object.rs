@@ -109,6 +109,12 @@ impl<'repo> Commit<'repo> {
         BString::from(self.inner.message_bytes())
     }
 
+    /// Get the commit message body.
+    #[instrument]
+    pub fn get_body(&self) -> Option<&str> {
+        self.inner.body()
+    }
+
     /// Get the commit message, without any whitespace trimmed.
     #[instrument]
     pub fn get_message_raw(&self) -> BString {
