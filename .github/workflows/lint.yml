@@ -54,4 +54,4 @@ jobs:
       - name: Run `cargo doc`
         env:
           RUSTDOCFLAGS: "--deny warnings"
-        run: cargo doc --workspace --no-deps
+        run: cargo doc --workspace --no-deps --document-private-items

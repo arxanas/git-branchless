@@ -190,7 +190,7 @@ impl RootOperation {
     }
 
     /// Re-render all operation progress bars. This does not change their
-    /// ordering like [`refresh_multi_progress`] does.
+    /// ordering like [`Self::refresh_multi_progress`] does.
     pub fn tick(&mut self) {
         let operations = {
             let mut acc = Vec::new();

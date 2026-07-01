@@ -756,7 +756,7 @@ impl Deref for GitWrapper {
     }
 }
 
-/// From https://stackoverflow.com/a/65192210
+/// From <https://stackoverflow.com/a/65192210>
 /// License: CC-BY-SA 4.0
 fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
     fs::create_dir_all(&dst)?;
