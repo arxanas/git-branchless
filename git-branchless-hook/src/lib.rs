@@ -233,8 +233,8 @@ mod reference_transaction {
         /// The string is expected to be one field from a reference transaction
         /// line, which can be one of the following values:
         ///
-        /// ref:<symbolic ref name>
-        /// <commit hash>
+        /// - `ref:<symbolic ref name>`
+        /// - `<commit hash>`
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             match value.strip_prefix("ref:") {
                 Some(refname) => Ok(ReferenceTarget::Symbolic {
@@ -426,10 +426,10 @@ mod reference_transaction {
         }
     }
     /// As per the discussion at
-    /// https://public-inbox.org/git/CAKjfCeBcuYC3OXRVtxxDGWRGOxC38Fb7CNuSh_dMmxpGVip_9Q@mail.gmail.com/,
+    /// <https://public-inbox.org/git/CAKjfCeBcuYC3OXRVtxxDGWRGOxC38Fb7CNuSh_dMmxpGVip_9Q@mail.gmail.com/>,
     /// the OIDs passed to the reference transaction can't actually be trusted
     /// when dealing with packed references, so we need to look up their actual
-    /// values on disk again. See https://git-scm.com/docs/git-pack-refs for
+    /// values on disk again. See <https://git-scm.com/docs/git-pack-refs> for
     /// details about packed references.
     ///
     /// Supposing we have a ref named `refs/heads/foo` pointing to an OID

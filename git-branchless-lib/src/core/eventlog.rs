@@ -955,7 +955,7 @@ impl EventReplayer {
         };
     }
 
-    /// See https://github.com/arxanas/git-branchless/issues/7.
+    /// See <https://github.com/arxanas/git-branchless/issues/7>.
     fn fix_event_git_v2_31(&self, event: Event) -> Option<Event> {
         let event = match event {
             // Git v2.31 will sometimes fail to set the `old_ref` field when
