@@ -21,12 +21,12 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: git/git
           ref: ${{ matrix.git-version }}
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: cache-git-build
         with:
           key: ${{ runner.os }}-git-${{ matrix.git-version }}
@@ -61,7 +61,7 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.33.1", "v2.37.3"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: "Download artifact: git"
         uses: actions/download-artifact@v8
         with:
