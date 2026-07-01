@@ -909,6 +909,22 @@ pub fn remove_rebase_lines(output: String) -> String {
         .collect()
 }
 
+/// Remove `reference-transaction` hook status lines from output.
+///
+/// Git batches ref updates into transactions differently across versions, so
+/// these lines are often incidental noise in snapshot tests.
+pub fn remove_reference_transaction_lines(output: String) -> String {
+    lazy_static! {
+        static ref REFERENCE_TRANSACTION_LINE_RE: Regex =
+            Regex::new(r"^branchless: processing \d+ updates?: ").unwrap();
+    }
+    output
+        .lines()
+        .filter(|line| !REFERENCE_TRANSACTION_LINE_RE.is_match(line))
+        .flat_map(|line| [line, "\n"])
+        .collect()
+}
+
 /// Remove whitespace from the end of each line in the provided string.
 pub fn trim_lines(output: String) -> String {
     output

@@ -59,9 +59,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         return Ok(());
     }
 
-    let git_version = git.get_version()?;
-    if git_version >= GitVersion(2, 35, 0) {
-        // Change in reference-transaction behavior causes this test to fail.
+    if git.get_version()? < GitVersion(2, 54, 0) {
         return Ok(());
     }
 
@@ -98,18 +96,6 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
                 1,
             ),
             ref_name: ReferenceName(
-                "HEAD",
-            ),
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: Id(
-                1,
-            ),
-            ref_name: ReferenceName(
                 "refs/heads/master",
             ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
@@ -119,14 +105,14 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         CommitEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                2,
+                3,
             ),
             commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                3,
+                4,
             ),
             ref_name: ReferenceName(
                 "HEAD",
@@ -138,7 +124,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                4,
+                7,
             ),
             ref_name: ReferenceName(
                 "HEAD",
@@ -150,7 +136,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                5,
+                8,
             ),
             ref_name: ReferenceName(
                 "HEAD",
@@ -162,21 +148,21 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         CommitEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                6,
+                10,
             ),
             commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
         },
         ObsoleteEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                7,
+                11,
             ),
             commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
         },
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                8,
+                12,
             ),
             ref_name: ReferenceName(
                 "HEAD",
@@ -188,7 +174,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                9,
+                15,
             ),
             ref_name: ReferenceName(
                 "HEAD",
@@ -200,7 +186,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                10,
+                16,
             ),
             ref_name: ReferenceName(
                 "refs/heads/master",
@@ -212,7 +198,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                11,
+                17,
             ),
             ref_name: ReferenceName(
                 "refs/heads/master",

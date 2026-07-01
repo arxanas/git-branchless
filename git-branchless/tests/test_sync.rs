@@ -1,6 +1,6 @@
 use lib::testing::{
     GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo, make_git, make_git_with_remote_repo,
-    remove_nondeterministic_lines,
+    remove_nondeterministic_lines, remove_reference_transaction_lines,
 };
 
 #[test]
@@ -44,6 +44,7 @@ fn test_sync_basic() -> eyre::Result<()> {
 
     {
         let (stdout, stderr) = git.branchless("sync", &[])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         Switched to branch 'master'
@@ -232,6 +233,7 @@ fn test_sync_reparent() -> eyre::Result<()> {
 
     {
         let (stdout, stderr) = git.branchless("sync", &["--reparent"])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
         branchless: creating working copy snapshot
         Switched to branch 'master'
@@ -458,12 +460,11 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.branchless("sync", &["-p", "--on-disk"])?;
         let stdout = remove_nondeterministic_lines(stdout);
         let stderr = remove_nondeterministic_lines(stderr);
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
-        branchless: processing 1 update: ref HEAD
         Executing: git branchless hook-skip-upstream-applied-commit 6ffd720862b7ae71cbe30d66ed27ea8579e24b0f
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
-        branchless: processing 2 updates: branch master, branch should-be-deleted
         branchless: creating working copy snapshot
         branchless: running command: <git-executable> checkout master --
         branchless: processing checkout

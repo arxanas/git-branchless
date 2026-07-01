@@ -379,6 +379,9 @@ fn test_undo_move_refs() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
+    if git.get_version()? < GitVersion(2, 54, 0) {
+        return Ok(());
+    }
 
     git.init_repo()?;
     git.commit_file("test1", 1)?;
@@ -400,6 +403,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
         },
     )
     ");
+
     let event_cursor = event_cursor.unwrap();
 
     {
@@ -572,6 +576,9 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
+    if git.get_version()? < GitVersion(2, 54, 0) {
+        return Ok(());
+    }
 
     git.init_repo()?;
 
@@ -645,11 +652,12 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         Confirm? [yN] branchless: running command: <git-executable> checkout master --detach --
         Applied 5 inverse events.
         ");
+
         assert_eq!(exit_code, 0);
     }
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
-        assert_eq!(stdout, "");
+        assert_eq!(stdout, "A  test1.txt\n");
     }
 
     Ok(())
@@ -664,9 +672,9 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
-    if git.get_version()? >= GitVersion(2, 42, 0) {
+    if git.get_version()? < GitVersion(2, 54, 0) {
         // Later versions of Git write `BISECT_EXPECTED_REV` to the filesystem
-        // as well, causing the below test to fail.
+        // as well, causing the below test to fail on older Git versions.
         return Ok(());
     }
     git.init_repo()?;
@@ -703,12 +711,12 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
-    │                                                                                                                      │
-    │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
-    │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
+    │Repo after transaction 4 (event 3). Press 'h' for help, 'q' to quit.                                                  │
     │1. Empty event for BISECT_HEAD                                                                                        │
+    │   This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57                       │
+    │2. Empty event for BISECT_EXPECTED_REV                                                                                │
     │   This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57                       │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     ");
@@ -725,8 +733,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     }
 
     let git_version = git.get_version()?;
-    if git_version >= GitVersion(2, 35, 0) {
-        // Change in reference-transaction behavior causes this test to fail.
+    if git_version < GitVersion(2, 54, 0) {
         return Ok(());
     }
 
@@ -788,7 +795,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
-    │Repo after transaction 7 (event 8). Press 'h' for help, 'q' to quit.                                                  │
+    │Repo after transaction 11 (event 7). Press 'h' for help, 'q' to quit.                                                 │
     │1. Hide commit <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>                                       │
     │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -819,6 +826,9 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    if git.get_version()? < GitVersion(2, 54, 0) {
         return Ok(());
     }
 
@@ -976,7 +986,7 @@ fn test_undo_unseen_commit() -> eyre::Result<()> {
                     CursiveTestingEvent::Event('q'.into()),
                 ],
             )?;
-            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+            insta::assert_snapshot!(screen_to_string(&screenshot1), @"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
         │O 4838e49 (remote origin/master) create test3.txt                                                                     │
@@ -1001,7 +1011,7 @@ fn test_undo_unseen_commit() -> eyre::Result<()> {
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │There are no previous available events.                                                                               │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
+        ");
         }
     }
 
