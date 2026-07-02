@@ -291,6 +291,23 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
     eyre::eyre!("Git error {:?}: {}", error.code(), error.message())
 }
 
+/// Build the `source` used for `Error::CreateBlobFromPath`, appending an
+/// actionable hint when the underlying I/O error indicates a permissions
+/// problem, so that the (possibly fatal) error message tells the user what
+/// to do about it rather than just what went wrong.
+///
+/// See <https://github.com/arxanas/git-branchless/issues/1658>
+fn create_blob_io_error_source(err: std::io::Error, path: &Path) -> eyre::Error {
+    if err.kind() == std::io::ErrorKind::PermissionDenied {
+        eyre::eyre!(
+            "{err} (check the permissions of {path:?}, e.g. `chmod +r '{}'`)",
+            path.display()
+        )
+    } else {
+        err.into()
+    }
+}
+
 /// Clean up a message, removing extraneous whitespace plus comment lines starting with
 /// `comment_char`, and ensure that the message ends with a newline.
 #[instrument]
@@ -1234,10 +1251,8 @@ impl Repo {
             Ok(contents) => contents,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => {
-                return Err(Error::CreateBlobFromPath {
-                    source: err.into(),
-                    path,
-                });
+                let source = create_blob_io_error_source(err, &path);
+                return Err(Error::CreateBlobFromPath { source, path });
             }
         };
         let blob = self.create_blob_from_contents(&contents)?;
@@ -1262,10 +1277,8 @@ impl Repo {
             Ok(link_target) => link_target,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => {
-                return Err(Error::CreateBlobFromPath {
-                    source: err.into(),
-                    path,
-                });
+                let source = create_blob_io_error_source(err, &path);
+                return Err(Error::CreateBlobFromPath { source, path });
             }
         };
 

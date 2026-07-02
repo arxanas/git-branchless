@@ -1097,3 +1097,71 @@ fn test_switch_detach() -> eyre::Result<()> {
 
     Ok(())
 }
+
+/// When the opportunistic undo-snapshot taken before a checkout can't be
+/// created (e.g. because a tracked file lost its read permissions), the
+/// command should proceed with a loud warning rather than panicking, and the
+/// checkout should still succeed. See
+/// https://github.com/arxanas/git-branchless/issues/1658
+#[cfg(unix)]
+#[test]
+fn test_switch_unreadable_tracked_file_warns_but_proceeds() -> eyre::Result<()> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let git = make_git()?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+
+    // Make an uncommitted change to a tracked file, then strip its read
+    // permission, so that the opportunistic pre-checkout snapshot fails to
+    // read it.
+    git.write_file_txt("test1", "test1 modified contents\n")?;
+    let file_path = git.repo_path.join("test1.txt");
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o000))?;
+
+    // Root ignores Unix file permission bits, so skip when running as root
+    // (e.g. some Docker/CI setups) rather than fail confusingly.
+    let running_as_root = fs::read(&file_path).is_ok();
+    if running_as_root {
+        fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+        return Ok(());
+    }
+
+    let result = git.branchless_with_options(
+        "switch",
+        &["-d", "master^"],
+        &GitRunOptions {
+            expected_exit_code: 0,
+            ..Default::default()
+        },
+    );
+
+    // Restore permissions so that the temp dir can be cleaned up afterwards,
+    // regardless of the outcome above.
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+
+    let (_stdout, stderr) = result?;
+    assert!(
+        stderr.to_lowercase().contains("warning"),
+        "expected a warning about the failed snapshot in stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("test1.txt"),
+        "expected the warning to name the offending path: {stderr}"
+    );
+    assert!(
+        !stderr.contains("The application panicked"),
+        "command should not panic: {stderr}"
+    );
+
+    // The checkout itself should have succeeded despite the snapshot failure.
+    let head_info = git.get_repo()?.get_head_info()?;
+    let head_oid = head_info.oid.expect("expected HEAD to be resolved");
+    let (master_parent_oid, _stderr) = git.run(&["rev-parse", "master^"])?;
+    assert_eq!(head_oid.to_string(), master_parent_oid.trim());
+
+    Ok(())
+}

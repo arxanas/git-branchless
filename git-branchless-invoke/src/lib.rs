@@ -235,6 +235,29 @@ pub fn do_main_and_drop_locals<T: Parser>(
     Ok(exit_code)
 }
 
+/// Render a top-level fatal error and exit the process, without going
+/// through Rust's panic machinery.
+///
+/// This is used (instead of `.expect(..)`) for errors that surface at the
+/// top level of a command, so that users see a clean, readable error
+/// message (including any `color_eyre::Help` suggestion sections) rather
+/// than a "the application panicked (crashed)" banner and a spantrace. Real
+/// bugs (actual Rust panics) still go through the panic handler installed by
+/// `color_eyre::install()`.
+pub fn exit_with_result(result: eyre::Result<i32>) -> ! {
+    match result {
+        Ok(exit_code) => std::process::exit(exit_code),
+        Err(err) => {
+            // `{:?}` on an `eyre::Report` renders via the hook installed by
+            // `color_eyre::install()`, which includes any attached
+            // `Suggestion` sections -- the same rendering a panic would use,
+            // just without the panic banner and backtrace-on-panic framing.
+            eprintln!("Error: {err:?}");
+            std::process::exit(1)
+        }
+    }
+}
+
 /// Invoke the provided subcommand main function. This should be used in the
 /// `main.rs` file for the subcommand executable. For example:
 ///
@@ -248,6 +271,6 @@ pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> EyreEx
     // Install panic handler.
     color_eyre::install().expect("Could not install panic handler");
     let args = std::env::args_os().collect();
-    let exit_code = do_main_and_drop_locals(f, args).expect("A fatal error occurred");
-    std::process::exit(exit_code);
+    let result = do_main_and_drop_locals(f, args);
+    exit_with_result(result)
 }
