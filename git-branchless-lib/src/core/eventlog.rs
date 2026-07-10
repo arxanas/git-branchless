@@ -704,7 +704,8 @@ pub fn is_gc_ref(reference_name: &ReferenceName) -> bool {
 ///
 /// Returns: Whether or not updates to the given reference should be ignored.
 pub fn should_ignore_ref_updates(reference_name: &ReferenceName) -> bool {
-    if is_gc_ref(reference_name) {
+    // Ignore our own GC refs, as well as tags (which we don't really support)
+    if is_gc_ref(reference_name) || reference_name.as_str().starts_with("refs/tags/") {
         return true;
     }
 
