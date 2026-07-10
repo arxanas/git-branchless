@@ -14,6 +14,8 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use chrono::DateTime;
+use eyre::OptionExt;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{MessageArgs, RecordArgs, ResolveRevsetOptions, Revset};
 use git_branchless_reword::{ResolveFixupCommitError, edit_message, resolve_commit_to_fixup};
@@ -32,9 +34,10 @@ use lib::core::rewrite::{
 };
 use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
-    CategorizedReferenceName, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-    ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
-    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
+    CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand, WorkingCopyChangesType,
+    WorkingCopySnapshot, process_diff_for_record, summarize_diff_for_temporary_commit,
+    update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -62,6 +65,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        new,
         untracked_file_strategy,
     } = args;
     record(
@@ -74,6 +78,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         detach,
         insert,
         stash,
+        new,
         untracked_file_strategy,
     )
 }
@@ -89,6 +94,7 @@ fn record(
     detach: bool,
     insert: bool,
     stash: bool,
+    new: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
@@ -97,19 +103,31 @@ fn record(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
-    try_exit_code!(create_commit_with_changes(
-        &repo,
-        git_run_info,
-        effects,
-        &event_log_db,
-        &event_tx_id,
-        messages,
-        commit_to_fixup,
-        interactive,
-        branch_name,
-        stash,
-        untracked_file_strategy
-    )?);
+    if new {
+        try_exit_code!(create_new_commit(
+            &repo,
+            &now,
+            git_run_info,
+            effects,
+            &event_log_db,
+            &event_tx_id,
+            messages,
+        )?);
+    } else {
+        try_exit_code!(create_commit_with_changes(
+            &repo,
+            git_run_info,
+            effects,
+            &event_log_db,
+            &event_tx_id,
+            messages,
+            commit_to_fixup,
+            interactive,
+            branch_name,
+            stash,
+            untracked_file_strategy
+        )?);
+    }
 
     if detach || stash {
         let head_info = repo.get_head_info()?;
@@ -425,6 +443,93 @@ fn create_commit_with_changes(
         };
         git_run_info.run_direct_no_wrapping(Some(*event_tx_id), &args)
     }
+}
+
+#[instrument]
+fn create_new_commit(
+    repo: &Repo,
+    now: &SystemTime,
+    git_run_info: &GitRunInfo,
+    effects: &Effects,
+    event_log_db: &EventLogDb,
+    event_tx_id: &EventTransactionId,
+    messages: Vec<String>,
+) -> EyreExitOr<()> {
+    let head_info = repo.get_head_info()?;
+    let current_commit_oid = match head_info {
+        ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: _,
+        } => oid,
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: _,
+        } => unimplemented!("unborn head"),
+    };
+
+    let current_commit = repo.find_commit_or_fail(current_commit_oid)?;
+    let current_tree = current_commit.get_tree()?;
+
+    let (author, committer) = {
+        let config = repo.get_readonly_config()?;
+        let name: String = config
+            .get("user.name")?
+            .ok_or_eyre("no user.name configured")?;
+        let email: String = config
+            .get("user.email")?
+            .ok_or_eyre("no user.email configured")?;
+
+        let (author_date, committer_date) = {
+            let author_date = std::env::var("GIT_AUTHOR_DATE")
+                .ok()
+                .and_then(|date| DateTime::parse_from_rfc2822(&date).ok())
+                .map(|datetime| datetime.into())
+                .unwrap_or(*now);
+
+            let committer_date = std::env::var("GIT_COMMITTER_DATE")
+                .ok()
+                .and_then(|date| DateTime::parse_from_rfc2822(&date).ok())
+                .map(|datetime| datetime.into())
+                .unwrap_or(*now);
+
+            (author_date, committer_date)
+        };
+
+        (
+            Signature::new(&name, &email, &author_date)?,
+            Signature::new(&name, &email, &committer_date)?,
+        )
+    };
+
+    let new_oid = repo.create_commit(
+        None,
+        &author,
+        &committer,
+        &messages.join("\n\n"),
+        &current_tree,
+        vec![&current_commit],
+    )?;
+
+    // TODO: move branch if ref_name
+    // TODO: mark commit reachable (will show in sl if descendants, but not if detached)
+    // FIXME: --new --create <branch> doesn't seem to work
+
+    try_exit_code!(check_out_commit(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        *event_tx_id,
+        Some(CheckoutTarget::Oid(new_oid)),
+        &CheckOutCommitOptions {
+            additional_args: vec![],
+            force_detach: false,
+            reset: false,
+            render_smartlog: false,
+        },
+    )?);
+
+    Ok(Ok(()))
 }
 
 #[instrument]
