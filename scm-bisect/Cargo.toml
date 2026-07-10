@@ -10,7 +10,7 @@ version = "0.11.1"
 
 [dependencies]
 indexmap = "2"
-itertools = "0.14"
+itertools = "0.15"
 thiserror = "2"
 tracing = "0.1"
 
