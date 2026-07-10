@@ -23,8 +23,8 @@ pub use reference::{
 };
 pub use repo::{
     AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, Error as RepoError,
-    GitErrorCode, GitVersion, PatchId, Repo, ResolvedReferenceInfo, Result as RepoResult, Time,
-    message_prettify,
+    GitErrorCode, GitVersion, PatchId, Repo, ResolvedReferenceInfo, Result as RepoResult,
+    Signature, Time, message_prettify,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
