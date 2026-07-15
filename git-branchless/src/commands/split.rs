@@ -2,13 +2,14 @@
 
 use eyre::Context;
 use rayon::ThreadPoolBuilder;
+use std::collections::HashMap;
 use std::{
     fmt::Write,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
+use git_branchless_opts::{FileExtractSpec, MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use lib::{
     core::{
@@ -26,8 +27,9 @@ use lib::{
         },
     },
     git::{
-        CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
-        make_empty_tree, summarize_diff_for_temporary_commit,
+        CherryPickFastOptions, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+        ResolvedReferenceInfo, get_changed_paths_between_trees, hydrate_tree, make_empty_tree,
+        process_diff_for_record, summarize_diff_for_temporary_commit,
     },
     try_exit_code,
     util::{ExitCode, EyreExitOr},
@@ -43,13 +45,72 @@ pub enum SplitMode {
     InsertBefore,
 }
 
+/// Mark every `Changed` section in `file` whose new-file line range overlaps
+/// `[start_line, end_line]` as checked. Returns `true` if at least one section
+/// was marked.
+///
+/// `start_line` and `end_line` are 1-indexed line numbers in the new (target)
+/// version of the file.
+fn select_hunks_by_line_range(
+    file: &mut scm_record::File<'_>,
+    start_line: usize,
+    end_line: usize,
+) -> bool {
+    // Track the current line number in the *new* file as we walk sections.
+    let mut new_line_counter: usize = 1;
+    let mut any_selected = false;
+
+    for section in &mut file.sections {
+        match section {
+            scm_record::Section::Unchanged { lines } => {
+                new_line_counter += lines.len();
+            }
+            scm_record::Section::Changed { lines } => {
+                let section_new_start = new_line_counter;
+                let added_count = lines
+                    .iter()
+                    .filter(|l| l.change_type == scm_record::ChangeType::Added)
+                    .count();
+                // New-file range covered by this section (half-open [start, end)).
+                let section_new_end = section_new_start + added_count;
+
+                // Overlap check (1-indexed):
+                //   If added_count > 0: the section covers new-file lines
+                //     section_new_start ..= section_new_end - 1.
+                //     Overlaps [start_line, end_line] when the two intervals share a line.
+                //   If added_count == 0 (pure removal): the deletion sits between
+                //     new-file lines section_new_start-1 and section_new_start.
+                //     Match when start_line <= section_new_start <= end_line + 1.
+                let overlaps = if added_count > 0 {
+                    section_new_start <= end_line && section_new_end > start_line.saturating_sub(1)
+                } else {
+                    section_new_start >= start_line
+                        && section_new_start <= end_line.saturating_add(1)
+                };
+
+                if overlaps {
+                    section.set_checked(true);
+                    any_selected = true;
+                }
+
+                new_line_counter = section_new_end;
+            }
+            scm_record::Section::FileMode { .. } | scm_record::Section::Binary { .. } => {
+                // Not selected by line range.
+            }
+        }
+    }
+
+    any_selected
+}
+
 /// Split a commit and restack its descendants.
 #[instrument]
 pub fn split(
     effects: &Effects,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
-    files_to_extract: Vec<String>,
+    files_to_extract: Vec<FileExtractSpec>,
     split_mode: SplitMode,
     move_options: &MoveOptions,
     git_run_info: &GitRunInfo,
@@ -186,11 +247,11 @@ pub fn split(
     };
 
     let cwd = std::env::current_dir()?;
-    // tuple: (input_file, resolved_path)
-    let resolved_paths_to_extract: eyre::Result<Vec<(String, PathBuf)>> = files_to_extract
+    let resolved_specs: eyre::Result<Vec<(FileExtractSpec, PathBuf)>> = files_to_extract
         .into_iter()
-        .map(|file| {
-            let path = Path::new(&file).to_path_buf();
+        .map(|spec| {
+            let file = spec.file_str();
+            let path = Path::new(file).to_path_buf();
             let working_copy_path = match repo.get_working_copy_path() {
                 Some(working_copy_path) => working_copy_path,
                 None => {
@@ -217,82 +278,279 @@ pub fn split(
                 path
             };
 
-            Ok((file, path))
+            Ok((spec, path))
         })
         .collect();
 
-    let resolved_paths_to_extract = match resolved_paths_to_extract {
-        Ok(resolved_paths_to_extract) => resolved_paths_to_extract,
+    let resolved_specs = match resolved_specs {
+        Ok(resolved_specs) => resolved_specs,
         Err(err) => {
             writeln!(effects.get_error_stream(), "{err}")?;
             return Ok(Err(ExitCode(1)));
         }
     };
 
-    for (file, path) in resolved_paths_to_extract.iter() {
+    // Pre-compute the diff for any LineRange specs (used for hunk selection).
+    let diff_files_for_hunk_selection: Option<Vec<scm_record::File<'static>>> = {
+        let has_line_range = resolved_specs
+            .iter()
+            .any(|(spec, _)| matches!(spec, FileExtractSpec::LineRange { .. }));
+        if has_line_range {
+            let diff = repo.get_diff_between_trees(effects, Some(&parent_tree), &target_tree, 0)?;
+            Some(process_diff_for_record(&repo, &diff)?)
+        } else {
+            None
+        }
+    };
+
+    // Pre-compute a map of exact renames in the target commit: new_path -> old_path.
+    // A rename is detected when a path is absent from parent_tree but present in
+    // target_tree, and another path with the SAME blob OID is absent from target_tree
+    // but present in parent_tree (same content = exact rename, no content change).
+    //
+    // This map is used when extracting a renamed file to correctly restore the
+    // original path in the remainder tree, preventing cherry-pick conflicts.
+    let rename_map: HashMap<PathBuf, PathBuf> = {
+        let changed_paths =
+            get_changed_paths_between_trees(&repo, Some(&parent_tree), Some(&target_tree))?;
+        let mut deleted_by_oid: HashMap<NonZeroOid, PathBuf> = HashMap::new();
+        let mut added_entries: Vec<(PathBuf, NonZeroOid)> = Vec::new();
+        for path in changed_paths {
+            let parent_oid = parent_tree.get_oid_for_path(&path)?;
+            let target_oid = target_tree.get_oid_for_path(&path)?;
+            match (parent_oid, target_oid) {
+                (Some(MaybeZeroOid::NonZero(p_oid)), None | Some(MaybeZeroOid::Zero)) => {
+                    deleted_by_oid.insert(p_oid, path);
+                }
+                (None | Some(MaybeZeroOid::Zero), Some(MaybeZeroOid::NonZero(t_oid))) => {
+                    added_entries.push((path, t_oid));
+                }
+                _ => {}
+            }
+        }
+        added_entries
+            .into_iter()
+            .filter_map(|(new_path, blob_oid)| {
+                deleted_by_oid
+                    .get(&blob_oid)
+                    .map(|old_path| (new_path, old_path.clone()))
+            })
+            .collect()
+    };
+
+    for (spec, path) in resolved_specs.iter() {
         let path = path.as_path();
 
-        if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
-            writeln!(
-                effects.get_error_stream(),
-                "Aborting: file '{filename}' was not changed in commit {oid}.",
-                filename = path.to_string_lossy(),
-                oid = target_commit.get_short_oid()?
-            )?;
-            return Ok(Err(ExitCode(1)));
-        }
-
-        let parent_entry = match parent_tree.get_path(path) {
-            Ok(entry) => entry,
-            Err(err) => {
-                writeln!(
-                    effects.get_error_stream(),
-                    "uh oh error reading tree entry: {err}.",
-                )?;
-                return Ok(Err(ExitCode(1)));
-            }
-        };
-
-        let target_entry = target_tree.get_path(path)?;
-        let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
-            // added or modified & InsertBefore => add to extracted commit
-            (None, Some(commit_entry), SplitMode::InsertBefore)
-            | (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
-                remainder_tree.add_or_replace(&repo, path, &commit_entry)?
-            }
-
-            // removed & InsertBefore => remove from remainder commit
-            (Some(_), None, SplitMode::InsertBefore) => remainder_tree.remove(&repo, path)?,
-
-            // added => remove from remainder commit
-            (None, Some(_), SplitMode::InsertAfter)
-            | (None, Some(_), SplitMode::DetachAfter)
-            | (None, Some(_), SplitMode::Discard) => remainder_tree.remove(&repo, path)?,
-
-            // deleted or modified => replace w/ parent content in split commit
-            (Some(parent_entry), _, _) => {
-                remainder_tree.add_or_replace(&repo, path, &parent_entry)?
-            }
-
-            (None, _, _) => {
-                if path.exists() {
+        match spec {
+            FileExtractSpec::WholeFile(file) => {
+                if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
                     writeln!(
                         effects.get_error_stream(),
-                        "Aborting: the file '{file}' could not be found in this repo.\nPerhaps it's not under version control?",
+                        "Aborting: file '{filename}' was not changed in commit {oid}.",
+                        filename = path.to_string_lossy(),
+                        oid = target_commit.get_short_oid()?
                     )?;
-                } else {
-                    writeln!(
-                        effects.get_error_stream(),
-                        "Aborting: the file '{file}' does not exist.",
-                    )?;
+                    return Ok(Err(ExitCode(1)));
                 }
-                return Ok(Err(ExitCode(1)));
-            }
-        };
 
-        remainder_tree = repo
-            .find_tree(temp_tree_oid)?
-            .expect("should have been found");
+                let parent_entry = match parent_tree.get_path(path) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "uh oh error reading tree entry: {err}.",
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                let target_entry = target_tree.get_path(path)?;
+                let temp_tree_oid = match (parent_entry, target_entry, &split_mode) {
+                    // modified & InsertBefore => add to extracted commit (no rename handling needed)
+                    (Some(_), Some(commit_entry), SplitMode::InsertBefore) => {
+                        remainder_tree.add_or_replace(&repo, path, &commit_entry)?
+                    }
+
+                    // added & InsertBefore => add to extracted commit; for renames, also remove
+                    // the original path (which is present in the parent-based remainder tree)
+                    (None, Some(commit_entry), SplitMode::InsertBefore) => {
+                        let oid = remainder_tree.add_or_replace(&repo, path, &commit_entry)?;
+                        if let Some(old_path) = rename_map.get(path) {
+                            let interim = repo
+                                .find_tree(oid)?
+                                .expect("hydrated tree should always be findable");
+                            interim.remove(&repo, old_path)?
+                        } else {
+                            oid
+                        }
+                    }
+
+                    // removed & InsertBefore => remove from remainder commit
+                    (Some(_), None, SplitMode::InsertBefore) => {
+                        remainder_tree.remove(&repo, path)?
+                    }
+
+                    // added => remove from remainder commit; for renames, also restore the
+                    // original path from the parent tree so the remainder accurately reflects
+                    // only the non-extracted changes
+                    (None, Some(_), SplitMode::InsertAfter)
+                    | (None, Some(_), SplitMode::DetachAfter)
+                    | (None, Some(_), SplitMode::Discard) => {
+                        let oid = remainder_tree.remove(&repo, path)?;
+                        if let Some(old_path) = rename_map.get(path) {
+                            if let Some(old_entry) = parent_tree.get_path(old_path)? {
+                                let interim = repo
+                                    .find_tree(oid)?
+                                    .expect("hydrated tree should always be findable");
+                                interim.add_or_replace(&repo, old_path, &old_entry)?
+                            } else {
+                                oid
+                            }
+                        } else {
+                            oid
+                        }
+                    }
+
+                    // deleted or modified => replace w/ parent content in split commit
+                    (Some(parent_entry), _, _) => {
+                        remainder_tree.add_or_replace(&repo, path, &parent_entry)?
+                    }
+
+                    (None, _, _) => {
+                        if path.exists() {
+                            writeln!(
+                                effects.get_error_stream(),
+                                "Aborting: the file '{file}' could not be found in this repo.\nPerhaps it's not under version control?",
+                            )?;
+                        } else {
+                            writeln!(
+                                effects.get_error_stream(),
+                                "Aborting: the file '{file}' does not exist.",
+                            )?;
+                        }
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                remainder_tree = repo
+                    .find_tree(temp_tree_oid)?
+                    .expect("should have been found");
+            }
+
+            FileExtractSpec::LineRange {
+                file,
+                start_line,
+                end_line,
+            } => {
+                // Validate that the file was actually changed in the target commit.
+                if let Ok(Some(false)) = target_commit.contains_touched_path(path) {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: file '{filename}' was not changed in commit {oid}.",
+                        filename = path.to_string_lossy(),
+                        oid = target_commit.get_short_oid()?
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                // Locate the file's diff sections (pre-computed before the loop).
+                let diff_files = diff_files_for_hunk_selection.as_ref().unwrap();
+                let scm_file = diff_files.iter().find(|f| f.path.as_ref() == path);
+                let scm_file = match scm_file {
+                    Some(f) => f,
+                    None => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "Aborting: could not find '{filename}' in the diff for commit {oid}.",
+                            filename = path.to_string_lossy(),
+                            oid = target_commit.get_short_oid()?,
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+
+                // Line-range selection is not supported for binary files.
+                if scm_file
+                    .sections
+                    .iter()
+                    .any(|s| matches!(s, scm_record::Section::Binary { .. }))
+                {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: cannot split binary file '{file}' by line range.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                // Clone so we can mutate the `is_checked` flags.
+                let mut scm_file = scm_file.clone();
+                let any_selected =
+                    select_hunks_by_line_range(&mut scm_file, *start_line, *end_line);
+
+                if !any_selected {
+                    let line_number_or_range = if start_line == end_line {
+                        format!("line {start_line}")
+                    } else {
+                        format!("lines {start_line}-{end_line}")
+                    };
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Aborting: no changed hunks found overlapping {line_number_or_range} in '{file}'.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+
+                let (selected, unselected) = scm_file.get_selected_contents();
+
+                // Choose which content goes into the remainder tree.
+                //   InsertBefore: the extracted (earlier) commit receives the *selected*
+                //     hunks; the original target is rebased on top and contributes the rest.
+                //   All other modes: the remainder commit keeps the *unselected* hunks,
+                //     and the extracted commit (created via cherry-pick) re-introduces
+                //     the selected hunks on top.
+                let remainder_content = if let SplitMode::InsertBefore = &split_mode {
+                    selected.contents
+                } else {
+                    unselected.contents
+                };
+
+                // Resolve a blob OID from the chosen content.
+                let remainder_blob_oid: Option<NonZeroOid> = match remainder_content {
+                    scm_record::SelectedContents::Unchanged => {
+                        // All hunks were on the other side — this side equals the parent
+                        // version of the file.
+                        match parent_tree.get_oid_for_path(path)? {
+                            None | Some(MaybeZeroOid::Zero) => None,
+                            Some(MaybeZeroOid::NonZero(oid)) => Some(oid),
+                        }
+                    }
+                    scm_record::SelectedContents::Text { contents } => {
+                        Some(repo.create_blob_from_contents(contents.as_bytes())?)
+                    }
+                    scm_record::SelectedContents::Binary { .. } => {
+                        unreachable!("binary files were already rejected above")
+                    }
+                };
+
+                // Determine the file mode from the target tree, falling back to the
+                // parent tree for pure deletions.
+                let file_mode = target_tree
+                    .get_path(path)?
+                    .or_else(|| parent_tree.get_path(path).ok().flatten())
+                    .map(|entry| entry.get_filemode())
+                    .unwrap_or(FileMode::Blob);
+
+                // Graft the new blob into the remainder tree.
+                let entry_map = HashMap::from([(
+                    path.to_path_buf(),
+                    remainder_blob_oid.map(|oid| (oid, file_mode)),
+                )]);
+                let new_tree_oid = hydrate_tree(&repo, Some(&remainder_tree), entry_map)?;
+                remainder_tree = repo
+                    .find_tree(new_tree_oid)?
+                    .expect("hydrated tree should always be findable");
+            }
+        }
     }
     let message = {
         let (old_tree, new_tree) = if let SplitMode::InsertBefore = &split_mode {
@@ -300,12 +558,16 @@ pub fn split(
         } else {
             (&remainder_tree, &target_tree)
         };
-        let diff = repo.get_diff_between_trees(
+        let mut diff = repo.get_diff_between_trees(
             effects,
             Some(old_tree),
             new_tree,
             0, // we don't care about the context here
         )?;
+        // Enable rename detection so that a pure rename shows as one file
+        // changed with 0 insertions/deletions rather than two separate
+        // add/delete entries.
+        diff.find_similar()?;
 
         summarize_diff_for_temporary_commit(&diff)?
     };
