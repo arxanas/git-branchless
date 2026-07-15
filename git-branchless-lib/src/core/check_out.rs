@@ -12,11 +12,11 @@ use tracing::instrument;
 
 use crate::core::config::get_auto_switch_branches;
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, Stage,
-    UpdateIndexCommand, WorkingCopySnapshot, update_index,
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, RepoError,
+    Stage, UpdateIndexCommand, WorkingCopySnapshot, update_index,
 };
 use crate::try_exit_code;
-use crate::util::EyreExitOr;
+use crate::util::{ExitCode, EyreExitOr};
 
 use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
@@ -135,8 +135,46 @@ pub fn check_out_commit(
         Some(CheckoutTarget::Unknown(target)) => (Some(target), None),
     };
 
+    // Tracks whether the opportunistic pre-checkout snapshot below failed.
+    // If it did, and this checkout later turns out to be restoring a
+    // snapshot (see the `restore_snapshot` call further down), we must not
+    // proceed: that snapshot is the only safety net for the user's current
+    // uncommitted changes, and `restore_snapshot` unconditionally does a
+    // `reset --hard`, which would silently discard them.
+    let mut snapshot_failed = false;
+
     if get_undo_create_snapshots(repo)? {
-        create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
+        // This snapshot is purely an opportunistic undo safety net: it's
+        // discarded immediately after being created here (only its
+        // event-log record is kept, for `git undo` to consult later). If it
+        // can't be created -- e.g. because a tracked file lost its read
+        // permissions -- that shouldn't block the user's actual command, so
+        // we degrade to a loud warning and continue instead of propagating
+        // the error. We only do this for the specific "couldn't snapshot
+        // the working copy" failure mode; anything else (e.g. an event log
+        // database failure) is a real problem and should still abort.
+        match create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id) {
+            Ok(_snapshot) => {}
+            Err(err) => match err.downcast_ref::<RepoError>() {
+                Some(RepoError::CreateSnapshot(_)) => {
+                    snapshot_failed = true;
+                    writeln!(
+                        effects.get_error_stream(),
+                        "{}",
+                        effects.get_glyphs().render(StyledString::styled(
+                            format!(
+                                "Warning: failed to create a working copy snapshot before this \
+                                 operation, so `git undo` will not be able to restore \
+                                 uncommitted changes for it. Proceeding anyway.\n\
+                                 {err}",
+                            ),
+                            BaseColor::Yellow.light(),
+                        ))?
+                    )?;
+                }
+                _ => return Err(err),
+            },
+        }
     }
 
     let target = if get_auto_switch_branches(repo)? && !reset && !force_detach {
@@ -189,6 +227,28 @@ pub fn check_out_commit(
         if let Some(head_oid) = head_info.oid {
             let head_commit = repo.find_commit_or_fail(head_oid)?;
             if let Some(snapshot) = WorkingCopySnapshot::try_from_base_commit(repo, &head_commit)? {
+                // `restore_snapshot` does a `reset --hard` to discard the
+                // working copy's current contents before restoring the
+                // target snapshot. The pre-checkout snapshot taken above is
+                // the only safety net for those current uncommitted
+                // changes; if it failed, proceeding would silently discard
+                // them, which is exactly the data-loss case the maintainer
+                // wanted to avoid on #1658. Refuse instead.
+                if snapshot_failed {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "{}",
+                        effects.get_glyphs().render(StyledString::styled(
+                            "Error: refusing to restore the working copy snapshot, because the \
+                             current uncommitted changes could not be snapshotted first (see the \
+                             warning above), and restoring would permanently discard them. Fix \
+                             the file permissions mentioned above and try again."
+                                .to_string(),
+                            BaseColor::Red.light(),
+                        ))?
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
                 try_exit_code!(restore_snapshot(
                     effects,
                     git_run_info,

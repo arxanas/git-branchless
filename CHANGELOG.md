@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - (#1629): `git test` no longer fails to create its results directory when the test command contains characters that are invalid in a path on Windows (such as `|`, `<`, `>`, `:`, `*`, `?`, `"`, or `\`).
+- (#1658): snapshot failures (e.g. unreadable files) no longer panic; checkout-type commands proceed with a warning (unless proceeding would immediately discard the unsnapshotted changes) and other commands report a rendered error.
 
 ## [v0.11.1] - 2026-05-21
 
