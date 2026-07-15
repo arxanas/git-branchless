@@ -1660,7 +1660,8 @@ impl Repo {
                         Ok(Some(entry)) => {
                             Some((path.clone(), Some((entry.get_oid(), entry.get_filemode()))))
                         }
-                        Ok(None) | Err(_) => None,
+                        Ok(None) => Some((path.clone(), None)),
+                        Err(_) => None,
                     })
                     .collect::<HashMap<_, _>>()
             }

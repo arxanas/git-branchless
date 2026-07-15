@@ -6328,6 +6328,95 @@ fn test_move_fixup_added_files() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_fixup_deleted_files() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.delete_file("test1")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "delete test1"])?;
+
+    git.write_file_txt("test2", "new contents")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "update test2"])?;
+
+    {
+        let (stdout, _stderr) = git.branchless("smartlog", &[])?;
+        insta::assert_snapshot!(stdout, @"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 0de4211 delete test1
+        |
+        @ 53f89c9 update test2
+        ");
+
+        let (stdout, _stderr) = git.run(&["ls-files"])?;
+        insta::assert_snapshot!(stdout, @"
+        initial.txt
+        test2.txt
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+        test1.txt | 1 -
+        1 file changed, 1 deletion(-)
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~~"])?;
+        insta::assert_snapshot!(&stdout, @"
+        test2.txt | 1 +
+        1 file changed, 1 insertion(+)
+        ");
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "move",
+            &["--in-memory", "--fixup", "-x", "HEAD~", "-d", "HEAD~~"],
+        )?;
+
+        insta::assert_snapshot!(stdout, @"
+        Attempting rebase in-memory...
+        [1/2] Committed as: f0f0727 create test2.txt
+        [2/2] Committed as: 66e6aae update test2
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 66e6aae105e43c390f98cba9d085aa029b56fdc6 --
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o f0f0727 create test2.txt
+        |
+        @ 66e6aae update test2
+        In-memory rebase succeeded.
+        ");
+
+        let (stdout, _stderr) = git.run(&["ls-files"])?;
+        insta::assert_snapshot!(stdout, @"
+        initial.txt
+        test2.txt
+        ");
+
+        let (stdout, _stderr) = git.run(&["show", "--pretty=format:", "--stat", "HEAD~"])?;
+        insta::assert_snapshot!(&stdout, @"
+        test1.txt | 1 -
+        test2.txt | 1 +
+        2 files changed, 1 insertion(+), 1 deletion(-)
+        ");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_reparent() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
