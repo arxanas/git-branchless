@@ -1,7 +1,7 @@
 use lib::testing::{
     GitInitOptions, GitRunOptions, GitWorktreeWrapper, GitWrapperWithRemoteRepo,
     extract_hint_command, make_git, make_git_with_remote_repo, make_git_worktree,
-    remove_rebase_lines,
+    remove_rebase_lines, remove_reference_transaction_lines,
 };
 
 #[test]
@@ -3190,17 +3190,13 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
                 "move",
                 &["--on-disk", "-s", "foo", "-d", &test1_oid.to_string()],
             )?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit 355e173bf9c5d2efac2e451da0cdad3fb82b869a
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
-            branchless: processing 2 updates: branch bar, branch foo
             Successfully rebased and updated detached HEAD.
             ");
             insta::assert_snapshot!(stdout, @"
@@ -3257,18 +3253,19 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
                 "move",
                 &["--in-memory", "-s", "foo", "-d", &test1_oid.to_string()],
             )?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
             branchless: creating working copy snapshot
             Previous HEAD position was f81d55c create test5.txt
             Switched to branch 'bar'
             branchless: processing checkout
             ");
+            let stdout = remove_reference_transaction_lines(stdout);
             insta::assert_snapshot!(stdout, @r"
             Attempting rebase in-memory...
             [1/3] Committed as: 4838e49 create test3.txt
             [2/3] Committed as: a248207 create test4.txt
             [3/3] Committed as: 566e434 create test5.txt
-            branchless: processing 2 updates: branch bar, branch foo
             branchless: processing 3 rewritten commits
             branchless: running command: <git-executable> checkout bar --
             :
@@ -3349,14 +3346,12 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         {
             let (stdout, stderr) =
                 git.branchless("move", &["--on-disk", "-b", "HEAD", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
-            branchless: processing 1 update: branch should-be-deleted
             Successfully rebased and updated detached HEAD.
             ");
             insta::assert_snapshot!(stdout, @"
@@ -3383,18 +3378,18 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         {
             let (stdout, stderr) =
                 git.branchless("move", &["--in-memory", "-b", "HEAD", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
             branchless: creating working copy snapshot
             Previous HEAD position was 96d1c37 create test2.txt
-            branchless: processing 1 update: ref HEAD
             HEAD is now at fa46633 create test2.txt
             branchless: processing checkout
             ");
+            let stdout = remove_reference_transaction_lines(stdout);
             insta::assert_snapshot!(stdout, @"
             Attempting rebase in-memory...
             [1/2] Skipped commit (was already applied upstream): 62fc20d create test1.txt
             [2/2] Committed as: fa46633 create test2.txt
-            branchless: processing 1 update: branch should-be-deleted
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9 --
             :
@@ -3464,11 +3459,9 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
                 "move",
                 &["--on-disk", "-b", &test2_oid.to_string(), "-d", "master"],
             )?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 4 rewritten commits
@@ -3525,11 +3518,13 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
                 "move",
                 &["--in-memory", "-b", &test2_oid.to_string(), "-d", "master"],
             )?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
             branchless: creating working copy snapshot
             Switched to branch 'master'
             branchless: processing checkout
             ");
+            let stdout = remove_reference_transaction_lines(stdout);
             insta::assert_snapshot!(stdout, @"
             hint: you can omit the --dest flag in this case, as it defaults to HEAD
             hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
@@ -3600,15 +3595,13 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             git.run(&["checkout", "work"])?;
             let (stdout, stderr) =
                 git.branchless("move", &["--on-disk", "-b", "HEAD", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
-            branchless: processing 2 updates: branch more-work, branch work
             branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout master --
             Previous HEAD position was 012efd6 create test3.txt
@@ -3645,18 +3638,19 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             git.run(&["checkout", "work"])?;
             let (stdout, stderr) =
                 git.branchless("move", &["--in-memory", "-b", "HEAD", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
             branchless: creating working copy snapshot
             Previous HEAD position was 96d1c37 create test2.txt
             Switched to branch 'master'
             branchless: processing checkout
             ");
+            let stdout = remove_reference_transaction_lines(stdout);
             insta::assert_snapshot!(stdout, @"
             Attempting rebase in-memory...
             [1/3] Skipped commit (was already applied upstream): 62fc20d create test1.txt
             [2/3] Skipped commit (was already applied upstream): 96d1c37 create test2.txt
             [3/3] Committed as: 012efd6 create test3.txt
-            branchless: processing 2 updates: branch more-work, branch work
             branchless: processing 3 rewritten commits
             branchless: running command: <git-executable> checkout master --
             :
@@ -4336,15 +4330,12 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
 
         {
             let (stdout, stderr) = git.branchless("move", &["--on-disk", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit da90168b4835f97f1a10bcc12833140056df9157
-            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
-            branchless: processing 1 update: branch new-root
             branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout new-root --
             Switched to branch 'new-root'
@@ -4383,17 +4374,18 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
     {
         {
             let (stdout, stderr) = git.branchless("move", &["--in-memory", "-d", "master"])?;
+            let stderr = remove_reference_transaction_lines(stderr);
             insta::assert_snapshot!(stderr, @"
             branchless: creating working copy snapshot
             Previous HEAD position was fc09f3d create test3.txt
             Switched to branch 'new-root'
             branchless: processing checkout
             ");
+            let stdout = remove_reference_transaction_lines(stdout);
             insta::assert_snapshot!(stdout, @"
             Attempting rebase in-memory...
             [1/2] Skipped now-empty commit: 270b681 new root
             [2/2] Committed as: 70deb1e create test3.txt
-            branchless: processing 1 update: branch new-root
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout new-root --
             :
@@ -4645,8 +4637,8 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
 
     {
         let (stdout, stderr) = git.run(&["rebase", "--continue"])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @r"
-        branchless: processing 1 update: ref HEAD
         Executing: git branchless hook-detect-empty-commit aec59174640c3e3dbb92fdade0bc44ca31552a85
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
