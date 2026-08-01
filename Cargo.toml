@@ -69,11 +69,11 @@ git-branchless-smartlog = { version = "0.11.1", path = "git-branchless-smartlog"
 git-branchless-submit = { version = "0.11.1", path = "git-branchless-submit" }
 git-branchless-test = { version = "0.11.1", path = "git-branchless-test" }
 git-branchless-undo = { version = "0.11.1", path = "git-branchless-undo" }
-git2 = { version = "0.20.4", default-features = false }
+git2 = { version = "0.21.0", default-features = false }
 glob = "0.3.3"
 indexmap = "2.14.0"
 indicatif = { version = "0.18.4", features = ["improved_unicode"] }
-itertools = "0.14.0"
+itertools = "0.15.0"
 lalrpop = "0.23.1"
 lalrpop-util = "0.23.0"
 lazy_static = "1.5.0"
@@ -85,7 +85,7 @@ path-slash = "0.2.1"
 portable-pty = "0.9.0"
 rayon = "1.12.0"
 regex = "1.12.3"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 scm-bisect = { version = "0.11.1", path = "scm-bisect" }
 scm-diff-editor = "0.10.1"
 scm-record = "0.10.1"
