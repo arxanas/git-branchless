@@ -111,6 +111,34 @@ fn advance(
     let public_commits = dag.query_ancestors(dag.main_branch_commit.clone())?;
 
     let glyphs = effects.get_glyphs();
+
+    // Special case: traversing all the way can bypass the ambiguous commit
+    // checks if the destination is not ambiguous.
+    match distance {
+        Distance::AllTheWay {
+            move_by_branches: false,
+        } => {
+            let possible_destinations = match command {
+                Command::Next => {
+                    let descendants = dag.query_descendants(CommitSet::from(current_oid))?;
+                    dag.query_heads(descendants)?
+                }
+                Command::Prev => {
+                    let current_stack = dag.query_stack_commits(CommitSet::from(current_oid))?;
+                    dag.query_roots(current_stack)?
+                }
+            };
+
+            match dag.commit_set_to_vec(&possible_destinations)?.as_slice() {
+                // only 1 possible destination, go directly to it
+                [stack_head] => return Ok(Some(*stack_head)),
+                [] | [..] => {}
+            }
+        }
+
+        Distance::AllTheWay { .. } | Distance::NumCommits { .. } => {}
+    };
+
     let mut current_oid = current_oid;
     let mut i = 0;
     loop {
