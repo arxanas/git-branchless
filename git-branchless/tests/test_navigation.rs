@@ -422,6 +422,78 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_navigation_traverse_all_the_way_over_fork_and_merge() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let commit2 = git.commit_file("test2", 1)?;
+    git.run(&["switch", "--detach", "HEAD~"])?;
+    git.commit_file("test3", 3)?;
+    git.run(&["merge", "--no-edit", "--no-ff", &commit2.to_string()])?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r#"
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |\
+            | o 142901d create test2.txt
+            | & (merge) f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+            |
+            o 4838e49 create test3.txt
+            |
+            | & (merge) 142901d create test2.txt
+            |/
+            @ f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+        "#);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("prev", &["-a"])?;
+        insta::assert_snapshot!(stdout, @r#"
+            branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --
+            O f777ecc (master) create initial.txt
+            |
+            @ 62fc20d create test1.txt
+            |\
+            | o 142901d create test2.txt
+            | & (merge) f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+            |
+            o 4838e49 create test3.txt
+            |
+            | & (merge) 142901d create test2.txt
+            |/
+            o f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+        "#);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("next", &["-a"])?;
+        insta::assert_snapshot!(stdout, @r#"
+            branchless: running command: <git-executable> checkout f3a471664c94f8899a7406b116bf99892a179153 --
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |\
+            | o 142901d create test2.txt
+            | & (merge) f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+            |
+            o 4838e49 create test3.txt
+            |
+            | & (merge) 142901d create test2.txt
+            |/
+            @ f3a4716 Merge commit '142901d553f71d2711a3754424a67191397915c4' into HEAD
+        "#);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_navigation_traverse_branches() -> eyre::Result<()> {
     let git = make_git()?;
 
