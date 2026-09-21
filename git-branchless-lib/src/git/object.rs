@@ -109,6 +109,12 @@ impl<'repo> Commit<'repo> {
         BString::from(self.inner.message_bytes())
     }
 
+    /// Get the commit message body, or `None` for a summary-only message.
+    #[instrument]
+    pub fn get_body(&self) -> Option<BString> {
+        self.inner.body_bytes().map(BString::from)
+    }
+
     /// Get the commit message, without any whitespace trimmed.
     #[instrument]
     pub fn get_message_raw(&self) -> BString {
@@ -335,5 +341,44 @@ impl Blob<'_> {
     /// `.gitattributes`, etc. are not checked.
     pub fn is_binary(&self) -> bool {
         self.inner.is_binary()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Commit;
+
+    #[test]
+    fn test_commit_body_bytes() -> eyre::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let repo = git2::Repository::init(temp_dir.path())?;
+        let tree_oid = repo.index()?.write_tree()?;
+        for (message, expected) in [
+            (b"Summary only\n".as_slice(), None),
+            (b"Summary\n\n \n".as_slice(), None),
+            (
+                b"Summary\n\nFirst paragraph.\n\nSecond paragraph.\n".as_slice(),
+                Some(b"First paragraph.\n\nSecond paragraph.".as_slice()),
+            ),
+            (
+                b"Summary\n\nBody with invalid UTF-8: \xff\n".as_slice(),
+                Some(b"Body with invalid UTF-8: \xff".as_slice()),
+            ),
+        ] {
+            let mut contents = format!(
+                "tree {tree_oid}\nauthor Test <test@example.com> 0 +0000\ncommitter Test <test@example.com> 0 +0000\n\n"
+            )
+            .into_bytes();
+            contents.extend_from_slice(message);
+            let oid = repo.odb()?.write(git2::ObjectType::Commit, &contents)?;
+            let commit = Commit {
+                inner: repo.find_commit(oid)?,
+            };
+            assert_eq!(
+                commit.get_body().as_ref().map(|body| body.as_slice()),
+                expected
+            );
+        }
+        Ok(())
     }
 }
