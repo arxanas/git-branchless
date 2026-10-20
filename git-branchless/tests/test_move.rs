@@ -125,6 +125,45 @@ fn test_move_stick() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_preserves_hidden_status() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "hidden", &test1_oid.to_string()])?;
+    git.branchless("hide", &["--no-delete-branches", &test1_oid.to_string()])?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r"
+        O f777ecc create initial.txt
+        |\
+        | x 62fc20d (manually hidden) (hidden) create test1.txt
+        |
+        @ fe65c1f (> master) create test2.txt
+        ");
+    }
+
+    git.branchless("move", &["-s", &test1_oid.to_string(), "-d", "master"])?;
+    let stdout = git.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    :
+    @ fe65c1f (> master) create test2.txt
+    |
+    x 0770943 (hidden) create test1.txt
+    ");
+
+    Ok(())
+}
+
+#[test]
 fn test_move_insert_stick() -> eyre::Result<()> {
     let git = make_git()?;
 
