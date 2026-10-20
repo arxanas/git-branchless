@@ -43,6 +43,83 @@ fn test_drop_non_meaningful_events() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_rewrite_preserves_obsolete_status() -> eyre::Result<()> {
+    use branchless::core::eventlog::CommitActivityStatus;
+
+    let event_tx_id = new_event_transaction_id(123);
+    let old_commit_oid = NonZeroOid::from_str("abc")?;
+    let new_commit_oid = NonZeroOid::from_str("def")?;
+    let rewritten_commit_oid = NonZeroOid::from_str("aaa")?;
+    let unhidden_commit_oid = NonZeroOid::from_str("bbb")?;
+    let active_commit_oid = NonZeroOid::from_str("ccc")?;
+    let active_rewrite_oid = NonZeroOid::from_str("ddd")?;
+    let mut replayer = new_event_replayer("refs/heads/master".into());
+
+    replayer.process_event(&Event::ObsoleteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        commit_oid: old_commit_oid,
+    });
+    replayer.process_event(&Event::RewriteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        old_commit_oid: old_commit_oid.into(),
+        new_commit_oid: new_commit_oid.into(),
+    });
+    let cursor = replayer.make_default_cursor();
+    assert!(matches!(
+        replayer.get_cursor_commit_activity_status(cursor, new_commit_oid),
+        CommitActivityStatus::Obsolete
+    ));
+
+    replayer.process_event(&Event::RewriteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        old_commit_oid: new_commit_oid.into(),
+        new_commit_oid: rewritten_commit_oid.into(),
+    });
+    let cursor = replayer.make_default_cursor();
+    assert!(matches!(
+        replayer.get_cursor_commit_activity_status(cursor, rewritten_commit_oid),
+        CommitActivityStatus::Obsolete
+    ));
+
+    replayer.process_event(&Event::UnobsoleteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        commit_oid: rewritten_commit_oid,
+    });
+    replayer.process_event(&Event::RewriteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        old_commit_oid: rewritten_commit_oid.into(),
+        new_commit_oid: unhidden_commit_oid.into(),
+    });
+    replayer.process_event(&Event::CommitEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        commit_oid: active_commit_oid,
+    });
+    replayer.process_event(&Event::RewriteEvent {
+        timestamp: 0.0,
+        event_tx_id,
+        old_commit_oid: active_commit_oid.into(),
+        new_commit_oid: active_rewrite_oid.into(),
+    });
+    let cursor = replayer.make_default_cursor();
+    assert!(matches!(
+        replayer.get_cursor_commit_activity_status(cursor, unhidden_commit_oid),
+        CommitActivityStatus::Active
+    ));
+    assert!(matches!(
+        replayer.get_cursor_commit_activity_status(cursor, active_rewrite_oid),
+        CommitActivityStatus::Active
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn test_different_event_transaction_ids() -> eyre::Result<()> {
     let git = make_git()?;
 

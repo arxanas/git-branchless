@@ -881,13 +881,28 @@ impl EventReplayer {
                         });
                 }
                 if let MaybeZeroOid::NonZero(new_commit_oid) = new_commit_oid {
+                    // Rewriting an obsolete commit should not make its replacement visible.
+                    let event_classification = match old_commit_oid {
+                        MaybeZeroOid::NonZero(old_commit_oid) => {
+                            match self.get_cursor_commit_activity_status(
+                                EventCursor { event_id: id },
+                                *old_commit_oid,
+                            ) {
+                                CommitActivityStatus::Obsolete => EventClassification::Hide,
+                                CommitActivityStatus::Active | CommitActivityStatus::Inactive => {
+                                    EventClassification::Show
+                                }
+                            }
+                        }
+                        MaybeZeroOid::Zero => EventClassification::Show,
+                    };
                     self.commit_history
                         .entry(*new_commit_oid)
                         .or_default()
                         .push(EventInfo {
                             id,
                             event: event.clone(),
-                            event_classification: EventClassification::Show,
+                            event_classification,
                         });
                 }
             }

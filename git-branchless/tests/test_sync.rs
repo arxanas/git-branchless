@@ -192,6 +192,78 @@ fn test_sync_pull() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_sync_pull_preserves_hidden_status() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    cloned_repo.commit_file("test2", 2)?;
+    cloned_repo.branchless("hide", &["--no-delete-branches", "HEAD"])?;
+    original_repo.commit_file("test3", 3)?;
+    cloned_repo.branchless("sync", &["--pull"])?;
+
+    let stdout = cloned_repo.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    :
+    % d742fb9 (> master) create test2.txt
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_sync_pull_preserves_rewritten_status() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    cloned_repo.commit_file("test2", 2)?;
+    cloned_repo.detach_head()?;
+    cloned_repo.write_file_txt("test2", "amended test2 contents\n")?;
+    cloned_repo.run(&["commit", "--amend", "-a", "-m", "amended test2"])?;
+    original_repo.commit_file("test3", 3)?;
+    cloned_repo.branchless("sync", &["--pull"])?;
+
+    let stdout = cloned_repo.smartlog()?;
+    insta::assert_snapshot!(stdout, @r"
+    :
+    O 62fc20d create test1.txt
+    |\
+    : @ 09fcc8b amended test2
+    :
+    X d742fb9 (master) create test2.txt
+    ");
+
+    Ok(())
+}
+
+#[test]
 fn test_sync_reparent() -> eyre::Result<()> {
     let git = make_git()?;
 

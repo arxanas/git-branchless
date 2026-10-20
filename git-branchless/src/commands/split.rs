@@ -340,12 +340,24 @@ pub fn split(
         return Ok(Err(ExitCode(1)));
     };
 
-    event_log_db.add_events(vec![Event::RewriteEvent {
-        timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
-        event_tx_id,
-        old_commit_oid: MaybeZeroOid::NonZero(target_oid),
-        new_commit_oid: MaybeZeroOid::NonZero(remainder_commit_oid),
-    }])?;
+    let timestamp = now.duration_since(UNIX_EPOCH)?.as_secs_f64();
+    // `InsertBefore` rebases the target next, so `RewriteEvent` would hide the rebased result.
+    let event = match &split_mode {
+        SplitMode::InsertBefore => Event::CommitEvent {
+            timestamp,
+            event_tx_id,
+            commit_oid: remainder_commit_oid,
+        },
+        SplitMode::DetachAfter | SplitMode::Discard | SplitMode::InsertAfter => {
+            Event::RewriteEvent {
+                timestamp,
+                event_tx_id,
+                old_commit_oid: MaybeZeroOid::NonZero(target_oid),
+                new_commit_oid: MaybeZeroOid::NonZero(remainder_commit_oid),
+            }
+        }
+    };
+    event_log_db.add_events(vec![event])?;
 
     // FIXME terminology is also wrong here: "extracted" is correct for `After`
     // and `Discard` modes, but the extracted commit is not actually None for
