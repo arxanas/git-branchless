@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- (#1308): Global options such as `--color` and `-C` are now respected when they appear after the subcommand (e.g. `git sl --color always`), not only before it.
 - (#1629): `git test` no longer fails to create its results directory when the test command contains characters that are invalid in a path on Windows (such as `|`, `<`, `>`, `:`, `*`, `?`, `"`, or `\`).
 
 ## [v0.11.1] - 2026-05-21

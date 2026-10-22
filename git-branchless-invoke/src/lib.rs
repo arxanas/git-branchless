@@ -165,6 +165,28 @@ support repositories with this configuration option enabled.",
     Ok(None)
 }
 
+/// Parse the global arguments (such as `--color`) out of `args`.
+///
+/// If `T` itself defines the global arguments (as the main `git-branchless`
+/// executable does), parse with the full command definition, so that global
+/// arguments are also recognized when they appear after the subcommand (e.g.
+/// `git branchless smartlog --color always`). Otherwise, fall back to parsing
+/// only the global arguments, which stops at the first unrecognized argument.
+fn parse_global_args<T: CommandFactory>(args: &[OsString]) -> eyre::Result<GlobalArgs> {
+    let command = T::command();
+    let command = if command
+        .get_arguments()
+        .any(|arg| arg.get_id() == "color" && arg.is_global_set())
+    {
+        command
+    } else {
+        GlobalArgs::command()
+    };
+    let matches = command.ignore_errors(true).get_matches_from(args);
+    GlobalArgs::from_arg_matches(&matches)
+        .map_err(|err| eyre::eyre!("Could not parse global arguments: {err}"))
+}
+
 /// Wrapper function for `main` to ensure that `Drop` is called for local
 /// variables, since `std::process::exit` will skip them. You probably want to
 /// call `invoke_subcommand_main` instead.
@@ -173,14 +195,11 @@ pub fn do_main_and_drop_locals<T: Parser>(
     f: impl Fn(CommandContext, T) -> EyreExitOr<()>,
     args: Vec<OsString>,
 ) -> eyre::Result<i32> {
-    let command = GlobalArgs::command();
     let command_args = T::parse_from(&args);
-    let matches = command.ignore_errors(true).get_matches_from(&args);
     let GlobalArgs {
         working_directory,
         color,
-    } = GlobalArgs::from_arg_matches(&matches)
-        .map_err(|err| eyre::eyre!("Could not parse global arguments: {err}"))?;
+    } = parse_global_args::<T>(&args)?;
 
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
@@ -250,4 +269,41 @@ pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> EyreEx
     let args = std::env::args_os().collect();
     let exit_code = do_main_and_drop_locals(f, args).expect("A fatal error occurred");
     std::process::exit(exit_code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use git_branchless_opts::Opts;
+
+    fn parse(args: &[&str]) -> GlobalArgs {
+        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+        parse_global_args::<Opts>(&args).unwrap()
+    }
+
+    #[test]
+    fn test_global_args_position() {
+        for args in [
+            &["git-branchless", "--color", "always", "smartlog"][..],
+            &["git-branchless", "smartlog", "--color", "always"],
+            &["git-branchless", "smartlog", "--color=always"],
+            &["git-branchless", "test", "run", "--color", "always"],
+        ] {
+            let global_args = parse(args);
+            assert!(
+                matches!(global_args.color, Some(ColorSetting::Always)),
+                "args: {args:?}, parsed: {global_args:?}"
+            );
+        }
+
+        let global_args = parse(&["git-branchless", "smartlog", "-C", "some-dir"]);
+        assert_eq!(
+            global_args.working_directory,
+            Some(PathBuf::from("some-dir"))
+        );
+
+        let global_args = parse(&["git-branchless", "smartlog"]);
+        assert!(global_args.color.is_none());
+        assert!(global_args.working_directory.is_none());
+    }
 }
