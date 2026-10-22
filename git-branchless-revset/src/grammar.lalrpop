@@ -59,7 +59,7 @@ Expr5: Expr<'input> = {
 
 Name: Cow<'input, str> = {
     // NOTE: `.` should be allowed in names, but not `..` (since that is an operator).
-    <s:r"([a-zA-Z0-9_$@/-]|\.[a-zA-Z0-9_$@/-])+|\."> => Cow::Borrowed(&s),
+    <s:r"([a-zA-Z0-9_$@/#-]|\.[a-zA-Z0-9_$@/#-])+|\."> => Cow::Borrowed(&s),
 
     // Escaping is not supported in LALROP regex literals.
     // \x22 = double-quote.
