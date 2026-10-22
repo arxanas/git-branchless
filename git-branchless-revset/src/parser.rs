@@ -748,4 +748,43 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_revset_parse_hash_in_name() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("mr/1229#crc"), @r##"
+        Ok(
+            Name(
+                "mr/1229#crc",
+            ),
+        )
+        "##);
+        insta::assert_debug_snapshot!(parse("stack(mr/1229#crc)"), @r##"
+        Ok(
+            FunctionCall(
+                "stack",
+                [
+                    Name(
+                        "mr/1229#crc",
+                    ),
+                ],
+            ),
+        )
+        "##);
+        insta::assert_debug_snapshot!(parse("#foo..bar.#baz"), @r##"
+        Ok(
+            FunctionCall(
+                "only",
+                [
+                    Name(
+                        "bar.#baz",
+                    ),
+                    Name(
+                        "#foo",
+                    ),
+                ],
+            ),
+        )
+        "##);
+        Ok(())
+    }
 }
