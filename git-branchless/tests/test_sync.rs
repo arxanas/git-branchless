@@ -205,6 +205,7 @@ fn test_sync_pull_preserves_hidden_status() -> eyre::Result<()> {
     original_repo.init_repo()?;
     original_repo.commit_file("test1", 1)?;
     original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+
     cloned_repo.init_repo_with_options(&GitInitOptions {
         make_initial_commit: false,
         ..Default::default()
@@ -213,13 +214,32 @@ fn test_sync_pull_preserves_hidden_status() -> eyre::Result<()> {
     cloned_repo.commit_file("test2", 2)?;
     cloned_repo.branchless("hide", &["--no-delete-branches", "HEAD"])?;
     original_repo.commit_file("test3", 3)?;
+
+    {
+        let (stdout, _stderr) = cloned_repo.branchless("smartlog", &["all()"])?;
+        insta::assert_snapshot!(stdout, @r"
+            O f777ecc create initial.txt
+            |
+            O 62fc20d create test1.txt
+            |
+            % 96d1c37 (manually hidden) (> master) create test2.txt
+        ");
+    }
+
     cloned_repo.branchless("sync", &["--pull"])?;
 
-    let stdout = cloned_repo.smartlog()?;
-    insta::assert_snapshot!(stdout, @r"
-    :
-    % d742fb9 (> master) create test2.txt
-    ");
+    {
+        let (stdout, _stderr) = cloned_repo.branchless("smartlog", &["all()"])?;
+        insta::assert_snapshot!(stdout, @r"
+            O f777ecc create initial.txt
+            |
+            O 62fc20d create test1.txt
+            |
+            O 4838e49 create test3.txt
+            |
+            % d742fb9 (> master) create test2.txt
+        ");
+    }
 
     Ok(())
 }
@@ -248,17 +268,36 @@ fn test_sync_pull_preserves_rewritten_status() -> eyre::Result<()> {
     cloned_repo.write_file_txt("test2", "amended test2 contents\n")?;
     cloned_repo.run(&["commit", "--amend", "-a", "-m", "amended test2"])?;
     original_repo.commit_file("test3", 3)?;
+
+    {
+        let (stdout, _stderr) = cloned_repo.branchless("smartlog", &["all()"])?;
+        insta::assert_snapshot!(stdout, @r"
+            O f777ecc create initial.txt
+            |
+            O 62fc20d create test1.txt
+            |\
+            | @ 09fcc8b amended test2
+            |
+            X 96d1c37 (rewritten as 09fcc8ba) (master) create test2.txt
+        ");
+    }
+
     cloned_repo.branchless("sync", &["--pull"])?;
 
-    let stdout = cloned_repo.smartlog()?;
-    insta::assert_snapshot!(stdout, @r"
-    :
-    O 62fc20d create test1.txt
-    |\
-    : @ 09fcc8b amended test2
-    :
-    X d742fb9 (master) create test2.txt
-    ");
+    {
+        let (stdout, _stderr) = cloned_repo.branchless("smartlog", &["all()"])?;
+        insta::assert_snapshot!(stdout, @r"
+            O f777ecc create initial.txt
+            |
+            O 62fc20d create test1.txt
+            |\
+            | @ 09fcc8b amended test2
+            |
+            O 4838e49 create test3.txt
+            |
+            X d742fb9 (master) create test2.txt
+        ");
+    }
 
     Ok(())
 }
