@@ -12,7 +12,11 @@ env:
 
 jobs:
   build-git:
-    runs-on: ubuntu-latest
+    # Later versions of ubuntu-latest (eg ubuntu-26.04) bundle updated gcc and
+    # libcurl that are not out-of-the-box compatible with the older versions of
+    # git we test against. This can be unpinned once we update our tests to more
+    # up-to-date git versions.
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
