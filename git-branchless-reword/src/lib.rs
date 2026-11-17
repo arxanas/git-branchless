@@ -40,7 +40,9 @@ use lib::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
     RebasePlanPermissions, RepoResource, execute_rebase_plan,
 };
-use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, message_prettify};
+use lib::git::{
+    Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, message_prettify, message_wrap,
+};
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
@@ -88,6 +90,7 @@ pub fn reword(
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
     messages: InitialCommitMessages,
+    wrap: Option<u8>,
     git_run_info: &GitRunInfo,
     force_rewrite_public_commits: bool,
 ) -> EyreExitOr<()> {
@@ -171,7 +174,7 @@ pub fn reword(
 
     let edit_message_fn = |message: &str| edit_message(git_run_info, &repo, message);
 
-    let messages = match prepare_messages(&repo, messages, &commits, edit_message_fn)? {
+    let messages = match prepare_messages(&repo, messages, &commits, edit_message_fn, wrap)? {
         PrepareMessagesResult::Succeeded { messages } => messages,
         PrepareMessagesResult::IdenticalMessage => {
             writeln!(
@@ -433,6 +436,7 @@ fn prepare_messages(
     messages: InitialCommitMessages,
     commits: &[Commit],
     edit_message_fn: impl Fn(&str) -> eyre::Result<String>,
+    wrap: Option<u8>,
 ) -> eyre::Result<PrepareMessagesResult> {
     let comment_char = get_comment_char(repo)?;
 
@@ -452,6 +456,7 @@ fn prepare_messages(
 
     if !load_editor {
         let message = message_prettify(message.as_str(), None)?;
+        let message = message_wrap(repo, &message, wrap);
 
         if message.trim().is_empty() {
             return Ok(PrepareMessagesResult::EmptyMessage);
@@ -761,6 +766,7 @@ mod tests {
                     ");
                     Ok(message.to_string())
                 },
+                None,
             )?;
             insta::assert_debug_snapshot!(result, @"IdenticalMessage");
         }
@@ -791,6 +797,7 @@ This is a template!
                     ");
                     Ok(message.to_string())
                 },
+                None,
             )?;
             insta::assert_debug_snapshot!(result, @"IdenticalMessage");
         }
@@ -828,6 +835,7 @@ This is a template!
                     ");
                     Ok(message.to_string())
                 },
+                None,
             )?;
             insta::assert_debug_snapshot!(result, @"IdenticalMessage");
         }

@@ -29,6 +29,7 @@ use itertools::Itertools;
 use thiserror::Error;
 use tracing::{instrument, warn};
 
+use crate::core::config::get_record_wrap_width;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::Glyphs;
@@ -308,6 +309,22 @@ pub fn message_prettify(message: &str, comment_char: Option<char>) -> Result<Str
     };
     let message = git2::message_prettify(message, comment_char).map_err(Error::Git)?;
     Ok(message)
+}
+
+/// Wrap a string to a given line length, or to a settings-configured default
+/// line length.
+#[instrument]
+pub fn message_wrap(repo: &Repo, message: &str, wrap_width: Option<u8>) -> String {
+    match (wrap_width, get_record_wrap_width(repo)) {
+        (Some(wrap_width), _) | (None, Ok(Some(wrap_width))) => textwrap::refill(
+            message,
+            textwrap::Options::new(wrap_width.into())
+                .break_words(false)
+                .word_splitter(textwrap::WordSplitter::NoHyphenation)
+                .word_separator(textwrap::WordSeparator::AsciiSpace),
+        ),
+        (None, Ok(None)) | (None, Err(_)) => message.to_string(),
+    }
 }
 
 /// A snapshot of information about a certain reference. Updates to the
