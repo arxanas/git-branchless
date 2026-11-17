@@ -1,7 +1,9 @@
 use std::str::FromStr;
 
 use lib::git::NonZeroOid;
-use lib::testing::{GitInitOptions, GitRunOptions, make_git, trim_lines};
+use lib::testing::{
+    GitInitOptions, GitRunOptions, make_git, remove_reference_transaction_lines, trim_lines,
+};
 
 #[test]
 fn test_restore_snapshot_basic() -> eyre::Result<()> {
@@ -81,14 +83,11 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
-        branchless: processing 2 updates: branch master, ref HEAD
-        branchless: processing 1 update: ref HEAD
         HEAD is now at f7ec40d branchless: working copy snapshot data: 2 unstaged changes
         branchless: processing checkout
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: branch master
         ");
         insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
@@ -190,14 +189,11 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
-        branchless: processing 2 updates: branch master, ref HEAD
-        branchless: processing 1 update: ref HEAD
         HEAD is now at 1935fed branchless: working copy snapshot data: 2 unstaged changes
         branchless: processing checkout
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: branch master
         ");
         insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --
@@ -262,14 +258,11 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         let (stdout, stderr) =
             git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
         branchless: restoring from snapshot
-        branchless: processing 2 updates: branch master, ref HEAD
-        branchless: processing 1 update: ref HEAD
         HEAD is now at eb8b9ee branchless: working copy snapshot data: 1 unstaged change
         branchless: processing checkout
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: branch master
         ");
         insta::assert_snapshot!(stdout, @"
         branchless: running command: <git-executable> reset --hard HEAD --

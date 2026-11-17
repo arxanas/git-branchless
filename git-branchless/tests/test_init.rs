@@ -5,6 +5,7 @@ use itertools::Itertools;
 use lib::git::GitVersion;
 use lib::testing::{
     GitInitOptions, GitRunOptions, GitWorktreeWrapper, make_git, make_git_worktree,
+    remove_reference_transaction_lines,
 };
 use regex::Regex;
 
@@ -49,9 +50,10 @@ echo Hello, world
 
     {
         let (stdout, stderr) = git.run(&["commit", "--allow-empty", "-m", "test"])?;
-        insta::assert_snapshot!(stdout, @"[master 4cd1a9b] test");
+        insta::assert_snapshot!(stdout, @"[master 4cd1a9b] test
+");
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
-        branchless: processing 2 updates: branch master, ref HEAD
         Hello, world
         branchless: processed commit: 4cd1a9b test
         ");

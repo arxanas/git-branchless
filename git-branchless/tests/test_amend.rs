@@ -1,5 +1,6 @@
 use std::fs;
 
+use lib::git::GitVersion;
 use lib::testing::{
     GitRunOptions, make_git,
     pty::{PtyAction, run_in_pty},
@@ -740,6 +741,9 @@ fn test_amend_undo() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    if git.get_version()? < GitVersion(2, 54, 0) {
         return Ok(());
     }
     git.init_repo()?;

@@ -1,7 +1,7 @@
 use lib::git::GitVersion;
 use lib::testing::{
     GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo, make_git_with_remote_repo,
-    remove_nondeterministic_lines,
+    remove_nondeterministic_lines, remove_reference_transaction_lines,
 };
 
 /// Minimum version due to changes in the output of `git push`.
@@ -107,15 +107,12 @@ fn test_submit() -> eyre::Result<()> {
     {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
-        insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update: branch bar
-        branchless: processing 1 update: branch qux
+        let stderr = remove_reference_transaction_lines(stderr);
+        insta::assert_snapshot!(stderr, @"
         To: file://<remote>
          * [new branch]      bar -> bar
          * [new branch]      qux -> qux
-        branchless: processing 1 update: remote branch origin/bar
-        branchless: processing 1 update: remote branch origin/qux
-        "###);
+        ");
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin bar qux
         branch 'bar' set up to track 'origin/bar'.
@@ -138,15 +135,14 @@ fn test_submit() -> eyre::Result<()> {
     {
         let (stdout, stderr) = cloned_repo.run(&["submit"])?;
         let stderr = redact_remotes(stderr);
-        insta::assert_snapshot!(stderr, @r###"
+        let stderr = remove_reference_transaction_lines(stderr);
+        insta::assert_snapshot!(stderr, @"
         From: file://<remote>
          * branch            bar        -> FETCH_HEAD
          * branch            qux        -> FETCH_HEAD
-        branchless: processing 1 update: branch qux
         To: file://<remote>
          + 20230db...bae8307 qux -> qux (forced update)
-        branchless: processing 1 update: remote branch origin/qux
-        "###);
+        ");
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
         branchless: running command: <git-executable> push --force-with-lease origin qux

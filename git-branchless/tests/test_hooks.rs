@@ -4,7 +4,7 @@ use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_times
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::git::GitVersion;
-use lib::testing::make_git;
+use lib::testing::{make_git, remove_reference_transaction_lines};
 use lib::util::get_sh;
 use std::process::Command;
 
@@ -21,8 +21,8 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
-        branchless: processing 2 updates: branch master, ref HEAD
         branchless: processed commit: 9e8dbe9 amend test1
         branchless: processing 1 rewritten commit
         ");
@@ -34,8 +34,8 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1 again"])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
-        branchless: processing 1 update: ref HEAD
         branchless: processed commit: c1e22fd amend test1 again
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 1 commit and 1 branch (master)!
@@ -101,17 +101,13 @@ fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
     git.run(&["commit", "--amend", "-m", "fixup! create test1.txt"])?;
 
-    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master", "--autosquash"])?;
-        if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 3 rewritten commits
-            Successfully rebased and updated detached HEAD.
-            ");
-        }
+        insta::assert_snapshot!(remove_reference_transaction_lines(stderr), @"
+        branchless: processing checkout
+        branchless: processing 3 rewritten commits
+        Successfully rebased and updated detached HEAD.
+        ");
     }
 
     Ok(())
@@ -131,24 +127,21 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
 
-    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "master", "HEAD^"])?;
-        if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 rewritten commit
-            branchless: This operation abandoned 1 commit!
-            branchless: Consider running one of the following:
-            branchless:   - git restack: re-apply the abandoned commits/branches
-            branchless:     (this is most likely what you want to do)
-            branchless:   - git smartlog: assess the situation
-            branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-            branchless:   - git undo: undo the operation
-            hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
-            Successfully rebased and updated detached HEAD.
-            ");
-        }
+        insta::assert_snapshot!(remove_reference_transaction_lines(stderr), @"
+        branchless: processing checkout
+        branchless: processing 1 rewritten commit
+        branchless: This operation abandoned 1 commit!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
+        Successfully rebased and updated detached HEAD.
+        ");
     }
 
     Ok(())
@@ -163,12 +156,12 @@ fn test_interactive_rebase_noop() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master"])?;
-        if git_version < GitVersion(2, 35, 0) {
-            insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.");
-        }
+        insta::assert_snapshot!(remove_reference_transaction_lines(stderr), @"
+        branchless: processing checkout
+        Successfully rebased and updated detached HEAD.
+        ");
     }
 
     Ok(())
@@ -388,6 +381,9 @@ fn test_symbolic_transaction_ref() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    if git.get_version()? < GitVersion(2, 54, 0) {
         return Ok(());
     }
 

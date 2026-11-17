@@ -1,5 +1,5 @@
 use branchless::git::{GitRunInfo, GitRunOpts};
-use branchless::testing::make_git;
+use branchless::testing::{make_git, remove_reference_transaction_lines};
 
 #[test]
 fn test_hook_working_dir() -> eyre::Result<()> {
@@ -27,8 +27,8 @@ fn test_hook_working_dir() -> eyre::Result<()> {
     {
         // Trigger the `post-rewrite` hook that we wrote above.
         let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
+        let stderr = remove_reference_transaction_lines(stderr);
         insta::assert_snapshot!(stderr, @"
-        branchless: processing 2 updates: branch master, ref HEAD
         branchless: processed commit: f23bf8f foo
         Check if test1.txt exists
         test1.txt exists
