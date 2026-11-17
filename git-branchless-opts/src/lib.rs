@@ -358,6 +358,10 @@ pub struct RecordArgs {
     /// How should newly encountered, untracked files be handled?
     #[clap(value_parser, long = "untracked", conflicts_with_all(&["interactive"]))]
     pub untracked_file_strategy: Option<UntrackedFileStrategy>,
+
+    /// Wrap provided commit messages at the given line length.
+    #[clap(value_parser, long = "wrap", conflicts_with_all(&["interactive"]))]
+    pub wrap: Option<u8>,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
@@ -661,6 +665,10 @@ pub enum Command {
         /// Options for supplying commit messages.
         #[clap(flatten)]
         message_args: MessageArgs,
+
+        /// Wrap provided commit messages at the given line length.
+        #[clap(value_parser, long = "wrap")]
+        wrap: Option<u8>,
 
         /// Throw away the original commit messages.
         ///

@@ -122,6 +122,22 @@ pub fn get_smartlog_show_worktrees(repo: &Repo) -> eyre::Result<bool> {
         .get_or("branchless.smartlog.showWorktrees", false)
 }
 
+/// At what column to wrap commit messages by default, if at all.
+#[instrument]
+pub fn get_record_wrap_width(repo: &Repo) -> eyre::Result<Option<u8>> {
+    let width: String = match repo
+        .get_readonly_config()?
+        .get("branchless.record.wrapWidth")?
+    {
+        Some(width) => width,
+        None => return Ok(None),
+    };
+
+    let width = width.parse::<u8>()?;
+
+    Ok(Some(width))
+}
+
 /// Get the default comment character.
 #[instrument]
 pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {

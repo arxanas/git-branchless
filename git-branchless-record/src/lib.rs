@@ -37,7 +37,7 @@ use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_f
 use lib::git::{
     CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid,
     ReferenceName, Repo, ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand,
-    WorkingCopyChangesType, WorkingCopySnapshot, process_diff_for_record,
+    WorkingCopyChangesType, WorkingCopySnapshot, message_wrap, process_diff_for_record,
     summarize_diff_for_temporary_commit, update_index,
 };
 use lib::try_exit_code;
@@ -68,6 +68,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         stash,
         new,
         untracked_file_strategy,
+        wrap,
     } = args;
     record(
         &effects,
@@ -81,6 +82,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         stash,
         new,
         untracked_file_strategy,
+        wrap,
     )
 }
 
@@ -97,12 +99,18 @@ fn record(
     stash: bool,
     new: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
+    wrap: Option<u8>,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
+
+    let messages = messages
+        .iter()
+        .map(|s| message_wrap(&repo, s, wrap))
+        .collect();
 
     if new {
         try_exit_code!(create_new_commit(
