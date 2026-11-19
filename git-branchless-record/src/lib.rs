@@ -24,6 +24,7 @@ use lib::core::check_out::{CheckOutCommitOptions, CheckoutTarget, check_out_comm
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
+use lib::core::eventlog::Event as EventLogEvent;
 use lib::core::eventlog::{Event as LogEvent, EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
@@ -35,10 +36,10 @@ use lib::core::rewrite::{
 };
 use lib::core::untracked_file_cache::{UntrackedFileStrategy, process_untracked_files};
 use lib::git::{
-    CategorizedReferenceName, ConfigRead, FileMode, GitRunInfo, MaybeZeroOid, NonZeroOid,
-    ReferenceName, Repo, ResolvedReferenceInfo, Signature, Stage, UpdateIndexCommand,
-    WorkingCopyChangesType, WorkingCopySnapshot, process_diff_for_record,
-    summarize_diff_for_temporary_commit, update_index,
+    CategorizedReferenceName, CherryPickFastOptions, ConfigRead, CreateCommitFastError, FileMode,
+    GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo, Signature,
+    Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, summarize_diff_for_temporary_commit, update_index,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -65,6 +66,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        before,
         stash,
         new,
         untracked_file_strategy,
@@ -78,6 +80,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        before,
         stash,
         new,
         untracked_file_strategy,
@@ -94,6 +97,7 @@ fn record(
     branch_name: Option<String>,
     detach: bool,
     insert: bool,
+    before: bool,
     stash: bool,
     new: bool,
     untracked_file_strategy: Option<UntrackedFileStrategy>,
@@ -227,12 +231,19 @@ fn record(
         }
     }
 
-    if insert {
-        try_exit_code!(insert_before_siblings(
+    if before || insert {
+        try_exit_code!(insert_before(
             effects,
             git_run_info,
             now,
-            event_tx_id
+            event_tx_id,
+            if before {
+                InsertBeforeTarget::Parent
+            } else if insert {
+                InsertBeforeTarget::Siblings
+            } else {
+                unreachable!()
+            }
         )?);
     }
 
@@ -731,34 +742,150 @@ fn record_interactive(
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
 
+#[derive(Debug)]
+enum InsertBeforeTarget {
+    /// Insert the newly created commit before its siblings (--insert)
+    Siblings,
+
+    /// Insert the newly created commit before its parent (--before)
+    Parent,
+}
+
 #[instrument]
-fn insert_before_siblings(
+fn insert_before(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     now: SystemTime,
     event_tx_id: EventTransactionId,
+    insert_target: InsertBeforeTarget,
 ) -> EyreExitOr<()> {
     // Reopen the repository since references may have changed.
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let references_snapshot = repo.get_references_snapshot()?;
-    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let event_cursor = event_replayer.make_default_cursor();
-    let head_info = repo.get_head_info()?;
-    let head_oid = match head_info {
-        ResolvedReferenceInfo {
-            oid: Some(head_oid),
-            reference_name: _,
-        } => head_oid,
-        ResolvedReferenceInfo {
-            oid: None,
-            reference_name: _,
-        } => {
-            return Ok(Ok(()));
+
+    // --before: two-phase approach.
+    //
+    // Phase 1 – before building the rebase plan: create the inserted commit
+    // (the new commit's diff cherry-picked onto the grandparent) and reset
+    // HEAD back to the original HEAD.  This is essential because:
+    //   1. orphaning the new commit makes it invisible in the DAG, preventing
+    //      a constraint cycle when the plan tries to move the original HEAD (a
+    //      descendant of the new commit);
+    //   2. the branch tracks the original HEAD (not the new commit) after the
+    //      reset, so move_branches maps original-HEAD→rebased and the post-
+    //      rebase checkout lands on the rebased commit, not the inserted one;
+    //   3. verify_rewrite_set sees only {original HEAD}, not {original HEAD,
+    //      new commit}, giving a correct public-commit count.
+    //
+    // Phase 2 – the rebase plan itself – only moves the original HEAD onto the
+    // inserted commit.
+    let inserted_oid: Option<NonZeroOid> = match insert_target {
+        InsertBeforeTarget::Siblings => None,
+        InsertBeforeTarget::Parent => {
+            let Some(head_oid) = repo.get_head_info()?.oid else {
+                return Ok(Ok(()));
+            };
+
+            let new_commit = repo.find_commit_or_fail(head_oid)?;
+
+            let original_head_oid = match new_commit.get_parents().as_slice() {
+                [] => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Cannot use --before: the new commit has no parent.",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+                [parent, ..] => parent.get_oid(),
+            };
+            let original_head_commit = repo.find_commit_or_fail(original_head_oid)?;
+
+            let grandparent_oid = match original_head_commit.get_parents().as_slice() {
+                [] => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Cannot use --before: the original HEAD has no parent (it is a root commit).",
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+                [parent, ..] => parent.get_oid(),
+            };
+            let grandparent_commit = repo.find_commit_or_fail(grandparent_oid)?;
+
+            // Compute the tree for the inserted commit by cherry-picking the
+            // new commit's diff onto the grandparent.  This ensures the
+            // inserted commit contains only the user's working-copy changes,
+            // not the original HEAD's changes.  Fall back to the new commit's
+            // full tree when the cherry-pick itself conflicts; the later rebase
+            // of the original HEAD will surface the conflict.
+            let inserted_tree = match repo.cherry_pick_fast(
+                &new_commit,
+                &grandparent_commit,
+                &CherryPickFastOptions {
+                    reuse_parent_tree_if_possible: true,
+                },
+            ) {
+                Ok(tree) => tree,
+                Err(CreateCommitFastError::MergeConflict { .. }) => new_commit.get_tree()?,
+                Err(other) => return Err(eyre::eyre!(other)),
+            };
+            let preserve_timestamps = get_restack_preserve_timestamps(&repo)?;
+            let new_author = new_commit.get_author();
+            let new_committer = if preserve_timestamps {
+                new_commit.get_committer()
+            } else {
+                new_commit.get_committer().update_timestamp(now)?
+            };
+            let new_message = new_commit.get_message_raw();
+            let new_message_str = std::str::from_utf8(&new_message)
+                .map_err(|e| eyre::eyre!("commit message is not valid UTF-8: {e}"))?;
+            let inserted_oid = repo.create_commit(
+                None,
+                &new_author,
+                &new_committer,
+                new_message_str,
+                &inserted_tree,
+                vec![&grandparent_commit],
+            )?;
+
+            mark_commit_reachable(&repo, inserted_oid)?;
+
+            let timestamp = now.duration_since(UNIX_EPOCH)?.as_secs_f64();
+            event_log_db.add_events(vec![
+                EventLogEvent::CommitEvent {
+                    timestamp,
+                    event_tx_id,
+                    commit_oid: inserted_oid,
+                },
+                EventLogEvent::RewriteEvent {
+                    timestamp,
+                    event_tx_id,
+                    old_commit_oid: MaybeZeroOid::NonZero(head_oid),
+                    new_commit_oid: MaybeZeroOid::NonZero(inserted_oid),
+                },
+            ])?;
+
+            // Move HEAD (and any branch) from the new commit back to the
+            // original HEAD, orphaning the new commit.
+            try_exit_code!(git_run_info.run(
+                effects,
+                Some(event_tx_id),
+                &["reset", "--soft", "HEAD~"],
+            )?);
+
+            Some(inserted_oid)
         }
     };
 
+    // Read fresh state for the upcoming rebase plan.  For --before the
+    // reset in phase 1 changed HEAD and the branch ref, so we re-read
+    // head_oid and rebuild the DAG from the current on-disk state.
+    // (repo/event_log_db are reused: ref reads go to disk each call and
+    // the event log DB already contains the phase-1 events.)
+    let references_snapshot = repo.get_references_snapshot()?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
     let dag = Dag::open_and_sync(
         effects,
         &repo,
@@ -766,12 +893,25 @@ fn insert_before_siblings(
         event_cursor,
         &references_snapshot,
     )?;
+
+    let Some(head_oid) = repo.get_head_info()?.oid else {
+        return Ok(Ok(()));
+    };
     let head_commit = repo.find_commit_or_fail(head_oid)?;
-    let head_commit_set = CommitSet::from(head_oid);
-    let parents = dag.query_parents(head_commit_set.clone())?;
-    let children = dag.query_children(parents)?;
-    let siblings = children.difference(&head_commit_set);
-    let siblings = dag.filter_visible_commits(siblings)?;
+    let commits_to_move = {
+        let head_commit_set = CommitSet::from(head_oid);
+        match insert_target {
+            // After the reset, HEAD is B.  We only move B.
+            InsertBeforeTarget::Parent => dag.filter_visible_commits(head_commit_set)?,
+            InsertBeforeTarget::Siblings => {
+                let parents = dag.query_parents(head_commit_set.clone())?;
+                let children = dag.query_children(parents)?;
+                let siblings = children.difference(&head_commit_set);
+                dag.filter_visible_commits(siblings)?
+            }
+        }
+    };
+
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits: false,
         dump_rebase_constraints: false,
@@ -780,26 +920,34 @@ fn insert_before_siblings(
     };
 
     let rebase_plan_result =
-        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &siblings)? {
+        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_move)? {
             Err(err) => Err(err),
             Ok(permissions) => {
-                let head_commit_parents: HashSet<_> =
-                    head_commit.get_parent_oids().into_iter().collect();
                 let mut builder = RebasePlanBuilder::new(&dag, permissions);
-                for sibling_oid in dag.commit_set_to_vec(&siblings)? {
-                    let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
-                    let parent_oids = sibling_commit.get_parent_oids();
-                    let new_parent_oids = parent_oids
-                        .into_iter()
-                        .map(|parent_oid| {
-                            if head_commit_parents.contains(&parent_oid) {
-                                head_oid
-                            } else {
-                                parent_oid
-                            }
-                        })
-                        .collect_vec();
-                    builder.move_subtree(sibling_oid, new_parent_oids)?;
+                match insert_target {
+                    InsertBeforeTarget::Parent => {
+                        let inserted_oid = inserted_oid.expect("set in phase 1 above");
+                        builder.move_subtree(head_oid, vec![inserted_oid])?;
+                    }
+                    InsertBeforeTarget::Siblings => {
+                        let head_commit_parents: HashSet<_> =
+                            head_commit.get_parent_oids().into_iter().collect();
+                        for sibling_oid in dag.commit_set_to_vec(&commits_to_move)? {
+                            let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
+                            let parent_oids = sibling_commit.get_parent_oids();
+                            let new_parent_oids = parent_oids
+                                .into_iter()
+                                .map(|parent_oid| {
+                                    if head_commit_parents.contains(&parent_oid) {
+                                        head_oid
+                                    } else {
+                                        parent_oid
+                                    }
+                                })
+                                .collect_vec();
+                            builder.move_subtree(sibling_oid, new_parent_oids)?;
+                        }
+                    }
                 }
                 let thread_pool = ThreadPoolBuilder::new().build()?;
                 let repo_pool = RepoResource::new_pool(&repo)?;
@@ -811,14 +959,13 @@ fn insert_before_siblings(
         Ok(Some(rebase_plan)) => rebase_plan,
 
         Ok(None) => {
-            // Nothing to do, since there were no siblings to move.
             return Ok(Ok(()));
         }
 
         Err(BuildRebasePlanError::ConstraintCycle { .. }) => {
             writeln!(
                 effects.get_output_stream(),
-                "BUG: constraint cycle detected when moving siblings, which shouldn't be possible."
+                "BUG: constraint cycle detected when rebasing HEAD onto new commit.",
             )?;
             return Ok(Err(ExitCode(1)));
         }
@@ -836,22 +983,51 @@ fn insert_before_siblings(
                 .ok_or_else(|| eyre::eyre!("BUG: could not get OID of a public commit to move"))?;
             let example_bad_commit_oid = NonZeroOid::try_from(example_bad_commit_oid)?;
             let example_bad_commit = repo.find_commit_or_fail(example_bad_commit_oid)?;
-            writeln!(
-                effects.get_output_stream(),
-                "\
+            match insert_target {
+                InsertBeforeTarget::Parent => {
+                    let inserted_oid = inserted_oid.expect("set in phase 1 above");
+                    writeln!(
+                        effects.get_output_stream(),
+                        "\
+You are trying to rewrite {}, such as: {}
+It is generally not advised to rewrite public commits, because your
+collaborators will have difficulty merging your changes.
+To proceed anyways, run: git move -f . --onto {}",
+                        Pluralize {
+                            determiner: None,
+                            amount: dag.set_count(&public_commits_to_move)?,
+                            unit: ("public commit", "public commits")
+                        },
+                        effects
+                            .get_glyphs()
+                            .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
+                        effects
+                            .get_glyphs()
+                            .render(repo.friendly_describe_commit_from_oid(
+                                effects.get_glyphs(),
+                                inserted_oid,
+                            )?)?,
+                    )?;
+                }
+                InsertBeforeTarget::Siblings => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "\
 You are trying to rewrite {}, such as: {}
 It is generally not advised to rewrite public commits, because your
 collaborators will have difficulty merging your changes.
 To proceed anyways, run: git move -f -s 'siblings(.)",
-                Pluralize {
-                    determiner: None,
-                    amount: dag.set_count(&public_commits_to_move)?,
-                    unit: ("public commit", "public commits")
-                },
-                effects
-                    .get_glyphs()
-                    .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
-            )?;
+                        Pluralize {
+                            determiner: None,
+                            amount: dag.set_count(&public_commits_to_move)?,
+                            unit: ("public commit", "public commits")
+                        },
+                        effects
+                            .get_glyphs()
+                            .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
+                    )?;
+                }
+            }
             return Ok(Ok(()));
         }
     };
@@ -864,7 +1040,12 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         force_on_disk: false,
         dry_run: false,
         resolve_merge_conflicts: false,
-        check_out_commit_options: Default::default(),
+        check_out_commit_options: CheckOutCommitOptions {
+            additional_args: vec![],
+            force_detach: false,
+            reset: false,
+            render_smartlog: false,
+        },
     };
     let result = execute_rebase_plan(
         effects,
@@ -878,7 +1059,11 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }
         | ExecuteRebasePlanResult::WouldSucceed => Ok(Ok(())),
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
-            failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Insert)?;
+            let remediation = match insert_target {
+                InsertBeforeTarget::Parent => MergeConflictRemediation::Before,
+                InsertBeforeTarget::Siblings => MergeConflictRemediation::Insert,
+            };
+            failed_merge_info.describe(effects, &repo, remediation)?;
             Ok(Ok(()))
         }
         ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
