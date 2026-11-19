@@ -437,29 +437,30 @@ impl Forge for GithubForge<'_> {
                         &pull_request_infos,
                         commit_oid
                     )?);
-                let updated_fields = {
-                    let fields = updated_pull_request_info.fields_to_update(pull_request_info);
-                    if fields.is_empty() {
-                        "none (this should not happen)".to_owned()
-                    } else {
-                        fields.join(", ")
-                    }
-                };
+                let updated_fields = updated_pull_request_info.fields_to_update(pull_request_info);
                 let client::UpdatePullRequestArgs {
                     head_ref_oid: _, // Updated by `branch_forge.update`.
                     base_ref_name,
                     title,
                     body,
                 } = updated_pull_request_info;
-                writeln!(
-                    effects.get_output_stream(),
-                    "Updating pull request ({updated_fields}) for commit {}",
-                    effects.get_glyphs().render(
-                        self.repo
-                            .find_commit_or_fail(commit_oid)?
-                            .friendly_describe(effects.get_glyphs())?
-                    )?
-                )?;
+
+                // For a single-patch stack the create step already produces the
+                // final title and body, so there may be nothing left to change
+                // in the pull request metadata.
+                let has_metadata_updates = !updated_fields.is_empty();
+                if has_metadata_updates {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Updating pull request ({}) for commit {}",
+                        updated_fields.join(", "),
+                        effects.get_glyphs().render(
+                            self.repo
+                                .find_commit_or_fail(commit_oid)?
+                                .friendly_describe(effects.get_glyphs())?
+                        )?
+                    )?;
+                }
 
                 // Make sure to update the branch and metadata at the same time,
                 // rather than all the branches at first. Otherwise, when
@@ -473,17 +474,19 @@ impl Forge for GithubForge<'_> {
                 );
 
                 // Update metdata:
-                try_exit_code!(self.client.update_pull_request(
-                    &effects,
-                    pull_request_info.number,
-                    client::UpdatePullRequestArgs {
-                        head_ref_oid: commit_oid,
-                        base_ref_name,
-                        title,
-                        body,
-                    },
-                    options
-                )?);
+                if has_metadata_updates {
+                    try_exit_code!(self.client.update_pull_request(
+                        &effects,
+                        pull_request_info.number,
+                        client::UpdatePullRequestArgs {
+                            head_ref_oid: commit_oid,
+                            base_ref_name,
+                            title,
+                            body,
+                        },
+                        options
+                    )?);
+                }
                 progress.notify_progress_inc(1);
             }
         }
@@ -637,24 +640,30 @@ impl GithubForge<'_> {
             }
         };
 
-        let stack_list = {
-            let mut result = String::new();
-            for stack_pull_request_info in stack_pull_request_infos.values() {
-                // Github will render a lone pull request URL as a title and
-                // open/closed status.
-                writeln!(result, "* {}", stack_pull_request_info.url)?;
-            }
-            result
-        };
-
         let commit = self.repo.find_commit_or_fail(commit_oid)?;
         let commit_summary = commit.get_summary()?;
         let commit_summary = String::from_utf8_lossy(&commit_summary).into_owned();
-        let title = format!("[{stack_index}/{stack_size}] {commit_summary}");
         let commit_message = commit.get_message_pretty();
         let commit_message = String::from_utf8_lossy(&commit_message);
-        let body = format!(
-            "\
+
+        // A single-patch stack points only to itself, so the `[1/1]` title
+        // prefix and the stack list in the body are just noise. Omit them and
+        // keep the plain commit summary and message in that case.
+        let (title, body) = if stack_size == 1 {
+            (commit_summary, commit_message.into_owned())
+        } else {
+            let stack_list = {
+                let mut result = String::new();
+                for stack_pull_request_info in stack_pull_request_infos.values() {
+                    // Github will render a lone pull request URL as a title and
+                    // open/closed status.
+                    writeln!(result, "* {}", stack_pull_request_info.url)?;
+                }
+                result
+            };
+            let title = format!("[{stack_index}/{stack_size}] {commit_summary}");
+            let body = format!(
+                "\
 **Stack:**
 
 {stack_list}
@@ -663,7 +672,9 @@ impl GithubForge<'_> {
 
 {commit_message}
 "
-        );
+            );
+            (title, body)
+        };
 
         let stack_ancestor_oids = {
             let main_branch_oid = CommitSet::from(references_snapshot.main_branch_oid);

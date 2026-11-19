@@ -402,8 +402,8 @@ fn test_github_forge_mock_client_closes_pull_requests() -> eyre::Result<()> {
               "baseRefName": "master",
               "closed": false,
               "isDraft": false,
-              "title": "[1/1] create test2.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/2\n\n\n---\n\ncreate test2.txt\n\n"
+              "title": "create test2.txt",
+              "body": "create test2.txt\n"
             }
           }
         }
@@ -456,7 +456,6 @@ fn test_github_forge_no_include_unsubmitted_commits_in_stack() -> eyre::Result<(
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin mock-github-username/create-test1-txt
         branch 'mock-github-username/create-test1-txt' set up to track 'origin/mock-github-username/create-test1-txt'.
-        Updating pull request (title, body) for commit 62fc20d create test1.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test1-txt
         Submitted 1 commit: mock-github-username/create-test1-txt
         "###);
@@ -492,8 +491,8 @@ fn test_github_forge_no_include_unsubmitted_commits_in_stack() -> eyre::Result<(
               "baseRefName": "master",
               "closed": false,
               "isDraft": false,
-              "title": "[1/1] create test1.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test1.txt\n\n"
+              "title": "create test1.txt",
+              "body": "create test1.txt\n"
             }
           }
         }
@@ -546,7 +545,6 @@ fn test_github_forge_multiple_commits_in_pull_request() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin mock-github-username/create-test3-txt
         branch 'mock-github-username/create-test3-txt' set up to track 'origin/mock-github-username/create-test3-txt'.
-        Updating pull request (title, body) for commit 70deb1e create test3.txt
         branchless: running command: <git-executable> push --force-with-lease origin mock-github-username/create-test3-txt
         Submitted 1 commit: mock-github-username/create-test3-txt
         "###);
@@ -586,8 +584,8 @@ fn test_github_forge_multiple_commits_in_pull_request() -> eyre::Result<()> {
               "baseRefName": "master",
               "closed": false,
               "isDraft": false,
-              "title": "[1/1] create test3.txt",
-              "body": "**Stack:**\n\n* https://example.com/mock-github-username/mock-github-repo/pulls/1\n\n\n---\n\ncreate test3.txt\n\n"
+              "title": "create test3.txt",
+              "body": "create test3.txt\n"
             }
           }
         }
