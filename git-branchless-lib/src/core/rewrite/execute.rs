@@ -327,6 +327,10 @@ pub enum MergeConflictRemediation {
 
     /// Indicate that the user should run `git move -m -s 'siblings(.)'`.
     Insert,
+
+    // TODO: confirm this message
+    /// Indicate that the user should run `git move -m -x HEAD~ --onto HEAD`.
+    Before,
 }
 
 /// Information about a failure to merge that occurred while moving commits.
@@ -413,6 +417,12 @@ impl FailedMergeInfo {
                 writeln!(
                     effects.get_output_stream(),
                     "To resolve merge conflicts, run: git move -m -s 'siblings(.)'"
+                )?;
+            }
+            MergeConflictRemediation::Before => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "To resolve merge conflicts, run: git move -m -x HEAD~ --onto HEAD"
                 )?;
             }
         }

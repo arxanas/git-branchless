@@ -347,6 +347,11 @@ pub struct RecordArgs {
     #[clap(action, short = 'I', long = "insert")]
     pub insert: bool,
 
+    /// Insert the new commit before HEAD, as a child of HEAD~, then rebase
+    /// HEAD onto the new commit.
+    #[clap(action, long = "before", conflicts_with("insert"))]
+    pub before: bool,
+
     /// After making the new commit, switch back to the previous commit.
     #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
     pub stash: bool,
