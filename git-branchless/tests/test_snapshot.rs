@@ -3,6 +3,157 @@ use std::str::FromStr;
 use lib::git::NonZeroOid;
 use lib::testing::{GitInitOptions, GitRunOptions, make_git, trim_lines};
 
+/// `git branchless snapshot create` is a load-bearing use of snapshot
+/// creation (the snapshot *is* the output, and it's immediately followed by
+/// a `git reset --hard`), so it must fail cleanly -- with a rendered error
+/// and non-panic exit code -- rather than silently degrading, when a tracked
+/// file can't be read. Crucially, it must fail *before* discarding the
+/// working copy via `reset --hard`, so no data is lost.
+/// See https://github.com/arxanas/git-branchless/issues/1658
+#[cfg(unix)]
+#[test]
+fn test_snapshot_create_unreadable_tracked_file_fails_cleanly() -> eyre::Result<()> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.write_file_txt("test1", "test1 modified contents\n")?;
+
+    let file_path = git.repo_path.join("test1.txt");
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o000))?;
+
+    let running_as_root = fs::read(&file_path).is_ok();
+    if running_as_root {
+        fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+        return Ok(());
+    }
+
+    let result = git.branchless_with_options(
+        "snapshot",
+        &["create"],
+        &GitRunOptions {
+            // Exit 1 is the rendered-error exit code used when a fatal
+            // error is reported via color-eyre instead of a panic (which
+            // would instead exit 101); see `exit_with_result`.
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    );
+
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+
+    let (_stdout, stderr) = result?;
+    assert!(
+        stderr.contains("could not create blob from"),
+        "expected the underlying error to be rendered: {stderr}"
+    );
+    assert!(
+        stderr.contains("test1.txt"),
+        "expected the error to name the offending path: {stderr}"
+    );
+    assert!(
+        !stderr.contains("The application panicked"),
+        "command should not panic: {stderr}"
+    );
+
+    // The working copy must not have been reset; the uncommitted
+    // modification (and the permission change) should still be present,
+    // proving that `snapshot create`'s `git reset --hard` never ran.
+    let (status_stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
+    assert!(
+        !status_stdout.trim().is_empty(),
+        "expected the working copy to still show the uncommitted change, \
+         proving the pre-reset snapshot failure aborted before `git reset --hard`"
+    );
+
+    Ok(())
+}
+
+/// If the opportunistic pre-checkout snapshot fails (e.g. because a tracked
+/// file lost its read permissions), and the checkout target turns out to be
+/// a working-copy snapshot's base commit, `restore_snapshot` would
+/// unconditionally discard the current uncommitted changes via `reset
+/// --hard`. Since the pre-checkout snapshot -- the only safety net for
+/// those changes -- failed, proceeding would silently lose them. The
+/// command must refuse instead of running `restore_snapshot`, and it must
+/// leave the working copy untouched.
+/// See https://github.com/arxanas/git-branchless/issues/1658
+#[cfg(unix)]
+#[test]
+fn test_switch_to_snapshot_base_refuses_when_pre_snapshot_fails() -> eyre::Result<()> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    // Dirty test2, then snapshot it. `snapshot create` resets the working
+    // copy back to clean afterwards, but the base commit it prints is
+    // recognized by `check_out_commit` as a snapshot base commit if it's
+    // ever checked out directly.
+    git.write_file_txt("test2", "test2 modified contents\n")?;
+    let base_oid = {
+        let (stdout, _stderr) = git.branchless("snapshot", &["create"])?;
+        stdout.trim().to_string()
+    };
+
+    // Now dirty test1 and strip its read permission, so that the
+    // opportunistic pre-checkout snapshot below fails to read it.
+    git.write_file_txt("test1", "test1 modified contents\n")?;
+    let file_path = git.repo_path.join("test1.txt");
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o000))?;
+
+    // Root ignores Unix file permission bits, so skip when running as root
+    // (e.g. some Docker/CI setups) rather than fail confusingly.
+    let running_as_root = fs::read(&file_path).is_ok();
+    if running_as_root {
+        fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+        return Ok(());
+    }
+
+    let result = git.branchless_with_options(
+        "switch",
+        &["-d", &base_oid],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    );
+
+    // Restore permissions so that the temp dir can be cleaned up afterwards,
+    // regardless of the outcome above.
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))?;
+
+    let (_stdout, stderr) = result?;
+    assert!(
+        stderr.contains("refusing to restore"),
+        "expected a refusal message about the failed pre-checkout snapshot: {stderr}"
+    );
+    assert!(
+        !stderr.contains("The application panicked"),
+        "command should not panic: {stderr}"
+    );
+
+    // Nothing should have been discarded: test1.txt must still contain the
+    // dirty, unsnapshotted content.
+    let contents = fs::read_to_string(&file_path)?;
+    assert_eq!(contents, "test1 modified contents\n");
+
+    Ok(())
+}
+
 #[test]
 fn test_restore_snapshot_basic() -> eyre::Result<()> {
     let git = make_git()?;

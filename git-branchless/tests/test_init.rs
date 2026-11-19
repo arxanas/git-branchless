@@ -290,8 +290,10 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
         "smartlog",
         &[],
         &GitRunOptions {
-            // Exit code 101 indicates a panic.
-            expected_exit_code: 101,
+            // Top-level fatal errors are rendered gracefully and exit 1;
+            // they no longer panic (exit code 101). See
+            // https://github.com/arxanas/git-branchless/issues/1658
+            expected_exit_code: 1,
 
             ..Default::default()
         },
@@ -302,8 +304,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     let stderr = console::strip_ansi_codes(&stderr);
     let stderr = location_trace_re.replace_all(&stderr, "some/file/path.rs:123");
     insta::assert_snapshot!(stderr, @r#"
-    The application panicked (crashed).
-    Message:  A fatal error occurred:
+    Error:
        0: Could not find repository main branch
 
     Location:
@@ -328,10 +329,6 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
     Note that remote main branches are no longer supported as of v0.6.0. See
     https://github.com/arxanas/git-branchless/discussions/595 for more details.
-
-    Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
-    Run with RUST_BACKTRACE=full to include source snippets.
-    Location: some/file/path.rs:123
 
     Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
     Run with RUST_BACKTRACE=full to include source snippets.

@@ -271,7 +271,6 @@ pub fn main() {
     color_eyre::install().expect("Could not install panic handler");
     let args: Vec<_> = std::env::args_os().collect();
     let args = rewrite_args(args);
-    let exit_code = git_branchless_invoke::do_main_and_drop_locals(command_main, args)
-        .expect("A fatal error occurred");
-    std::process::exit(exit_code);
+    let result = git_branchless_invoke::do_main_and_drop_locals(command_main, args);
+    git_branchless_invoke::exit_with_result(result)
 }
