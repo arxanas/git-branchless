@@ -159,6 +159,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             resolve_revset_options,
             force_rewrite_public_commits,
             discard,
+            wrap,
         } => {
             let messages = if discard {
                 git_branchless_reword::InitialCommitMessages::Discard
@@ -172,6 +173,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
                 revsets,
                 &resolve_revset_options,
                 messages,
+                wrap,
                 &git_run_info,
                 force_rewrite_public_commits,
             )?

@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use branchless::git::{
     AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion, Repo,
-    StatusEntry,
+    StatusEntry, message_wrap,
 };
 use branchless::testing::{
     GitWorktreeWrapper, GitWrapperWithRemoteRepo, make_git, make_git_with_remote_repo,
     make_git_worktree,
 };
+use insta::assert_snapshot;
 
 #[test]
 fn test_parse_git_version_output() {
@@ -37,6 +38,60 @@ fn test_parse_git_version_output() {
         "git version 2.33.GIT".parse::<GitVersion>().unwrap(),
         GitVersion(2, 33, 0)
     );
+}
+
+#[test]
+fn test_message_wrap() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    let repo = git.get_repo()?;
+
+    assert_snapshot!(
+        message_wrap(&repo, "foo foo foo bar bar bar qux qux qux", Some(12)),
+        @"
+        foo foo foo
+        bar bar bar
+        qux qux qux
+        ",
+    );
+
+    assert_eq!(
+        "https://github.com/arxanas/git-branchless/wiki/Command:-git-record#usage",
+        message_wrap(
+            &repo,
+            "https://github.com/arxanas/git-branchless/wiki/Command:-git-record#usage",
+            Some(12)
+        ),
+        "should not wrap urls"
+    );
+
+    assert_snapshot!(
+        message_wrap(&repo, "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:", Some(80)),
+        @"
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the \"Software\"), to deal
+        in the Software without restriction, including without limitation the rights to
+        use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+        the Software, and to permit persons to whom the Software is furnished to do so,
+        subject to the following conditions:
+        ",
+    );
+
+    git.run(&["config", "branchless.record.wrapWidth", "72"])?;
+    assert_snapshot!(
+        message_wrap(&repo, "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:", None),
+        @"
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software and associated documentation files (the
+        \"Software\"), to deal in the Software without restriction, including
+        without limitation the rights to use, copy, modify, merge, publish,
+        distribute, sublicense, and/or sell copies of the Software, and to
+        permit persons to whom the Software is furnished to do so, subject to
+        the following conditions:
+        ",
+    );
+
+    Ok(())
 }
 
 #[test]

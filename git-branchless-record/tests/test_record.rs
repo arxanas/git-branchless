@@ -504,6 +504,92 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_record_message_wrapping() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        // no wrapping
+        git.write_file_txt("test1", "test1 contents one\n")?;
+
+        git.branchless(
+            "record",
+            &["-m", "foo bar baz foo bar baz foo bar baz foo bar baz"],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit a83c7080d8b429095a55d3494efde40993edd0fc
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            foo bar baz foo bar baz foo bar baz foo bar baz
+
+        test1.txt
+        "###);
+    }
+
+    {
+        // --wrap flag
+        git.write_file_txt("test1", "test1 contents two\n")?;
+
+        git.branchless(
+            "record",
+            &[
+                "-m",
+                "foo bar baz foo bar baz foo bar baz foo bar baz",
+                "--wrap",
+                "20",
+            ],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit ae6fdeb60f3f5f0657a9aa40c91f780beaf31e12
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            foo bar baz foo bar
+            baz foo bar baz foo
+            bar baz
+
+        test1.txt
+        "###);
+    }
+
+    {
+        // wrapping config
+        git.write_file_txt("test1", "test1 contents three\n")?;
+
+        git.run(&["config", "branchless.record.wrapWidth", "15"])?;
+
+        git.branchless(
+            "record",
+            &["-m", "foo bar baz foo bar baz foo bar baz foo bar baz"],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 52a4407d07a3499b5913fed83d3614edbbe7673a
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            foo bar baz foo
+            bar baz foo bar
+            baz foo bar baz
+
+        test1.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_record_new() -> eyre::Result<()> {
     let git = make_git()?;
     if !git.supports_reference_transactions()? {

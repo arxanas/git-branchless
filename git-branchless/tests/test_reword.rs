@@ -659,3 +659,85 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_reword_message_wrapping() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        // no wrapping
+        git.branchless(
+            "reword",
+            &["-m", "foo bar baz foo bar baz foo bar baz foo bar baz"],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 41deef29dbfe68c963ebc558cded5550c859b751
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            foo bar baz foo bar baz foo bar baz foo bar baz
+
+        test1.txt
+        "###);
+    }
+
+    {
+        // --wrap flag
+        git.branchless(
+            "reword",
+            &[
+                "-m",
+                "foo bar baz foo bar baz foo bar baz foo bar baz",
+                "--wrap",
+                "20",
+            ],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 205d83769a5c2f84feb3e9fd99cc2f73a841abb9
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            foo bar baz foo bar
+            baz foo bar baz foo
+            bar baz
+
+        test1.txt
+        "###);
+    }
+
+    {
+        // wrapping config
+        git.run(&["config", "branchless.record.wrapWidth", "15"])?;
+
+        git.branchless(
+            "reword",
+            &["-m", "foo bar baz foo bar baz foo bar baz foo bar baz"],
+        )?;
+
+        let (stdout, _stderr) = git.run(&["show", "--name-only"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 10f819082d89fdeb171d12629cebf129a1f6017d
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            foo bar baz foo
+            bar baz foo bar
+            baz foo bar baz
+
+        test1.txt
+        "###);
+    }
+
+    Ok(())
+}
