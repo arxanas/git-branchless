@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - (#498): revset expressions now accept `#` in branch names (e.g. `stack(mr/1229#crc)`).
+- (#1455): `git checkout --orphan` no longer crashes the `reference-transaction` hook.
 - (#1629): `git test` no longer fails to create its results directory when the test command contains characters that are invalid in a path on Windows (such as `|`, `<`, `>`, `:`, `*`, `?`, `"`, or `\`).
 
 ## [v0.11.1] - 2026-05-21
