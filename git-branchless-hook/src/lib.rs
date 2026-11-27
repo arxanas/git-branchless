@@ -195,7 +195,7 @@ mod reference_transaction {
     use lazy_static::lazy_static;
     use tracing::{instrument, warn};
 
-    use lib::git::{MaybeZeroOid, ReferenceName, Repo};
+    use lib::git::{GitErrorCode, MaybeZeroOid, ReferenceName, Repo, RepoError};
 
     /// A reference target parsed from a reference line.
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -221,7 +221,16 @@ mod reference_transaction {
         pub fn as_oid(&self, repo: &Repo) -> eyre::Result<MaybeZeroOid> {
             match self {
                 ReferenceTarget::Direct { oid } => Ok(*oid),
-                ReferenceTarget::Symbolic { name } => Ok(repo.reference_name_to_oid(name)?),
+                ReferenceTarget::Symbolic { name } => match repo.reference_name_to_oid(name) {
+                    Ok(oid) => Ok(oid),
+                    // The symbolic ref points to an unborn branch.
+                    Err(RepoError::FindReference { source, .. })
+                        if source.code() == GitErrorCode::NotFound =>
+                    {
+                        Ok(MaybeZeroOid::Zero)
+                    }
+                    Err(err) => Err(err.into()),
+                },
             }
         }
     }

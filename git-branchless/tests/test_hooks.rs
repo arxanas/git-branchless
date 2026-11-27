@@ -412,6 +412,27 @@ fn test_symbolic_transaction_ref() -> eyre::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_checkout_orphan_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+
+    // `HEAD` now points to a branch which doesn't exist yet, so the symbolic
+    // ref in the transaction can't be resolved to an OID.
+    let (_stdout, stderr) = git.run(&["checkout", "--orphan", "orphan-branch"])?;
+    assert!(
+        !stderr.contains("Failed to process reference transaction"),
+        "hook failed: {stderr}"
+    );
+
+    Ok(())
+}
+
 #[cfg(unix)]
 #[test]
 fn test_git_rebase_multiple_fixup_does_not_strand_commits() -> eyre::Result<()> {
