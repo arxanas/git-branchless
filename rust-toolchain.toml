@@ -1,5 +1,5 @@
 [toolchain]
 # Current minimum-supported Rust version
-channel = "1.86"
+channel = "1.97"
 profile = "default"
 components = [ "rustfmt", "clippy", "rust-analyzer" ]
