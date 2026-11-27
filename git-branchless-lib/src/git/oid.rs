@@ -109,19 +109,14 @@ pub(super) fn make_non_zero_oid(oid: git2::Oid) -> NonZeroOid {
 ///
 /// This type is isomorphic to `Option<NonZeroOid>`. It should be used primarily
 /// when converting to and from string representations of OID values.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MaybeZeroOid {
     /// The zero OID (i.e. 40 `0`s).
+    #[default]
     Zero,
 
     /// A non-zero OID.
     NonZero(NonZeroOid),
-}
-
-impl Default for MaybeZeroOid {
-    fn default() -> Self {
-        Self::Zero
-    }
 }
 
 impl MaybeZeroOid {

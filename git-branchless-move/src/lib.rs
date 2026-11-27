@@ -231,32 +231,32 @@ pub fn r#move(
     };
     let source_oids = source_oids.union(&base_oids);
 
-    if let Some(head_oid) = head_oid {
-        if get_hint_enabled(&repo, Hint::MoveImplicitHeadArgument)? {
-            let should_warn_base = !sources_provided
-                && bases_provided
-                && dag.set_contains(&base_oids, head_oid)?
-                && dag.set_count(&base_oids)? == 1;
-            if should_warn_base {
-                writeln!(
-                    effects.get_output_stream(),
-                    "{}: you can omit the --base flag in this case, as it defaults to HEAD",
-                    effects.get_glyphs().render(get_hint_string())?,
-                )?;
-            }
+    if let Some(head_oid) = head_oid
+        && get_hint_enabled(&repo, Hint::MoveImplicitHeadArgument)?
+    {
+        let should_warn_base = !sources_provided
+            && bases_provided
+            && dag.set_contains(&base_oids, head_oid)?
+            && dag.set_count(&base_oids)? == 1;
+        if should_warn_base {
+            writeln!(
+                effects.get_output_stream(),
+                "{}: you can omit the --base flag in this case, as it defaults to HEAD",
+                effects.get_glyphs().render(get_hint_string())?,
+            )?;
+        }
 
-            let should_warn_dest = dest_provided && dest_oid == head_oid;
-            if should_warn_dest {
-                writeln!(
-                    effects.get_output_stream(),
-                    "{}: you can omit the --dest flag in this case, as it defaults to HEAD",
-                    effects.get_glyphs().render(get_hint_string())?,
-                )?;
-            }
+        let should_warn_dest = dest_provided && dest_oid == head_oid;
+        if should_warn_dest {
+            writeln!(
+                effects.get_output_stream(),
+                "{}: you can omit the --dest flag in this case, as it defaults to HEAD",
+                effects.get_glyphs().render(get_hint_string())?,
+            )?;
+        }
 
-            if should_warn_base || should_warn_dest {
-                print_hint_suppression_notice(effects, Hint::MoveImplicitHeadArgument)?;
-            }
+        if should_warn_base || should_warn_dest {
+            print_hint_suppression_notice(effects, Hint::MoveImplicitHeadArgument)?;
         }
     }
     drop(base_oids);

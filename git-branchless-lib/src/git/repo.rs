@@ -1024,13 +1024,10 @@ impl Repo {
         while let Some(line_prefix) = status_bytes.peek() {
             let line = match line_prefix {
                 // Ordinary change entry or unmerged entry.
-                b'1' | b'u' => {
-                    let line = status_bytes
-                        .by_ref()
-                        .take_while(not_null_terminator)
-                        .collect_vec();
-                    line
-                }
+                b'1' | b'u' => status_bytes
+                    .by_ref()
+                    .take_while(not_null_terminator)
+                    .collect_vec(),
                 // Rename or copy change entry.
                 b'2' => {
                     let mut line = status_bytes
@@ -1398,16 +1395,15 @@ impl Repo {
             reuse_parent_tree_if_possible,
         } = options;
 
-        if *reuse_parent_tree_if_possible {
-            if let Some(only_parent) = patch_commit.get_only_parent() {
-                if only_parent.get_tree_oid() == target_commit.get_tree_oid() {
-                    // If this patch is being applied to the same commit it was
-                    // originally based on, then we can skip cherry-picking
-                    // altogether, and use its tree directly. This is common e.g.
-                    // when only rewording a commit message.
-                    return Ok(patch_commit.get_tree()?);
-                }
-            };
+        if *reuse_parent_tree_if_possible
+            && let Some(only_parent) = patch_commit.get_only_parent()
+            && only_parent.get_tree_oid() == target_commit.get_tree_oid()
+        {
+            // If this patch is being applied to the same commit it was
+            // originally based on, then we can skip cherry-picking
+            // altogether, and use its tree directly. This is common e.g.
+            // when only rewording a commit message.
+            return Ok(patch_commit.get_tree()?);
         }
 
         let changed_pathbufs = self

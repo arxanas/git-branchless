@@ -80,7 +80,7 @@ impl Display for OperationType {
             OperationType::RepairBranches => write!(f, "Checking for broken branches"),
             OperationType::RepairCommits => write!(f, "Checking for broken commits"),
             OperationType::RunGitCommand(command) => {
-                write!(f, "Running Git command: {}", &command)
+                write!(f, "Running Git command: {command}")
             }
             OperationType::RunTests(command) => write!(f, "Running command: {command}"),
             OperationType::RunTestOnCommit(commit) => write!(f, "Waiting to run on {commit}"),
@@ -256,9 +256,10 @@ pub mod icons {
 }
 
 /// An icon denoting the status of an operation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum OperationIcon {
     /// A suitable waiting icon should be rendered.
+    #[default]
     InProgress,
 
     /// The operation was a success.
@@ -269,12 +270,6 @@ pub enum OperationIcon {
 
     /// The operation was a failure.
     Failure,
-}
-
-impl Default for OperationIcon {
-    fn default() -> Self {
-        Self::InProgress
-    }
 }
 
 #[derive(Debug)]

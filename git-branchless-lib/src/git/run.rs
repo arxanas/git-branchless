@@ -130,8 +130,8 @@ impl GitRunInfo {
         writeln!(
             effects.get_output_stream(),
             "branchless: running command: {} {}",
-            &path_to_git.to_string_lossy(),
-            &args_string
+            path_to_git.to_string_lossy(),
+            args_string
         )?;
 
         let mut command = Command::new(path_to_git);
@@ -440,7 +440,7 @@ impl GitRunInfo {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .wrap_err_with(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
+                .wrap_err_with(|| format!("Invoking {} hook with PATH: {:?}", hook_name, path))?;
 
             if let Some(stdin) = stdin {
                 child

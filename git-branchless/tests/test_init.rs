@@ -20,7 +20,7 @@ fn test_hook_installed() -> eyre::Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         let metadata = std::fs::metadata(&hook_path)
-            .wrap_err_with(|| format!("Reading hook permissions for {:?}", &hook_path))?;
+            .wrap_err_with(|| format!("Reading hook permissions for {hook_path:?}"))?;
         let mode = metadata.permissions().mode();
         assert!(mode & 0o111 == 0o111);
     }

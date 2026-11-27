@@ -1054,7 +1054,7 @@ mod client {
                     Ok((branch_name, branch_oid))
                 })
                 .try_collect()?;
-            for (_, pull_request_info) in self.pull_requests.iter_mut() {
+            for pull_request_info in self.pull_requests.values_mut() {
                 let base_ref_name = &pull_request_info.base_ref_name;
                 let base_branch_oid = match branches.get(base_ref_name) {
                     Some(oid) => *oid,

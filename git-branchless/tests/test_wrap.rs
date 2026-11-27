@@ -353,7 +353,7 @@ fn test_wrap_without_repo() -> eyre::Result<()> {
             ..Default::default()
         },
     )?;
-    println!("{}", &stderr);
+    println!("{stderr}");
     assert!(stderr.contains("fatal: not a git repository"));
     insta::assert_snapshot!(stdout, @"");
 

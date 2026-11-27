@@ -299,7 +299,7 @@ impl Git {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()?;
-            write!(child.stdin.take().unwrap(), "{}", &input)?;
+            write!(child.stdin.take().unwrap(), "{input}")?;
             child.wait_with_output().wrap_err_with(|| {
                 format!(
                     "Running git
@@ -307,7 +307,7 @@ impl Git {
                     Args: {:?}
                     Stdin: {:?}
                     Env: <not shown>",
-                    &self.path_to_git, &args, input
+                    self.path_to_git, args, input
                 )
             })?
         } else {
@@ -317,7 +317,7 @@ impl Git {
                     Executable: {:?}
                     Args: {:?}
                     Env: <not shown>",
-                    &self.path_to_git, &args
+                    self.path_to_git, args
                 )
             })?
         };
@@ -335,13 +335,13 @@ stdout:
 {}
 stderr:
 {}",
-                &self.path_to_git,
-                &args,
+                self.path_to_git,
+                args,
                 exit_code,
                 expected_exit_code,
-                &env,
-                &String::from_utf8_lossy(&result.stdout),
-                &String::from_utf8_lossy(&result.stderr),
+                env,
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr),
             )
         } else {
             result
@@ -372,12 +372,12 @@ stderr:
         &self,
         args: &[S],
     ) -> eyre::Result<(String, String)> {
-        if let Some(first_arg) = args.first() {
-            if first_arg.as_ref() == "branchless" {
-                eyre::bail!(
-                    r#"Refusing to invoke `branchless` via `git.run(&["branchless", ...])`; instead, call `git.branchless(&[...])`"#
-                );
-            }
+        if let Some(first_arg) = args.first()
+            && first_arg.as_ref() == "branchless"
+        {
+            eyre::bail!(
+                r#"Refusing to invoke `branchless` via `git.run(&["branchless", ...])`; instead, call `git.branchless(&[...])`"#
+            );
         }
 
         self.run_with_options(args, &Default::default())

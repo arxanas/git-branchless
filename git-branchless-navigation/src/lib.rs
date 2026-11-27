@@ -129,10 +129,9 @@ fn advance(
                 }
             };
 
-            match dag.commit_set_to_vec(&possible_destinations)?.as_slice() {
+            if let [stack_head] = dag.commit_set_to_vec(&possible_destinations)?.as_slice() {
                 // only 1 possible destination, go directly to it
-                [stack_head] => return Ok(Some(*stack_head)),
-                [] | [..] => {}
+                return Ok(Some(*stack_head));
             }
         }
 

@@ -482,31 +482,31 @@ mod render {
             lines.push(StyledString::plain(glyphs.vertical_ellipsis));
         };
 
-        if let [_, merge_parents @ ..] = current_node.parents.as_slice() {
-            if !merge_parents.is_empty() {
-                for merge_parent_oid in merge_parents {
-                    let merge_parent_node = &graph.nodes[merge_parent_oid];
-                    lines.push(
-                        StyledStringBuilder::new()
-                            .append_plain(last_child_line_char.unwrap_or(glyphs.line))
-                            .append_plain(" ")
-                            .append_styled(
-                                format!("{} (merge) ", glyphs.commit_merge),
-                                BaseColor::Blue.dark(),
-                            )
-                            .append(render_node_descriptors(
-                                glyphs,
-                                &merge_parent_node.object,
-                                commit_descriptors,
-                            )?)
-                            .build(),
-                    );
-                }
-                lines.push(StyledString::plain(format!(
-                    "{}{}",
-                    glyphs.line_with_offshoot, glyphs.merge,
-                )));
+        if let [_, merge_parents @ ..] = current_node.parents.as_slice()
+            && !merge_parents.is_empty()
+        {
+            for merge_parent_oid in merge_parents {
+                let merge_parent_node = &graph.nodes[merge_parent_oid];
+                lines.push(
+                    StyledStringBuilder::new()
+                        .append_plain(last_child_line_char.unwrap_or(glyphs.line))
+                        .append_plain(" ")
+                        .append_styled(
+                            format!("{} (merge) ", glyphs.commit_merge),
+                            BaseColor::Blue.dark(),
+                        )
+                        .append(render_node_descriptors(
+                            glyphs,
+                            &merge_parent_node.object,
+                            commit_descriptors,
+                        )?)
+                        .build(),
+                );
             }
+            lines.push(StyledString::plain(format!(
+                "{}{}",
+                glyphs.line_with_offshoot, glyphs.merge,
+            )));
         }
 
         lines.push({

@@ -1346,14 +1346,14 @@ fn run_tests_inner(
     let search_strategy = search_strategy.map(BasicStrategy::new);
 
     let latest_test_command_path = get_latest_test_command_path(repo)?;
-    if let Some(parent) = latest_test_command_path.parent() {
-        if let Err(err) = std::fs::create_dir_all(parent) {
-            warn!(
-                ?err,
-                ?latest_test_command_path,
-                "Failed to create containing directory for latest test command"
-            );
-        }
+    if let Some(parent) = latest_test_command_path.parent()
+        && let Err(err) = std::fs::create_dir_all(parent)
+    {
+        warn!(
+            ?err,
+            ?latest_test_command_path,
+            "Failed to create containing directory for latest test command"
+        );
     }
     if let Err(err) = std::fs::write(&latest_test_command_path, command.to_string()) {
         warn!(

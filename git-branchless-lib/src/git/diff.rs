@@ -403,16 +403,16 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             }
         }
 
-        if let BlobContents::Text(before_lines) = before_lines {
-            if unchanged_hunk_line_idx < before_lines.len() {
-                file_sections.push(Section::Unchanged {
-                    lines: before_lines[unchanged_hunk_line_idx..]
-                        .iter()
-                        .cloned()
-                        .map(Cow::Owned)
-                        .collect(),
-                });
-            }
+        if let BlobContents::Text(before_lines) = before_lines
+            && unchanged_hunk_line_idx < before_lines.len()
+        {
+            file_sections.push(Section::Unchanged {
+                lines: before_lines[unchanged_hunk_line_idx..]
+                    .iter()
+                    .cloned()
+                    .map(Cow::Owned)
+                    .collect(),
+            });
         }
 
         let file_mode_section = if old_file_mode != new_file_mode {

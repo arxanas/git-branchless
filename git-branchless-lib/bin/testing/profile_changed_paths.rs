@@ -38,7 +38,7 @@ fn main() -> eyre::Result<()> {
             repo.find_commit_or_fail(head_oid)?
         }
     };
-    println!("Commit to check: {:?}", &commit);
+    println!("Commit to check: {commit:?}");
 
     let result = repo.get_paths_touched_by_commit(&commit)?;
     println!("Result: {result:?}");
