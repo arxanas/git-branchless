@@ -186,7 +186,7 @@ pub fn do_main_and_drop_locals<T: Parser>(
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
             format!(
                 "Could not set working directory to: {:?}",
-                &working_directory
+                working_directory
             )
         })?;
     }

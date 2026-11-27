@@ -754,7 +754,7 @@ mod tests {
             let result = prepare_messages(
                 &repo,
                 InitialCommitMessages::Discard,
-                &[head_commit.clone()],
+                std::slice::from_ref(&head_commit),
                 |message| {
                     insta::assert_snapshot!(message.trim(), @"
                     # Original message:
@@ -914,7 +914,7 @@ This is a template!
                 this commit has been duplicated\n\
                 \n",
                 ),
-                &[test1_commit.clone()],
+                std::slice::from_ref(&test1_commit),
                 '#',
             )?;
 

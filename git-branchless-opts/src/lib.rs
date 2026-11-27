@@ -1105,7 +1105,7 @@ pub fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
 
     // For backward-compatibility, convert calls of the form
     // `git-branchless-hook-X Y Z` into `git-branchless hook X Y Z`.
-    let args = match args.as_slice() {
+    match args.as_slice() {
         [first, subcommand, rest @ ..] if exe_name == "git-branchless" => {
             let mut new_args = vec![first.clone()];
             match subcommand
@@ -1124,9 +1124,7 @@ pub fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
             new_args
         }
         other => other.to_vec(),
-    };
-
-    args
+    }
 }
 
 #[cfg(test)]

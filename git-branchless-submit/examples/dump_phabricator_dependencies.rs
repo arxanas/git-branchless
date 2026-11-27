@@ -60,7 +60,7 @@ fn main() -> eyre::Result<()> {
         &effects,
         &repo,
         &mut dag,
-        &[revset.clone()],
+        std::slice::from_ref(&revset),
         &ResolveRevsetOptions {
             show_hidden_commits: false,
         },

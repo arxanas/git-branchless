@@ -508,12 +508,12 @@ pub fn hook_skip_upstream_applied_commit(
 
     if let Some(orig_head_reference) = repo.find_reference(&"ORIG_HEAD".into())? {
         let resolved_orig_head = repo.resolve_reference(&orig_head_reference)?;
-        if let Some(original_head_oid) = resolved_orig_head.oid {
-            if original_head_oid == commit_oid {
-                let current_head_oid = repo.get_head_info()?.oid;
-                if let Some(current_head_oid) = current_head_oid {
-                    save_updated_head_oid(&repo, current_head_oid)?;
-                }
+        if let Some(original_head_oid) = resolved_orig_head.oid
+            && original_head_oid == commit_oid
+        {
+            let current_head_oid = repo.get_head_info()?.oid;
+            if let Some(current_head_oid) = current_head_oid {
+                save_updated_head_oid(&repo, current_head_oid)?;
             }
         }
     }

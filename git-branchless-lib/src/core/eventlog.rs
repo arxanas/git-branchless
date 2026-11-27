@@ -620,10 +620,10 @@ ORDER BY rowid ASC
         now: SystemTime,
         message: &str,
     ) -> eyre::Result<EventTransactionId> {
-        if let Ok(transaction_id) = std::env::var(BRANCHLESS_TRANSACTION_ID_ENV_VAR) {
-            if let Ok(transaction_id) = transaction_id.parse::<EventTransactionId>() {
-                return Ok(transaction_id);
-            }
+        if let Ok(transaction_id) = std::env::var(BRANCHLESS_TRANSACTION_ID_ENV_VAR)
+            && let Ok(transaction_id) = transaction_id.parse::<EventTransactionId>()
+        {
+            return Ok(transaction_id);
         }
 
         let tx = self.conn.unchecked_transaction()?;
@@ -845,10 +845,10 @@ impl EventReplayer {
     /// * `replayer` in order from oldest to newest.
     pub fn process_event(&mut self, event: &Event) {
         // Drop non-meaningful ref-update events.
-        if let Event::RefUpdateEvent { ref_name, .. } = event {
-            if should_ignore_ref_updates(ref_name) {
-                return;
-            }
+        if let Event::RefUpdateEvent { ref_name, .. } = event
+            && should_ignore_ref_updates(ref_name)
+        {
+            return;
         }
 
         let event = match self.fix_event_git_v2_31(event.clone()) {

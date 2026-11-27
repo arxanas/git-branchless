@@ -91,7 +91,7 @@ pub fn split(
         effects,
         &repo,
         &mut dag,
-        &[revset.clone()],
+        std::slice::from_ref(&revset),
         resolve_revset_options,
     ) {
         Ok(commit_sets) => match dag.commit_set_to_vec(&commit_sets[0])?.as_slice() {

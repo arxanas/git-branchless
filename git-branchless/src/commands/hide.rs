@@ -107,10 +107,10 @@ pub fn hide(
             .iter()
             .map(|commit| (commit.get_oid(), MaybeZeroOid::Zero))
             .collect();
-        if let Some(head_oid) = head_info.oid {
-            if abandoned_branches.contains_key(&head_oid) {
-                repo.detach_head(&head_info)?;
-            }
+        if let Some(head_oid) = head_info.oid
+            && abandoned_branches.contains_key(&head_oid)
+        {
+            repo.detach_head(&head_info)?;
         }
         move_branches(
             effects,

@@ -131,10 +131,9 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
             name @ CategorizedReferenceName::LocalBranch { .. } => {
                 if let Some(main_branch) =
                     self.find_branch(&name.render_suffix(), BranchType::Local)?
+                    && let Some(remote_name) = main_branch.get_push_remote_name()?
                 {
-                    if let Some(remote_name) = main_branch.get_push_remote_name()? {
-                        return Ok(Some(remote_name));
-                    }
+                    return Ok(Some(remote_name));
                 }
             }
 

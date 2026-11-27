@@ -37,7 +37,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
         let earlier_commit = nth_parent(later_commit.clone(), 1000);
-        println!("Comparing {:?} with {:?}", &earlier_commit, &later_commit);
+        println!("Comparing {earlier_commit:?} with {earlier_commit:?}");
 
         let effects = Effects::new_suppress_for_test(Glyphs::text());
         let conn = repo.get_db_conn().unwrap();

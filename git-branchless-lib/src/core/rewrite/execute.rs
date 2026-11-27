@@ -633,19 +633,19 @@ mod in_memory {
                         // Is it even possible to repeatedly amend a tree and then commit
                         // it once at the end?
 
-                        let maybe_tree = if rebased_commit.is_none() {
+                        let maybe_tree = if let Some(rebased_commit) = rebased_commit {
+                            repo.amend_fast(
+                                &rebased_commit,
+                                &AmendFastOptions::FromCommit {
+                                    commit: commit_to_apply,
+                                },
+                            )
+                        } else {
                             repo.cherry_pick_fast(
                                 &commit_to_apply,
                                 &current_commit,
                                 &CherryPickFastOptions {
                                     reuse_parent_tree_if_possible: true,
-                                },
-                            )
-                        } else {
-                            repo.amend_fast(
-                                &rebased_commit.expect("rebased commit should not be None"),
-                                &AmendFastOptions::FromCommit {
-                                    commit: commit_to_apply,
                                 },
                             )
                         };
@@ -1018,10 +1018,7 @@ mod on_disk {
 
         let rebase_state_dir = repo.get_rebase_state_dir_path();
         std::fs::create_dir_all(&rebase_state_dir).wrap_err_with(|| {
-            format!(
-                "Creating rebase state directory at: {:?}",
-                &rebase_state_dir
-            )
+            format!("Creating rebase state directory at: {:?}", rebase_state_dir)
         })?;
 
         // Mark this rebase as an interactive rebase. For whatever reason, if this
@@ -1033,19 +1030,19 @@ mod on_disk {
         // ```
         let interactive_file_path = rebase_state_dir.join("interactive");
         std::fs::write(&interactive_file_path, "")
-            .wrap_err_with(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
+            .wrap_err_with(|| format!("Writing interactive to: {:?}", interactive_file_path))?;
 
         if let Some(head_oid) = head_info.oid {
             let orig_head_file_path = repo.get_path().join("ORIG_HEAD");
             std::fs::write(&orig_head_file_path, head_oid.to_string())
-                .wrap_err_with(|| format!("Writing `ORIG_HEAD` to: {:?}", &orig_head_file_path))?;
+                .wrap_err_with(|| format!("Writing `ORIG_HEAD` to: {:?}", orig_head_file_path))?;
 
             // Confusingly, there is also a file at
             // `.git/rebase-merge/orig-head` (different from `.git/ORIG_HEAD`),
             // which seems to store the same thing.
             let rebase_orig_head_file_path = rebase_state_dir.join("orig-head");
             std::fs::write(&rebase_orig_head_file_path, head_oid.to_string()).wrap_err_with(
-                || format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path),
+                || format!("Writing `orig-head` to: {:?}", rebase_orig_head_file_path),
             )?;
 
             // `head-name` contains the name of the branch which will be reset
@@ -1060,7 +1057,7 @@ mod on_disk {
                     .map(|reference_name| reference_name.as_str())
                     .unwrap_or("detached HEAD"),
             )
-            .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
+            .wrap_err_with(|| format!("Writing head-name to: {:?}", head_name_file_path))?;
 
             save_original_head_info(repo, &head_info)?;
 
@@ -1071,7 +1068,7 @@ mod on_disk {
                 &rebase_merge_head_file_path,
                 rebase_plan.first_dest_oid.to_string(),
             )
-            .wrap_err_with(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
+            .wrap_err_with(|| format!("Writing head to: {:?}", rebase_merge_head_file_path))?;
         }
 
         // Dummy `onto` file. We may be rebasing onto a set of unrelated
@@ -1082,7 +1079,7 @@ mod on_disk {
             || {
                 format!(
                     "Writing onto {:?} to: {:?}",
-                    &rebase_plan.first_dest_oid, &onto_file_path
+                    rebase_plan.first_dest_oid, onto_file_path
                 )
             },
         )?;
@@ -1129,7 +1126,7 @@ mod on_disk {
         std::fs::write(&keep_redundant_commits_file_path, "").wrap_err_with(|| {
             format!(
                 "Writing `keep_redundant_commits` to: {:?}",
-                &keep_redundant_commits_file_path
+                keep_redundant_commits_file_path
             )
         })?;
 
@@ -1138,7 +1135,7 @@ mod on_disk {
             std::fs::write(&cdate_is_adate_file_path, "").wrap_err_with(|| {
                 format!(
                     "Writing `cdate_is_adate` option file to: {:?}",
-                    &cdate_is_adate_file_path
+                    cdate_is_adate_file_path
                 )
             })?;
         }

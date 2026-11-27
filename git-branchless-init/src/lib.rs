@@ -351,13 +351,12 @@ fn install_alias(
 
 #[instrument]
 fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
-    if let Some(default_branch_name) = get_default_branch_name(repo)? {
-        if repo
+    if let Some(default_branch_name) = get_default_branch_name(repo)?
+        && repo
             .find_branch(&default_branch_name, BranchType::Local)?
             .is_some()
-        {
-            return Ok(Some(default_branch_name));
-        }
+    {
+        return Ok(Some(default_branch_name));
     }
 
     for branch_name in [
@@ -434,7 +433,7 @@ fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyr
         let man_dir_relative = man_dir.strip_prefix(repo.get_path()).wrap_err_with(|| {
             format!(
                 "Getting relative path for {:?} with respect to {:?}",
-                &man_dir,
+                man_dir,
                 repo.get_path()
             )
         })?;
@@ -458,7 +457,7 @@ fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyr
     )?;
     config.set("man.viewer", "branchless")?;
 
-    write_man_pages(&man_dir).wrap_err_with(|| format!("Writing man-pages to: {:?}", &man_dir))?;
+    write_man_pages(&man_dir).wrap_err_with(|| format!("Writing man-pages to: {:?}", man_dir))?;
     Ok(())
 }
 

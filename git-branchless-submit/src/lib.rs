@@ -399,12 +399,12 @@ fn submit(
 
     let (updated_commit_names, skipped_commit_names): (BTreeSet<String>, BTreeSet<String>) = {
         let updated_commit_names = commits_to_update
-            .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
+            .values()
+            .flat_map(|commit_status| commit_status.local_commit_name.clone())
             .collect();
         let skipped_commit_names = commits_to_skip
-            .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
+            .values()
+            .flat_map(|commit_status| commit_status.local_commit_name.clone())
             .collect();
 
         if !dry_run {

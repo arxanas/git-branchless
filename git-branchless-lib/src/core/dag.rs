@@ -91,7 +91,7 @@ impl Parents for GitParentsBlocking {
         trace!(?v, "visiting Git commit");
 
         let oid = MaybeZeroOid::from_bytes(v.as_ref())
-            .map_err(|_e| anyhow::anyhow!("Could not convert to Git oid: {:?}", &v))
+            .map_err(|_e| anyhow::anyhow!("Could not convert to Git oid: {:?}", v))
             .map_err(BackendError::Other)?;
         let oid = match oid {
             MaybeZeroOid::NonZero(oid) => oid,
@@ -101,7 +101,7 @@ impl Parents for GitParentsBlocking {
         let repo = self.repo.lock().unwrap();
         let commit = repo
             .find_commit(oid)
-            .map_err(|_e| anyhow::anyhow!("Could not resolve to Git commit: {:?}", &v))
+            .map_err(|_e| anyhow::anyhow!("Could not resolve to Git commit: {:?}", v))
             .map_err(BackendError::Other)?;
         let commit = match commit {
             Some(commit) => commit,
@@ -256,7 +256,7 @@ impl Dag {
         let dag_dir = repo.get_dag_dir()?;
         std::fs::create_dir_all(&dag_dir).wrap_err("Creating .git/branchless/dag dir")?;
         let dag = eden_dag::Dag::open(&dag_dir)
-            .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
+            .wrap_err_with(|| format!("Opening DAG directory at: {:?}", dag_dir))?;
         Ok(dag)
     }
 
@@ -371,7 +371,7 @@ impl Dag {
         ) -> eyre::Result<NonZeroOid> {
             let vertex = vertex.wrap_err("Evaluating vertex")?;
             let vertex = NonZeroOid::try_from(vertex.clone())
-                .wrap_err_with(|| format!("Converting vertex to NonZeroOid: {:?}", &vertex))?;
+                .wrap_err_with(|| format!("Converting vertex to NonZeroOid: {:?}", vertex))?;
             Ok(vertex)
         }
         let stream = self
