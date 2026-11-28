@@ -436,8 +436,8 @@ mod in_memory {
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{
-        AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, GitRunInfo, MaybeZeroOid,
-        NonZeroOid, Repo,
+        AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, GitRunInfo, GitRunOpts,
+        MaybeZeroOid, NonZeroOid, Repo,
     };
     use crate::util::EyreExitOr;
 
@@ -901,7 +901,7 @@ mod in_memory {
         repo: &Repo,
         event_log_db: &EventLogDb,
         rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
-        skipped_head_updated_oid: Option<NonZeroOid>,
+        new_head_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
     ) -> EyreExitOr<()> {
         let ExecuteRebasePlanOptions {
@@ -915,13 +915,54 @@ mod in_memory {
             check_out_commit_options,
         } = options;
 
+        let head_info = repo.get_head_info()?;
+        // Check the two-tree transition while HEAD, the branches and the rewrite
+        // log still agree. A dirty path which the checkout won't touch is fine.
+        if !check_out_commit_options.reset
+            && let (Some(old), Some(new)) = (head_info.oid, new_head_oid)
+            && old != new
+            && repo.get_working_copy_path().is_some()
+        {
+            // Checkout refreshes the index first. Otherwise a timestamp-only
+            // change can make read-tree reject a clean file.
+            let _result = git_run_info.run_silent(
+                repo,
+                Some(*event_tx_id),
+                &["update-index", "-q", "--refresh"],
+                GitRunOpts::default(),
+            )?;
+            let result = git_run_info.run_silent(
+                repo,
+                Some(*event_tx_id),
+                &[
+                    "read-tree",
+                    "--dry-run",
+                    "-u",
+                    "-m",
+                    &old.to_string(),
+                    &new.to_string(),
+                ],
+                GitRunOpts {
+                    treat_git_failure_as_error: false,
+                    ..Default::default()
+                },
+            )?;
+            if !result.exit_code.is_success() {
+                writeln!(
+                    effects.get_error_stream(),
+                    "Cannot check out the rewritten HEAD: {}",
+                    result.stderr.to_str_lossy().trim_end()
+                )?;
+                return Ok(Err(result.exit_code));
+            }
+        }
+
         for new_oid in rewritten_oids.values() {
             if let MaybeZeroOid::NonZero(new_oid) = new_oid {
                 mark_commit_reachable(repo, *new_oid)?;
             }
         }
 
-        let head_info = repo.get_head_info()?;
         if head_info.oid.is_some() {
             // Avoid moving the branch which HEAD points to, or else the index will show
             // a lot of changes in the working copy.
@@ -955,7 +996,7 @@ mod in_memory {
             *event_tx_id,
             rewritten_oids,
             &head_info,
-            skipped_head_updated_oid,
+            new_head_oid,
             check_out_commit_options,
         )?;
         Ok(exit_code)
@@ -1294,11 +1335,7 @@ pub fn execute_rebase_plan(
                     return Ok(ExecuteRebasePlanResult::WouldSucceed);
                 }
 
-                // Ignore the return code, as it probably indicates that the
-                // checkout failed (which might happen if the user has changes
-                // which don't merge cleanly). The user can resolve that
-                // themselves.
-                match post_rebase_in_memory(
+                if let Err(exit_code) = post_rebase_in_memory(
                     effects,
                     git_run_info,
                     repo,
@@ -1307,11 +1344,7 @@ pub fn execute_rebase_plan(
                     new_head_oid,
                     options,
                 )? {
-                    Ok(()) => {}
-                    Err(_exit_code) => {
-                        // FIXME: we may still want to propagate the exit code to the
-                        // caller.
-                    }
+                    return Ok(ExecuteRebasePlanResult::Failed { exit_code });
                 }
 
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
