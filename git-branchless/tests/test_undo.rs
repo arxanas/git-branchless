@@ -107,19 +107,19 @@ fn test_undo_help() -> eyre::Result<()> {
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
-        │        ┌───────────────────────────────────────────┤ How to use ├───────────────────────────────────────────┐        │
-        │        │ Use `git undo` to view and revert to previous states of the repository.                            │        │
-        │        │                                                                                                    │        │
-        │        │ h/?: Show this help.                                                                               │        │
-        │        │ q: Quit.                                                                                           │        │
-        │        │ p/n or <left>/<right>: View next/previous state.                                                   │        │
-        │        │ g: Go to a provided event ID.                                                                      │        │
-        │        │ <enter>: Revert the repository to the given state (requires confirmation).                         │        │
-        │        │                                                                                                    │        │
-        │        │ You can also copy a commit hash from the past and manually run `git unhide` or `git rebase` on it. │        │
-        │        │                                                                                                    │        │
-        │        │                                                                                            <Close> │        │
-        │        └────────────────────────────────────────────────────────────────────────────────────────────────────┘        │
+        │       ┌───────────────────────────────────────────┤ How to use ├────────────────────────────────────────────┐        │
+        │       │ Use `git undo` to view and revert to previous states of the repository.                             │        │
+        │       │                                                                                                     │        │
+        │       │ h/?: Show this help.                                                                                │        │
+        │       │ q: Quit.                                                                                            │        │
+        │       │ p/n or <left>/<right>: View next/previous state.                                                    │        │
+        │       │ g: Go to a provided event ID.                                                                       │        │
+        │       │ <enter>: Revert the repository to the given state (requires confirmation).                          │        │
+        │       │                                                                                                     │        │
+        │       │ You can also copy a commit hash from the past and manually run `git unhide` or `git rebase` on it.  │        │
+        │       │                                                                                                     │        │
+        │       │                                                                                             <Close> │        │
+        │       └─────────────────────────────────────────────────────────────────────────────────────────────────────┘        │
         │                                                                                                                      │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
