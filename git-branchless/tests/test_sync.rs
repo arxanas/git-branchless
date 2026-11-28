@@ -192,6 +192,78 @@ fn test_sync_pull() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_sync_pull_with_local_changes_on_draft_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("shared", 1)?;
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+    cloned_repo.run(&["checkout", "-b", "topic"])?;
+    let topic = cloned_repo.commit_file("draft", 2)?;
+    original_repo.commit_file_with_contents("shared", 3, "upstream\n")?;
+
+    cloned_repo.write_file_txt("shared", "local edits\n")?;
+    cloned_repo.branchless_with_options(
+        "sync",
+        &["--pull"],
+        &GitRunOptions {
+            expected_exit_code: 128,
+            ..Default::default()
+        },
+    )?;
+    assert_eq!(
+        cloned_repo.run(&["rev-parse", "topic"])?.0.trim(),
+        topic.to_string()
+    );
+    assert_eq!(
+        cloned_repo
+            .run(&["symbolic-ref", "--short", "HEAD"])?
+            .0
+            .trim(),
+        "topic"
+    );
+    assert!(
+        cloned_repo
+            .run(&["diff", "--", "shared.txt"])?
+            .0
+            .contains("+local edits")
+    );
+
+    // Keep unrelated staged work across the retry.
+    cloned_repo.run(&["checkout", "--", "shared.txt"])?;
+    cloned_repo.write_file_txt("draft", "staged edits\n")?;
+    cloned_repo.run(&["add", "draft.txt"])?;
+    cloned_repo.branchless("sync", &["--pull"])?;
+    assert_eq!(
+        cloned_repo.run(&["rev-parse", "HEAD^"])?.0,
+        cloned_repo.run(&["rev-parse", "origin/master"])?.0
+    );
+    assert_eq!(
+        cloned_repo
+            .run(&["rev-list", "--count", "master..topic"])?
+            .0
+            .trim(),
+        "1"
+    );
+    assert_eq!(
+        cloned_repo.run(&["show", ":draft.txt"])?.0,
+        "staged edits\n"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_sync_pull_preserves_hidden_status() -> eyre::Result<()> {
     let GitWrapperWithRemoteRepo {
         temp_dir: _guard,
