@@ -1112,8 +1112,12 @@ impl Repo {
             .into_iter()
             .enumerate()
             .filter_map(|(i, remote_name)| match remote_name {
-                Some(remote_name) => Some(remote_name.to_owned()),
-                None => {
+                Ok(Some(remote_name)) => Some(remote_name.to_owned()),
+                Ok(None) => {
+                    warn!(remote_index = i, "Remote name is empty");
+                    None
+                }
+                Err(_) => {
                     warn!(remote_index = i, "Remote name could not be decoded");
                     None
                 }
@@ -1751,22 +1755,12 @@ impl<'repo> Signature<'repo> {
             .try_into()
             .map_err(Error::IntegerConvert)?;
         let time = git2::Time::new(seconds, self.inner.when().offset_minutes());
-        let name = match self.inner.name() {
-            Some(name) => name,
-            None => {
-                return Err(Error::DecodeUtf8 {
-                    item: "signature name",
-                });
-            }
-        };
-        let email = match self.inner.email() {
-            Some(email) => email,
-            None => {
-                return Err(Error::DecodeUtf8 {
-                    item: "signature email",
-                });
-            }
-        };
+        let name = self.inner.name().map_err(|_| Error::DecodeUtf8 {
+            item: "signature name",
+        })?;
+        let email = self.inner.email().map_err(|_| Error::DecodeUtf8 {
+            item: "signature email",
+        })?;
         let signature = git2::Signature::new(name, email, &time).map_err(Error::CreateSignature)?;
         Ok(Signature { inner: signature })
     }
@@ -1780,12 +1774,12 @@ impl<'repo> Signature<'repo> {
 
     /// Get the name applied to this signature.
     pub fn get_name(&self) -> Option<&str> {
-        self.inner.name()
+        self.inner.name().ok()
     }
 
     /// Get the email applied to this signature.
     pub fn get_email(&self) -> Option<&str> {
-        self.inner.email()
+        self.inner.email().ok()
     }
 
     /// Return the friendly formatted name and email of the signature.
@@ -1793,10 +1787,10 @@ impl<'repo> Signature<'repo> {
         let name = self.inner.name();
         let email = self.inner.email().map(|email| format!("<{email}>"));
         match (name, email) {
-            (Some(name), Some(email)) => Some(format!("{name} {email}")),
-            (Some(name), _) => Some(name.into()),
-            (_, Some(email)) => Some(email),
-            _ => None,
+            (Ok(name), Ok(email)) => Some(format!("{name} {email}")),
+            (Ok(name), Err(_)) => Some(name.into()),
+            (Err(_), Ok(email)) => Some(email),
+            (Err(_), Err(_)) => None,
         }
     }
 }

@@ -207,7 +207,7 @@ impl ConfigRead for Config {
         let mut result = Vec::new();
         entries
             .for_each(|entry| {
-                if let (Some(name), Some(value)) = (entry.name(), entry.value()) {
+                if let (Ok(name), Ok(value)) = (entry.name(), entry.value()) {
                     result.push((name.to_owned(), value.to_owned()));
                 }
             })

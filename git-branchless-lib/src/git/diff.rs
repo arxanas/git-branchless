@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use eyre::{Context, OptionExt};
+use eyre::Context;
 use itertools::Itertools;
 use scm_record::helpers::make_binary_description;
 use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
@@ -21,8 +21,8 @@ impl Diff<'_> {
         let stats = self.inner.stats()?;
         let buf = stats.to_buf(git2::DiffStatsFormat::SHORT, usize::MAX)?;
         buf.as_str()
-            .ok_or_eyre("converting buf to str")
             .map(|s| s.trim().to_string())
+            .map_err(|err| eyre::eyre!(err))
     }
 }
 
