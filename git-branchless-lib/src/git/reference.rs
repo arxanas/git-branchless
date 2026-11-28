@@ -89,8 +89,8 @@ pub struct Reference<'repo> {
 impl std::fmt::Debug for Reference<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inner.name() {
-            Some(name) => write!(f, "<Reference name={name:?}>"),
-            None => write!(f, "<Reference name={:?}>", self.inner.name_bytes()),
+            Ok(name) => write!(f, "<Reference name={name:?}>"),
+            Err(_) => write!(f, "<Reference name={:?}>", self.inner.name_bytes()),
         }
     }
 }
@@ -266,11 +266,7 @@ impl<'repo> Branch<'repo> {
     /// prefix, as appropriate
     #[instrument]
     pub fn get_reference_name(&self) -> eyre::Result<ReferenceName> {
-        let reference_name = self
-            .inner
-            .get()
-            .name()
-            .ok_or_else(|| eyre::eyre!("Could not decode branch reference name"))?;
+        let reference_name = self.inner.get().name()?;
         Ok(ReferenceName(reference_name.to_owned()))
     }
 

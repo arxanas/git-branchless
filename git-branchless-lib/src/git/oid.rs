@@ -97,7 +97,7 @@ impl From<NonZeroOid> for git2::Oid {
 }
 
 pub(super) fn make_non_zero_oid(oid: git2::Oid) -> NonZeroOid {
-    assert_ne!(oid, git2::Oid::zero());
+    assert_ne!(oid, git2::Oid::ZERO_SHA1);
     NonZeroOid { inner: oid }
 }
 
@@ -135,7 +135,7 @@ impl std::fmt::Debug for MaybeZeroOid {
 
 impl Display for MaybeZeroOid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let zero = git2::Oid::zero();
+        let zero = git2::Oid::ZERO_SHA1;
         write!(
             f,
             "{:?}",
@@ -152,7 +152,7 @@ impl FromStr for MaybeZeroOid {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.parse() {
-            Ok(oid) if oid == git2::Oid::zero() => Ok(MaybeZeroOid::Zero),
+            Ok(oid) if oid == git2::Oid::ZERO_SHA1 => Ok(MaybeZeroOid::Zero),
             Ok(oid) => Ok(MaybeZeroOid::NonZero(NonZeroOid { inner: oid })),
             Err(err) => Err(wrap_git_error(err)).wrap_err("Could not parse OID from string"),
         }
@@ -224,7 +224,7 @@ impl From<MaybeZeroOid> for Option<NonZeroOid> {
 impl From<MaybeZeroOid> for git2::Oid {
     fn from(oid: MaybeZeroOid) -> Self {
         match oid {
-            MaybeZeroOid::Zero => git2::Oid::zero(),
+            MaybeZeroOid::Zero => git2::Oid::ZERO_SHA1,
             MaybeZeroOid::NonZero(oid) => oid.into(),
         }
     }
